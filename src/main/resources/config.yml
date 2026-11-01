@@ -1,0 +1,40 @@
+# LifestealPlus configuration. Apply changes with /lifesteal reload.
+
+hearts:
+  # Hearts a brand-new player starts with.
+  starting: 10
+  # Most hearts anyone can have. Kills past this still cost the victim a heart, but the
+  # killer gains nothing (the ledger records it as "capped"). Lowering this never takes
+  # hearts away from players already above it.
+  max: 20
+  # Hearts a player comes back with from /lifesteal revive.
+  revive: 3
+  # Hearts that move from victim to killer on a PvP kill.
+  per-kill: 1
+  # Hearts lost dying to anything other than a player (mobs, fall, lava). 0 turns it off.
+  natural-death-loss: 1
+
+pvp:
+  # After a killer takes a heart from someone, killing that same person again within
+  # this many hours moves no hearts: the killer gains nothing and the victim keeps theirs.
+  # Stops friends farming hearts off each other and spawn-camping a player who's down.
+  # Only counts the same killer on the same victim; a revenge kill still pays. 0 turns it off.
+  repeat-kill-cooldown-hours: 6
+
+purgatory:
+  # Eliminated players go to Purgatory, a separate world where they can earn their way
+  # back by winning trials. Set to false to have them spectate instead. Needs a restart.
+  enabled: true
+  # Name of the Purgatory world folder. Created and built automatically. Needs a restart.
+  world: lifesteal_purgatory
+  # Trials a player has to win to come back (with hearts.revive hearts).
+  fragments-needed: 3
+  # After winning a trial, how long before that player can earn another fragment.
+  # They can still join trials in the meantime to help others.
+  trial-cooldown-minutes: 20
+  # Scales how many enemies each trial sends. 1.0 is normal; 0.5 is gentler, 1.5 harsher.
+  difficulty: 1.0
+
+database:
+  # SQLite file inside the plugin folder. Changing this needs a restart.
+  file: lifesteal.db

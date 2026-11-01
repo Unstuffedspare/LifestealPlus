@@ -1,0 +1,21 @@
+name: LifestealPlus
+version: '${version}'
+main: dev.lifestealplus.LifestealPlugin
+api-version: '26.3'
+description: Lifesteal SMP core with a full heart ledger.
+libraries:
+  - org.xerial:sqlite-jdbc:${sqliteVersion}
+
+permissions:
+  lifestealplus.hearts:
+    description: Check your own hearts with /hearts.
+    default: true
+  lifestealplus.hearts.others:
+    description: Check another player's hearts with /hearts <player>.
+    default: true
+  lifestealplus.purgatory:
+    description: Use /purgatory to see your progress and call or join trials while eliminated.
+    default: true
+  lifestealplus.admin:
+    description: Use /lifesteal to give, take, set and revive hearts, read the ledger, and reload config.
+    default: op
