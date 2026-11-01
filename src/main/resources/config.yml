@@ -32,6 +32,21 @@ bounty:
   # (admins can still see it in /lifesteal ledger).
   anonymous: true
 
+last-stand:
+  # Players down to this many hearts (but not eliminated) get Strength I and Speed I
+  # until they climb back above it. Makes comebacks possible and finishing someone off
+  # risky. 0 turns it off.
+  hearts: 1
+
+most-wanted:
+  # Every this many minutes, the online player with the most hearts has their rough
+  # location announced to everyone. 0 turns it off.
+  interval-minutes: 120
+  # Coordinates are rounded to the nearest this many blocks.
+  precision-blocks: 100
+  # Nobody is singled out unless at least this many players are online.
+  min-players-online: 3
+
 purgatory:
   # Eliminated players go to Purgatory, a separate world where they can earn their way
   # back by winning trials. Set to false to have them spectate instead. Needs a restart.

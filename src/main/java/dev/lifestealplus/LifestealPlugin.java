@@ -9,7 +9,11 @@ import dev.lifestealplus.purgatory.PurgatoryWorld;
 import dev.lifestealplus.purgatory.TrialManager;
 import io.papermc.paper.plugin.lifecycle.event.types.LifecycleEvents;
 import java.time.Clock;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.logging.Level;
+import org.bukkit.configuration.Configuration;
+import org.bukkit.configuration.file.FileConfiguration;
 import org.bukkit.plugin.java.JavaPlugin;
 
 public final class LifestealPlugin extends JavaPlugin {
@@ -17,10 +21,12 @@ public final class LifestealPlugin extends JavaPlugin {
     private volatile PluginSettings settings;
     private HeartService hearts;
     private TrialManager trials;
+    private MostWanted mostWanted;
 
     @Override
     public void onEnable() {
         saveDefaultConfig();
+        addMissingSettings();
         try {
             settings = PluginSettings.from(getConfig());
             getDataFolder().mkdirs();
@@ -35,7 +41,9 @@ public final class LifestealPlugin extends JavaPlugin {
 
         HeartTracker tracker = new HeartTracker(this);
         getServer().getPluginManager().registerEvents(new PlayerListener(this, hearts, tracker), this);
-        LifestealCommands commands = new LifestealCommands(this, hearts, tracker);
+        mostWanted = new MostWanted(this, tracker);
+        mostWanted.schedule();
+        LifestealCommands commands = new LifestealCommands(this, hearts, tracker, mostWanted);
         PurgatoryCommands purgatoryCommands = settings.purgatory().enabled() ? startPurgatory(tracker) : null;
         getLifecycleManager().registerEventHandler(LifecycleEvents.COMMANDS, event -> {
             commands.register(event.registrar());
@@ -46,6 +54,31 @@ public final class LifestealPlugin extends JavaPlugin {
         getServer().getOnlinePlayers().forEach(player ->
                 hearts.touch(player.getUniqueId(), player.getName())
                         .thenAcceptAsync(h -> tracker.joined(player, h), tracker.mainThread()));
+    }
+
+    /**
+     * saveDefaultConfig never touches an existing config.yml, so settings added by later
+     * versions would stay invisible to admins. Copy any that are missing in, with their
+     * comments, and leave everything the admin already set alone.
+     */
+    private void addMissingSettings() {
+        FileConfiguration config = getConfig();
+        Configuration defaults = config.getDefaults();
+        if (defaults == null) return;
+        List<String> added = new ArrayList<>();
+        for (String key : defaults.getKeys(true)) {
+            if (config.isSet(key)) continue;
+            if (defaults.isConfigurationSection(key)) {
+                config.createSection(key);
+            } else {
+                config.set(key, defaults.get(key));
+                added.add(key);
+            }
+            config.setComments(key, defaults.getComments(key));
+        }
+        if (added.isEmpty()) return;
+        saveConfig();
+        getLogger().info("Added new settings to config.yml: " + String.join(", ", added));
     }
 
     /** Falls back to spectating (and says so) rather than failing the whole plugin if the world can't be made. */
@@ -84,7 +117,9 @@ public final class LifestealPlugin extends JavaPlugin {
     void reloadSettings() {
         reloadConfig();
         PluginSettings fresh = PluginSettings.from(getConfig());
+        boolean wantedTimerChanged = !fresh.mostWanted().interval().equals(settings.mostWanted().interval());
         settings = fresh;
         hearts.setRules(fresh.rules());
+        if (wantedTimerChanged) mostWanted.schedule();
     }
 }

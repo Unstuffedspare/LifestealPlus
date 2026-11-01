@@ -44,11 +44,13 @@ final class LifestealCommands {
     private final LifestealPlugin plugin;
     private final HeartService hearts;
     private final HeartTracker tracker;
+    private final MostWanted mostWanted;
 
-    LifestealCommands(LifestealPlugin plugin, HeartService hearts, HeartTracker tracker) {
+    LifestealCommands(LifestealPlugin plugin, HeartService hearts, HeartTracker tracker, MostWanted mostWanted) {
         this.plugin = plugin;
         this.hearts = hearts;
         this.tracker = tracker;
+        this.mostWanted = mostWanted;
     }
 
     void register(Commands commands) {
@@ -235,6 +237,14 @@ final class LifestealCommands {
                                                             }, tracker.mainThread()));
                                             return Command.SINGLE_SUCCESS;
                                         }))))
+                .then(Commands.literal("mostwanted")
+                        .executes(ctx -> {
+                            if (mostWanted.announce() == null) {
+                                ctx.getSource().getSender().sendRichMessage(
+                                        "<gray>Nobody to announce: too few players online, or nobody alive.");
+                            }
+                            return Command.SINGLE_SUCCESS;
+                        }))
                 .then(Commands.literal("reload")
                         .executes(ctx -> {
                             CommandSender sender = ctx.getSource().getSender();

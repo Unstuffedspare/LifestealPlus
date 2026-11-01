@@ -8,9 +8,18 @@ import org.bukkit.configuration.file.FileConfiguration;
  * Everything read from config.yml, validated in one place.
  *
  * @param bountyAnonymous announce new bounties without naming who placed them
+ * @param lastStandHearts players at this many hearts or fewer (but not eliminated) get Last Stand; 0 turns it off
  */
 public record PluginSettings(HeartRules rules, int naturalDeathLoss, String databaseFile, PurgatorySettings purgatory,
-                             boolean bountyAnonymous) {
+                             boolean bountyAnonymous, int lastStandHearts, MostWantedSettings mostWanted) {
+
+    /**
+     * @param interval how often the leader's rough location is broadcast; zero turns it off
+     * @param precision coordinates are rounded to the nearest this many blocks
+     * @param minPlayers don't single anyone out unless at least this many players are online
+     */
+    public record MostWantedSettings(Duration interval, int precision, int minPlayers) {
+    }
 
     /**
      * @param enabled read once at startup: turning Purgatory on or off needs a restart
@@ -49,7 +58,18 @@ public record PluginSettings(HeartRules rules, int naturalDeathLoss, String data
                 Duration.ofSeconds(Math.round(cooldownMinutes * 60)),
                 difficulty);
 
+        int lastStand = config.getInt("last-stand.hearts", 1);
+        if (lastStand < 0) throw new IllegalArgumentException("last-stand.hearts can't be negative");
+
+        double wantedMinutes = config.getDouble("most-wanted.interval-minutes", 120);
+        if (wantedMinutes < 0) throw new IllegalArgumentException("most-wanted.interval-minutes can't be negative");
+        int precision = config.getInt("most-wanted.precision-blocks", 100);
+        if (precision < 1) throw new IllegalArgumentException("most-wanted.precision-blocks must be at least 1");
+        MostWantedSettings mostWanted = new MostWantedSettings(
+                Duration.ofSeconds(Math.round(wantedMinutes * 60)), precision,
+                Math.max(1, config.getInt("most-wanted.min-players-online", 3)));
+
         return new PluginSettings(rules, naturalDeathLoss, config.getString("database.file", "lifesteal.db"), purgatory,
-                config.getBoolean("bounty.anonymous", true));
+                config.getBoolean("bounty.anonymous", true), lastStand, mostWanted);
     }
 }

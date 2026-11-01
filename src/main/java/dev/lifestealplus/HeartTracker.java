@@ -33,9 +33,10 @@ public final class HeartTracker {
     private final Executor mainThread;
     /** Last known hearts for online players. Read from command suggestions and listeners. */
     private final Map<UUID, Integer> online = new ConcurrentHashMap<>();
-    /** Set on players we put into spectator, so revives don't touch admins who chose spectator. */
+    /** Set on players this plugin eliminated, so revives don't touch admins who chose spectator. */
     private final NamespacedKey eliminatedTag;
     private EliminationHandler elimination = new SpectatorElimination();
+    private final LastStand lastStand;
 
     HeartTracker(LifestealPlugin plugin) {
         this.plugin = plugin;
@@ -43,6 +44,12 @@ public final class HeartTracker {
             if (plugin.isEnabled()) plugin.getServer().getScheduler().runTask(plugin, task);
         };
         this.eliminatedTag = new NamespacedKey(plugin, "eliminated");
+        this.lastStand = new LastStand(plugin);
+        // Milk and /effect clear can strip Last Stand between heart changes; put it back.
+        plugin.getServer().getScheduler().runTaskTimer(plugin, () -> online.forEach((id, hearts) -> {
+            Player player = plugin.getServer().getPlayer(id);
+            if (player != null && !player.isDead()) lastStand.update(player, hearts);
+        }), 200, 200);
     }
 
     public Executor mainThread() {
@@ -144,5 +151,6 @@ public final class HeartTracker {
             tags.remove(eliminatedTag);
             elimination.restore(player, hearts);
         }
+        lastStand.update(player, hearts);
     }
 }
