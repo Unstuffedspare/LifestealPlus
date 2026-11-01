@@ -45,6 +45,16 @@ public final class KillHandler {
     private void tellAboutKill(KillOutcome outcome) {
         String killerName = outcome.killer().name(), victimName = outcome.victim().name();
         if (outcome.repeat()) explainRepeatKill(outcome);
+        if (outcome.linked()) {
+            for (Player admin : plugin.getServer().getOnlinePlayers()) {
+                if (!admin.hasPermission("lifestealplus.admin")) continue;
+                admin.sendRichMessage("<gold>⚠ <killer> killed <victim>, and they've logged in from the same address.</gold> "
+                                + "<gray>Could be farming, could be housemates: /lifesteal alts <killer>",
+                        Placeholder.unparsed("killer", killerName),
+                        Placeholder.unparsed("victim", victimName));
+            }
+            plugin.getLogger().info("Linked accounts: " + killerName + " killed " + victimName);
+        }
         if (outcome.shielded()) {
             Player killer = plugin.getServer().getPlayer(outcome.killer().player());
             if (killer != null) killer.sendRichMessage("<aqua>🛡 No hearts moved: one of you still has a new-player shield.");

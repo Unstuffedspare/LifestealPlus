@@ -6,6 +6,7 @@ import com.mojang.brigadier.arguments.StringArgumentType;
 import com.mojang.brigadier.context.CommandContext;
 import com.mojang.brigadier.suggestion.SuggestionProvider;
 import com.mojang.brigadier.tree.LiteralCommandNode;
+import dev.lifestealplus.admin.AdminCommands;
 import dev.lifestealplus.combat.NewbieShield;
 import dev.lifestealplus.core.BountyException;
 import dev.lifestealplus.core.BountyTotal;
@@ -48,10 +49,12 @@ final class LifestealCommands {
     private final MostWanted mostWanted;
     private final NewbieShield shield;
     private final EventCommands events;
+    private final AdminCommands admin;
 
     LifestealCommands(LifestealPlugin plugin, HeartService hearts, HeartTracker tracker, MostWanted mostWanted,
-                      NewbieShield shield, EventCommands events) {
+                      NewbieShield shield, EventCommands events, AdminCommands admin) {
         this.events = events;
+        this.admin = admin;
         this.plugin = plugin;
         this.hearts = hearts;
         this.tracker = tracker;
@@ -65,6 +68,7 @@ final class LifestealCommands {
         commands.register(bountyCommand(), "Stake your hearts on another player's head");
         commands.register(vengeanceCommand(), "See who you can take vengeance on, and who can on you");
         commands.register(shieldCommand(), "See how long your new-player shield lasts");
+        commands.register(admin.leaderboardCommand(), "Most hearts this season, or a past season's final standings");
     }
 
     private LiteralCommandNode<CommandSourceStack> shieldCommand() {
@@ -285,6 +289,9 @@ final class LifestealCommands {
                                                     }, tracker.mainThread()));
                                             return Command.SINGLE_SUCCESS;
                                         }))))
+                .then(admin.altsNode())
+                .then(admin.flagsNode())
+                .then(admin.seasonNode())
                 .then(events.eventNode())
                 .then(events.finaleNode())
                 .then(events.itemNode())

@@ -92,6 +92,37 @@ public final class HeartService implements AutoCloseable {
     public record Marks(List<VengeanceMark> held, List<VengeanceMark> against) {
     }
 
+    public CompletableFuture<Void> recordLogin(UUID player, String addressHash) {
+        return submit(() -> {
+            store.recordLogin(player, addressHash);
+            return null;
+        });
+    }
+
+    public CompletableFuture<List<PlayerHearts>> linkedAccounts(UUID player) {
+        return submit(() -> store.linkedAccounts(player));
+    }
+
+    public CompletableFuture<List<AltFlag>> altFlags(int limit) {
+        return submit(() -> store.altFlags(limit));
+    }
+
+    public CompletableFuture<List<SeasonStanding>> archiveSeason(String name) {
+        return submit(() -> store.archiveSeason(name));
+    }
+
+    public CompletableFuture<List<SeasonStanding>> seasonStandings(String season) {
+        return submit(() -> store.seasonStandings(season));
+    }
+
+    public CompletableFuture<List<String>> seasons() {
+        return submit(store::seasons);
+    }
+
+    public CompletableFuture<List<PlayerHearts>> topHearts(int limit) {
+        return submit(() -> store.topHearts(limit));
+    }
+
     public CompletableFuture<Duration> shieldLeft(UUID player) {
         return submit(() -> store.shieldLeft(player));
     }

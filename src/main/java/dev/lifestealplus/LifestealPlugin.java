@@ -1,5 +1,8 @@
 package dev.lifestealplus;
 
+import dev.lifestealplus.admin.AdminCommands;
+import dev.lifestealplus.admin.AltTracker;
+import dev.lifestealplus.admin.SeasonReset;
 import dev.lifestealplus.combat.CombatBodies;
 import dev.lifestealplus.combat.CombatTagger;
 import dev.lifestealplus.combat.NewbieShield;
@@ -68,8 +71,15 @@ public final class LifestealPlugin extends JavaPlugin {
         }
         mostWanted = new MostWanted(this, tracker);
         mostWanted.schedule();
+        try {
+            getServer().getPluginManager().registerEvents(new AltTracker(hearts, getLogger()), this);
+        } catch (Exception e) {
+            getLogger().log(Level.SEVERE, "Couldn't start alt-account tracking; logins won't be recorded", e);
+        }
+        AdminCommands admin = new AdminCommands(this, hearts, tracker,
+                new SeasonReset(this, hearts, tracker, shield, bodies, finale));
         LifestealCommands commands = new LifestealCommands(this, hearts, tracker, mostWanted, shield,
-                new EventCommands(this, heartItems, bloodMoon, airdrops, finale));
+                new EventCommands(this, heartItems, bloodMoon, airdrops, finale), admin);
         PurgatoryCommands purgatoryCommands = settings.purgatory().enabled() ? startPurgatory(tracker) : null;
         getLifecycleManager().registerEventHandler(LifecycleEvents.COMMANDS, event -> {
             commands.register(event.registrar());

@@ -25,7 +25,7 @@ import org.sqlite.SQLiteDataSource;
  */
 public final class HeartStore implements AutoCloseable {
 
-    private static final int SCHEMA_VERSION = 6;
+    private static final int SCHEMA_VERSION = 7;
 
     private final Connection conn;
     private final Clock clock;
@@ -164,6 +164,244 @@ public final class HeartStore implements AutoCloseable {
                 }
                 return null;
             });
+        }
+        if (version < 7) {
+            inTransaction(() -> {
+                try (Statement st = conn.createStatement()) {
+                    st.execute("""
+                            CREATE TABLE logins (
+                                uuid         TEXT    NOT NULL,
+                                address_hash TEXT    NOT NULL,
+                                first_seen   INTEGER NOT NULL,
+                                last_seen    INTEGER NOT NULL,
+                                PRIMARY KEY (uuid, address_hash)
+                            )""");
+                    st.execute("CREATE INDEX logins_address ON logins(address_hash)");
+                    st.execute("""
+                            CREATE TABLE alt_flags (
+                                id          INTEGER PRIMARY KEY AUTOINCREMENT,
+                                event_id    INTEGER NOT NULL,
+                                at          INTEGER NOT NULL,
+                                killer      TEXT    NOT NULL,
+                                killer_name TEXT    NOT NULL,
+                                victim      TEXT    NOT NULL,
+                                victim_name TEXT    NOT NULL
+                            )""");
+                    st.execute("""
+                            CREATE TABLE seasons (
+                                name        TEXT PRIMARY KEY COLLATE NOCASE,
+                                archived_at INTEGER NOT NULL
+                            )""");
+                    st.execute("""
+                            CREATE TABLE season_standings (
+                                season       TEXT    NOT NULL,
+                                rank         INTEGER NOT NULL,
+                                uuid         TEXT    NOT NULL,
+                                name         TEXT    NOT NULL,
+                                hearts       INTEGER NOT NULL,
+                                kills        INTEGER NOT NULL,
+                                deaths       INTEGER NOT NULL,
+                                eliminations INTEGER NOT NULL,
+                                PRIMARY KEY (season, rank)
+                            )""");
+                    // Same columns as heart_ledger, plus the season they belonged to.
+                    st.execute("""
+                            CREATE TABLE heart_ledger_archive (
+                                season        TEXT NOT NULL,
+                                id            INTEGER,
+                                event_id      INTEGER,
+                                at            INTEGER,
+                                player_uuid   TEXT,
+                                player_name   TEXT,
+                                cause         TEXT,
+                                op            TEXT,
+                                requested     INTEGER,
+                                hearts_before INTEGER,
+                                hearts_after  INTEGER,
+                                other_uuid    TEXT,
+                                other_name    TEXT,
+                                actor         TEXT,
+                                note          TEXT
+                            )""");
+                    st.execute("PRAGMA user_version = 7");
+                }
+                return null;
+            });
+        }
+    }
+
+    /**
+     * Remembers that a player logged in from an address. Only a salted hash of the address is
+     * ever stored, so admins can see two accounts share one without anyone seeing an IP.
+     */
+    public void recordLogin(UUID player, String addressHash) throws SQLException {
+        long now = clock.millis();
+        try (PreparedStatement ps = conn.prepareStatement("""
+                INSERT INTO logins (uuid, address_hash, first_seen, last_seen) VALUES (?, ?, ?, ?)
+                ON CONFLICT(uuid, address_hash) DO UPDATE SET last_seen = excluded.last_seen""")) {
+            ps.setString(1, player.toString());
+            ps.setString(2, addressHash);
+            ps.setLong(3, now);
+            ps.setLong(4, now);
+            ps.executeUpdate();
+        }
+    }
+
+    /** Other accounts that have logged in from any address this one has. Links outlive season resets. */
+    public List<PlayerHearts> linkedAccounts(UUID player) throws SQLException {
+        try (PreparedStatement ps = conn.prepareStatement("""
+                SELECT DISTINCT p.uuid, p.name, p.hearts
+                FROM logins mine
+                JOIN logins theirs ON theirs.address_hash = mine.address_hash AND theirs.uuid <> mine.uuid
+                JOIN players p ON p.uuid = theirs.uuid
+                WHERE mine.uuid = ?
+                ORDER BY p.name COLLATE NOCASE""")) {
+            ps.setString(1, player.toString());
+            List<PlayerHearts> linked = new ArrayList<>();
+            try (ResultSet rs = ps.executeQuery()) {
+                while (rs.next()) linked.add(new PlayerHearts(UUID.fromString(rs.getString(1)), rs.getString(2), rs.getInt(3)));
+            }
+            return linked;
+        }
+    }
+
+    private boolean areLinked(UUID a, UUID b) throws SQLException {
+        try (PreparedStatement ps = conn.prepareStatement("""
+                SELECT 1 FROM logins x JOIN logins y ON y.address_hash = x.address_hash
+                WHERE x.uuid = ? AND y.uuid = ? LIMIT 1""")) {
+            ps.setString(1, a.toString());
+            ps.setString(2, b.toString());
+            try (ResultSet rs = ps.executeQuery()) {
+                return rs.next();
+            }
+        }
+    }
+
+    /** Newest first. */
+    public List<AltFlag> altFlags(int limit) throws SQLException {
+        try (PreparedStatement ps = conn.prepareStatement("""
+                SELECT event_id, at, killer, killer_name, victim, victim_name FROM alt_flags ORDER BY id DESC LIMIT ?""")) {
+            ps.setInt(1, limit);
+            List<AltFlag> flags = new ArrayList<>();
+            try (ResultSet rs = ps.executeQuery()) {
+                while (rs.next()) {
+                    flags.add(new AltFlag(rs.getLong(1), Instant.ofEpochMilli(rs.getLong(2)), UUID.fromString(rs.getString(3)),
+                            rs.getString(4), UUID.fromString(rs.getString(5)), rs.getString(6)));
+                }
+            }
+            return flags;
+        }
+    }
+
+    /**
+     * Ends the season: writes its final standings and full ledger to the archive under
+     * {@code name}, then clears every player and everything that hangs off them, so the next
+     * join starts fresh. Logins and alt flags are kept; links matter across seasons.
+     */
+    public List<SeasonStanding> archiveSeason(String name) throws SQLException {
+        return inTransaction(() -> {
+            try (PreparedStatement ps = conn.prepareStatement("SELECT 1 FROM seasons WHERE name = ?")) {
+                ps.setString(1, name);
+                try (ResultSet rs = ps.executeQuery()) {
+                    if (rs.next()) throw new IllegalArgumentException("A season called \"" + name + "\" has already been archived.");
+                }
+            }
+            List<SeasonStanding> standings = new ArrayList<>();
+            try (Statement st = conn.createStatement(); ResultSet rs = st.executeQuery("""
+                    SELECT p.uuid, p.name, p.hearts,
+                           (SELECT COUNT(*) FROM heart_ledger l WHERE l.cause = 'PVP_DEATH' AND l.other_uuid = p.uuid
+                                AND l.hearts_after < l.hearts_before) AS kills,
+                           (SELECT COUNT(*) FROM heart_ledger l WHERE l.player_uuid = p.uuid AND l.cause IN ('PVP_DEATH', 'DEATH')
+                                AND l.hearts_after < l.hearts_before) AS deaths,
+                           (SELECT COUNT(*) FROM heart_ledger l WHERE l.player_uuid = p.uuid AND l.hearts_before > 0
+                                AND l.hearts_after <= 0) AS eliminations
+                    FROM players p
+                    ORDER BY p.hearts DESC, kills DESC, p.name COLLATE NOCASE""")) {
+                int rank = 0;
+                while (rs.next()) {
+                    standings.add(new SeasonStanding(++rank, UUID.fromString(rs.getString(1)), rs.getString(2),
+                            rs.getInt(3), rs.getInt(4), rs.getInt(5), rs.getInt(6)));
+                }
+            }
+            try (PreparedStatement ps = conn.prepareStatement("""
+                    INSERT INTO season_standings (season, rank, uuid, name, hearts, kills, deaths, eliminations)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?)""")) {
+                for (SeasonStanding s : standings) {
+                    ps.setString(1, name);
+                    ps.setInt(2, s.rank());
+                    ps.setString(3, s.uuid().toString());
+                    ps.setString(4, s.name());
+                    ps.setInt(5, s.hearts());
+                    ps.setInt(6, s.kills());
+                    ps.setInt(7, s.deaths());
+                    ps.setInt(8, s.eliminations());
+                    ps.addBatch();
+                }
+                ps.executeBatch();
+            }
+            try (PreparedStatement ps = conn.prepareStatement("INSERT INTO seasons (name, archived_at) VALUES (?, ?)")) {
+                ps.setString(1, name);
+                ps.setLong(2, clock.millis());
+                ps.executeUpdate();
+            }
+            try (PreparedStatement ps = conn.prepareStatement("INSERT INTO heart_ledger_archive SELECT ?, * FROM heart_ledger")) {
+                ps.setString(1, name);
+                ps.executeUpdate();
+            }
+            try (Statement st = conn.createStatement()) {
+                for (String table : List.of("heart_ledger", "players", "purgatory_progress", "vengeance_marks", "bounties", "body_deaths")) {
+                    st.execute("DELETE FROM " + table);
+                }
+            }
+            return standings;
+        });
+    }
+
+    public List<SeasonStanding> seasonStandings(String season) throws SQLException {
+        try (PreparedStatement ps = conn.prepareStatement("""
+                SELECT rank, uuid, name, hearts, kills, deaths, eliminations FROM season_standings
+                WHERE season = ? COLLATE NOCASE ORDER BY rank""")) {
+            ps.setString(1, season);
+            List<SeasonStanding> standings = new ArrayList<>();
+            try (ResultSet rs = ps.executeQuery()) {
+                while (rs.next()) {
+                    standings.add(new SeasonStanding(rs.getInt(1), UUID.fromString(rs.getString(2)), rs.getString(3),
+                            rs.getInt(4), rs.getInt(5), rs.getInt(6), rs.getInt(7)));
+                }
+            }
+            return standings;
+        }
+    }
+
+    /** Archived seasons, oldest first. */
+    public List<String> seasons() throws SQLException {
+        try (Statement st = conn.createStatement(); ResultSet rs = st.executeQuery("SELECT name FROM seasons ORDER BY archived_at")) {
+            List<String> names = new ArrayList<>();
+            while (rs.next()) names.add(rs.getString(1));
+            return names;
+        }
+    }
+
+    public int archivedLedgerSize(String season) throws SQLException {
+        try (PreparedStatement ps = conn.prepareStatement("SELECT COUNT(*) FROM heart_ledger_archive WHERE season = ? COLLATE NOCASE")) {
+            ps.setString(1, season);
+            try (ResultSet rs = ps.executeQuery()) {
+                rs.next();
+                return rs.getInt(1);
+            }
+        }
+    }
+
+    /** The live leaderboard: players still in the game, most hearts first. */
+    public List<PlayerHearts> topHearts(int limit) throws SQLException {
+        try (PreparedStatement ps = conn.prepareStatement(
+                "SELECT uuid, name, hearts FROM players WHERE hearts > 0 ORDER BY hearts DESC, name COLLATE NOCASE LIMIT ?")) {
+            ps.setInt(1, limit);
+            List<PlayerHearts> top = new ArrayList<>();
+            try (ResultSet rs = ps.executeQuery()) {
+                while (rs.next()) top.add(new PlayerHearts(UUID.fromString(rs.getString(1)), rs.getString(2), rs.getInt(3)));
+            }
+            return top;
         }
     }
 
@@ -333,6 +571,20 @@ public final class HeartStore implements AutoCloseable {
             long now = clock.millis();
             String victimName = require(victim).name();
             String killerName = require(killer).name();
+            boolean linked = areLinked(victim, killer);
+            if (linked) {
+                try (PreparedStatement ps = conn.prepareStatement("""
+                        INSERT INTO alt_flags (event_id, at, killer, killer_name, victim, victim_name)
+                        VALUES (?, ?, ?, ?, ?, ?)""")) {
+                    ps.setLong(1, eventId);
+                    ps.setLong(2, now);
+                    ps.setString(3, killer.toString());
+                    ps.setString(4, killerName);
+                    ps.setString(5, victim.toString());
+                    ps.setString(6, victimName);
+                    ps.executeUpdate();
+                }
+            }
 
             if (!shieldLeft(victim).isZero() || !shieldLeft(killer).isZero()) {
                 HeartChange loss = applyOne(
@@ -343,7 +595,7 @@ public final class HeartStore implements AutoCloseable {
                         HeartRequest.add(killer, rules.heartsPerKill(), HeartCause.PVP_KILL, "server")
                                 .withOther(victim, victimName).withNote(NEWBIE_SHIELD),
                         rules, eventId, now, true);
-                return new KillOutcome(loss, gain, false, false, false, null, true);
+                return new KillOutcome(loss, gain, false, false, false, null, true, linked);
             }
 
             if (paidKillSince(victim, killer, now - rules.repeatKillWindow().toMillis(), rules)) {
@@ -356,7 +608,7 @@ public final class HeartStore implements AutoCloseable {
                                 .withOther(victim, victimName).withNote(REPEAT_KILL),
                         rules, eventId, now, true);
                 BountyClaim bounty = claimBounties(victim, victimName, killer, rules, eventId, now);
-                return new KillOutcome(loss, gain, true, false, false, bounty, false);
+                return new KillOutcome(loss, gain, true, false, false, bounty, false, linked);
             }
 
             boolean vengeance = consumeMark(victim, killer, now);
@@ -375,7 +627,7 @@ public final class HeartStore implements AutoCloseable {
             boolean marked = !vengeance && taken > 0 && !rules.vengeanceWindow().isZero();
             if (marked) mark(killer, victim, now + rules.vengeanceWindow().toMillis());
             BountyClaim bounty = claimBounties(victim, victimName, killer, rules, eventId, now);
-            return new KillOutcome(loss, gain, false, vengeance, marked, bounty, false);
+            return new KillOutcome(loss, gain, false, vengeance, marked, bounty, false, linked);
         });
     }
 
