@@ -24,7 +24,7 @@ import org.sqlite.SQLiteDataSource;
  */
 public final class HeartStore implements AutoCloseable {
 
-    private static final int SCHEMA_VERSION = 3;
+    private static final int SCHEMA_VERSION = 4;
 
     private final Connection conn;
     private final Clock clock;
@@ -127,6 +127,37 @@ public final class HeartStore implements AutoCloseable {
                 }
                 return null;
             });
+        }
+        if (version < 4) {
+            inTransaction(() -> {
+                try (Statement st = conn.createStatement()) {
+                    st.execute("""
+                            CREATE TABLE body_deaths (
+                                uuid TEXT PRIMARY KEY,
+                                at   INTEGER NOT NULL
+                            )""");
+                    st.execute("PRAGMA user_version = 4");
+                }
+                return null;
+            });
+        }
+    }
+
+    /** A combat-logger's body was killed while they were offline; their next login finishes the death. */
+    public void recordBodyDeath(UUID player) throws SQLException {
+        try (PreparedStatement ps = conn.prepareStatement(
+                "INSERT INTO body_deaths (uuid, at) VALUES (?, ?) ON CONFLICT(uuid) DO UPDATE SET at = excluded.at")) {
+            ps.setString(1, player.toString());
+            ps.setLong(2, clock.millis());
+            ps.executeUpdate();
+        }
+    }
+
+    /** Whether the player's body died while they were away. Clears the record, so it's only true once. */
+    public boolean takeBodyDeath(UUID player) throws SQLException {
+        try (PreparedStatement ps = conn.prepareStatement("DELETE FROM body_deaths WHERE uuid = ?")) {
+            ps.setString(1, player.toString());
+            return ps.executeUpdate() > 0;
         }
     }
 

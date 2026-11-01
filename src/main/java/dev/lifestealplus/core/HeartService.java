@@ -79,6 +79,17 @@ public final class HeartService implements AutoCloseable {
     public record Marks(List<VengeanceMark> held, List<VengeanceMark> against) {
     }
 
+    public CompletableFuture<Void> recordBodyDeath(UUID player) {
+        return submit(() -> {
+            store.recordBodyDeath(player);
+            return null;
+        });
+    }
+
+    public CompletableFuture<Boolean> takeBodyDeath(UUID player) {
+        return submit(() -> store.takeBodyDeath(player));
+    }
+
     public CompletableFuture<PurgatoryProgress> progress(UUID player) {
         return submit(() -> store.progress(player));
     }

@@ -11,7 +11,15 @@ import org.bukkit.configuration.file.FileConfiguration;
  * @param lastStandHearts players at this many hearts or fewer (but not eliminated) get Last Stand; 0 turns it off
  */
 public record PluginSettings(HeartRules rules, int naturalDeathLoss, String databaseFile, PurgatorySettings purgatory,
-                             boolean bountyAnonymous, int lastStandHearts, MostWantedSettings mostWanted) {
+                             boolean bountyAnonymous, int lastStandHearts, MostWantedSettings mostWanted,
+                             CombatSettings combat) {
+
+    /**
+     * @param tag how long a PvP hit keeps both players in combat
+     * @param body how long a combat-logger's body stays to be killed; zero means no bodies
+     */
+    public record CombatSettings(Duration tag, Duration body) {
+    }
 
     /**
      * @param interval how often the leader's rough location is broadcast; zero turns it off
@@ -69,7 +77,12 @@ public record PluginSettings(HeartRules rules, int naturalDeathLoss, String data
                 Duration.ofSeconds(Math.round(wantedMinutes * 60)), precision,
                 Math.max(1, config.getInt("most-wanted.min-players-online", 3)));
 
+        int tagSeconds = config.getInt("combat.tag-seconds", 15);
+        int bodySeconds = config.getInt("combat.body-seconds", 30);
+        if (tagSeconds < 0 || bodySeconds < 0) throw new IllegalArgumentException("combat times can't be negative");
+        CombatSettings combat = new CombatSettings(Duration.ofSeconds(tagSeconds), Duration.ofSeconds(bodySeconds));
+
         return new PluginSettings(rules, naturalDeathLoss, config.getString("database.file", "lifesteal.db"), purgatory,
-                config.getBoolean("bounty.anonymous", true), lastStand, mostWanted);
+                config.getBoolean("bounty.anonymous", true), lastStand, mostWanted, combat);
     }
 }

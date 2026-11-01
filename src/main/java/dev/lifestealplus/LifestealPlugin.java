@@ -1,5 +1,7 @@
 package dev.lifestealplus;
 
+import dev.lifestealplus.combat.CombatBodies;
+import dev.lifestealplus.combat.CombatTagger;
 import dev.lifestealplus.core.HeartService;
 import dev.lifestealplus.core.HeartStore;
 import dev.lifestealplus.purgatory.Purgatory;
@@ -22,6 +24,7 @@ public final class LifestealPlugin extends JavaPlugin {
     private HeartService hearts;
     private TrialManager trials;
     private MostWanted mostWanted;
+    private CombatBodies bodies;
 
     @Override
     public void onEnable() {
@@ -40,7 +43,12 @@ public final class LifestealPlugin extends JavaPlugin {
         }
 
         HeartTracker tracker = new HeartTracker(this);
-        getServer().getPluginManager().registerEvents(new PlayerListener(this, hearts, tracker), this);
+        KillHandler kills = new KillHandler(this, hearts, tracker);
+        CombatTagger tagger = new CombatTagger(this, tracker);
+        bodies = new CombatBodies(this, hearts, kills, tagger);
+        getServer().getPluginManager().registerEvents(tagger, this);
+        getServer().getPluginManager().registerEvents(bodies, this);
+        getServer().getPluginManager().registerEvents(new PlayerListener(this, hearts, tracker, kills, bodies), this);
         mostWanted = new MostWanted(this, tracker);
         mostWanted.schedule();
         LifestealCommands commands = new LifestealCommands(this, hearts, tracker, mostWanted);
@@ -101,6 +109,7 @@ public final class LifestealPlugin extends JavaPlugin {
     @Override
     public void onDisable() {
         if (trials != null) trials.shutdown();
+        if (bodies != null) bodies.shutdown();
         if (hearts == null) return;
         try {
             hearts.close();

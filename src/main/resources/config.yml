@@ -26,6 +26,14 @@ pvp:
   vengeance-minutes: 30
   vengeance-bonus-hearts: 1
 
+combat:
+  # Hitting another player, or being hit by one, puts you both in combat for this many
+  # seconds (shown above the hotbar). 0 turns combat tagging off.
+  tag-seconds: 15
+  # Logging out in combat leaves your body behind for this many seconds. If anyone kills
+  # it, that's your death: they get your heart and your items drop. 0 turns bodies off.
+  body-seconds: 30
+
 bounty:
   # Players can stake their own hearts on someone with /bounty place. Whoever kills the
   # target collects the lot. When true, the announcement doesn't say who placed it
