@@ -25,6 +25,8 @@ public final class HeartService implements AutoCloseable {
         return t;
     });
     private volatile HeartRules rules;
+    /** Multiplies heartsPerKill while an event (a Blood Moon) is running. */
+    private volatile int killMultiplier = 1;
 
     public HeartService(HeartStore store, HeartRules rules) {
         this.store = store;
@@ -51,8 +53,18 @@ public final class HeartService implements AutoCloseable {
         return apply(List.of(request)).thenApply(List::getFirst);
     }
 
+    public void setKillMultiplier(int multiplier) {
+        this.killMultiplier = Math.max(1, multiplier);
+    }
+
+    public int killMultiplier() {
+        return killMultiplier;
+    }
+
     public CompletableFuture<KillOutcome> kill(UUID victim, UUID killer) {
-        return submit(() -> store.kill(victim, killer, rules));
+        HeartRules now = rules;
+        HeartRules applied = killMultiplier == 1 ? now : now.withHeartsPerKill(now.heartsPerKill() * killMultiplier);
+        return submit(() -> store.kill(victim, killer, applied));
     }
 
     /** Fails with {@link BountyException} (wrapped) when the rules don't allow it. */
@@ -108,6 +120,28 @@ public final class HeartService implements AutoCloseable {
 
     public CompletableFuture<Boolean> takeBodyDeath(UUID player) {
         return submit(() -> store.takeBodyDeath(player));
+    }
+
+    public CompletableFuture<Optional<String>> state(String key) {
+        return submit(() -> store.state(key));
+    }
+
+    public CompletableFuture<Void> putState(String key, String value) {
+        return submit(() -> {
+            store.putState(key, value);
+            return null;
+        });
+    }
+
+    public CompletableFuture<Void> clearState(String key) {
+        return submit(() -> {
+            store.clearState(key);
+            return null;
+        });
+    }
+
+    public CompletableFuture<Optional<PlayerHearts>> lastStanding() {
+        return submit(store::lastStanding);
     }
 
     public CompletableFuture<PurgatoryProgress> progress(UUID player) {

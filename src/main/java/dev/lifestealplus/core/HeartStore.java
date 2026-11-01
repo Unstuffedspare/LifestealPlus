@@ -25,7 +25,7 @@ import org.sqlite.SQLiteDataSource;
  */
 public final class HeartStore implements AutoCloseable {
 
-    private static final int SCHEMA_VERSION = 5;
+    private static final int SCHEMA_VERSION = 6;
 
     private final Connection conn;
     private final Clock clock;
@@ -151,6 +151,63 @@ public final class HeartStore implements AutoCloseable {
                 }
                 return null;
             });
+        }
+        if (version < 6) {
+            inTransaction(() -> {
+                try (Statement st = conn.createStatement()) {
+                    st.execute("""
+                            CREATE TABLE server_state (
+                                key   TEXT PRIMARY KEY,
+                                value TEXT NOT NULL
+                            )""");
+                    st.execute("PRAGMA user_version = 6");
+                }
+                return null;
+            });
+        }
+    }
+
+    /** Small named values that have to survive restarts, like when the next server event is due. */
+    public Optional<String> state(String key) throws SQLException {
+        try (PreparedStatement ps = conn.prepareStatement("SELECT value FROM server_state WHERE key = ?")) {
+            ps.setString(1, key);
+            try (ResultSet rs = ps.executeQuery()) {
+                return rs.next() ? Optional.of(rs.getString(1)) : Optional.empty();
+            }
+        }
+    }
+
+    public void putState(String key, String value) throws SQLException {
+        try (PreparedStatement ps = conn.prepareStatement(
+                "INSERT INTO server_state (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value")) {
+            ps.setString(1, key);
+            ps.setString(2, value);
+            ps.executeUpdate();
+        }
+    }
+
+    public void clearState(String key) throws SQLException {
+        try (PreparedStatement ps = conn.prepareStatement("DELETE FROM server_state WHERE key = ?")) {
+            ps.setString(1, key);
+            ps.executeUpdate();
+        }
+    }
+
+    /** Players with at least one heart, online or not. */
+    public int aliveCount() throws SQLException {
+        try (Statement st = conn.createStatement(); ResultSet rs = st.executeQuery("SELECT COUNT(*) FROM players WHERE hearts > 0")) {
+            rs.next();
+            return rs.getInt(1);
+        }
+    }
+
+    /** The only player with hearts left, if exactly one is. */
+    public Optional<PlayerHearts> lastStanding() throws SQLException {
+        try (Statement st = conn.createStatement();
+             ResultSet rs = st.executeQuery("SELECT uuid, name, hearts FROM players WHERE hearts > 0 LIMIT 2")) {
+            if (!rs.next()) return Optional.empty();
+            PlayerHearts first = new PlayerHearts(UUID.fromString(rs.getString(1)), rs.getString(2), rs.getInt(3));
+            return rs.next() ? Optional.empty() : Optional.of(first);
         }
     }
 

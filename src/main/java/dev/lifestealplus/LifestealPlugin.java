@@ -5,6 +5,10 @@ import dev.lifestealplus.combat.CombatTagger;
 import dev.lifestealplus.combat.NewbieShield;
 import dev.lifestealplus.core.HeartService;
 import dev.lifestealplus.core.HeartStore;
+import dev.lifestealplus.events.Airdrops;
+import dev.lifestealplus.events.BloodMoon;
+import dev.lifestealplus.events.Finale;
+import dev.lifestealplus.items.HeartItems;
 import dev.lifestealplus.purgatory.Purgatory;
 import dev.lifestealplus.purgatory.PurgatoryCommands;
 import dev.lifestealplus.purgatory.PurgatoryListener;
@@ -26,6 +30,9 @@ public final class LifestealPlugin extends JavaPlugin {
     private TrialManager trials;
     private MostWanted mostWanted;
     private CombatBodies bodies;
+    private BloodMoon bloodMoon;
+    private Airdrops airdrops;
+    private Finale finale;
 
     @Override
     public void onEnable() {
@@ -52,9 +59,17 @@ public final class LifestealPlugin extends JavaPlugin {
         NewbieShield shield = new NewbieShield(this, hearts);
         getServer().getPluginManager().registerEvents(shield, this);
         getServer().getPluginManager().registerEvents(new PlayerListener(this, hearts, tracker, kills, bodies), this);
+        HeartItems heartItems = new HeartItems(this, hearts, tracker);
+        bloodMoon = new BloodMoon(this, hearts, heartItems);
+        airdrops = new Airdrops(this, hearts, heartItems);
+        finale = new Finale(this, hearts);
+        for (var listener : List.of(heartItems, bloodMoon, airdrops, finale)) {
+            getServer().getPluginManager().registerEvents(listener, this);
+        }
         mostWanted = new MostWanted(this, tracker);
         mostWanted.schedule();
-        LifestealCommands commands = new LifestealCommands(this, hearts, tracker, mostWanted, shield);
+        LifestealCommands commands = new LifestealCommands(this, hearts, tracker, mostWanted, shield,
+                new EventCommands(this, heartItems, bloodMoon, airdrops, finale));
         PurgatoryCommands purgatoryCommands = settings.purgatory().enabled() ? startPurgatory(tracker) : null;
         getLifecycleManager().registerEventHandler(LifecycleEvents.COMMANDS, event -> {
             commands.register(event.registrar());
@@ -102,7 +117,7 @@ public final class LifestealPlugin extends JavaPlugin {
             return null;
         }
         Purgatory purgatory = new Purgatory(this, world);
-        trials = new TrialManager(this, hearts, tracker, purgatory);
+        trials = new TrialManager(this, hearts, tracker, purgatory, finale::isActive);
         purgatory.setTrials(trials);
         tracker.setEliminationHandler(purgatory);
         getServer().getPluginManager().registerEvents(new PurgatoryListener(world, trials), this);
@@ -113,6 +128,8 @@ public final class LifestealPlugin extends JavaPlugin {
     public void onDisable() {
         if (trials != null) trials.shutdown();
         if (bodies != null) bodies.shutdown();
+        if (bloodMoon != null) bloodMoon.shutdown();
+        if (airdrops != null) airdrops.shutdown();
         if (hearts == null) return;
         try {
             hearts.close();

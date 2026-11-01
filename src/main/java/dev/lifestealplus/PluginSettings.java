@@ -12,7 +12,7 @@ import org.bukkit.configuration.file.FileConfiguration;
  */
 public record PluginSettings(HeartRules rules, int naturalDeathLoss, String databaseFile, PurgatorySettings purgatory,
                              boolean bountyAnonymous, int lastStandHearts, MostWantedSettings mostWanted,
-                             CombatSettings combat) {
+                             CombatSettings combat, EventSettings events) {
 
     /**
      * @param tag how long a PvP hit keeps both players in combat
@@ -86,6 +86,7 @@ public record PluginSettings(HeartRules rules, int naturalDeathLoss, String data
         CombatSettings combat = new CombatSettings(Duration.ofSeconds(tagSeconds), Duration.ofSeconds(bodySeconds));
 
         return new PluginSettings(rules, naturalDeathLoss, config.getString("database.file", "lifesteal.db"), purgatory,
-                config.getBoolean("bounty.anonymous", true), lastStand, mostWanted, combat);
+                config.getBoolean("bounty.anonymous", true), lastStand, mostWanted, combat,
+                EventSettings.from(config));
     }
 }

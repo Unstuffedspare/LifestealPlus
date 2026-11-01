@@ -47,9 +47,11 @@ final class LifestealCommands {
     private final HeartTracker tracker;
     private final MostWanted mostWanted;
     private final NewbieShield shield;
+    private final EventCommands events;
 
     LifestealCommands(LifestealPlugin plugin, HeartService hearts, HeartTracker tracker, MostWanted mostWanted,
-                      NewbieShield shield) {
+                      NewbieShield shield, EventCommands events) {
+        this.events = events;
         this.plugin = plugin;
         this.hearts = hearts;
         this.tracker = tracker;
@@ -283,6 +285,9 @@ final class LifestealCommands {
                                                     }, tracker.mainThread()));
                                             return Command.SINGLE_SUCCESS;
                                         }))))
+                .then(events.eventNode())
+                .then(events.finaleNode())
+                .then(events.itemNode())
                 .then(Commands.literal("mostwanted")
                         .executes(ctx -> {
                             if (mostWanted.announce() == null) {

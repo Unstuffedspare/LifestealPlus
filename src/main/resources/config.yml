@@ -75,6 +75,41 @@ purgatory:
   # Scales how many enemies each trial sends. 1.0 is normal; 0.5 is gentler, 1.5 harsher.
   difficulty: 1.0
 
+heart-items:
+  # Heart items come from airdrops and Blood Moons. Right-click a Heart to gain a heart;
+  # right-click with this many Heart Fragments to turn them into a Heart.
+  fragments-per-heart: 4
+
+blood-moon:
+  # Roughly how often a Blood Moon rises, in real days (the exact time is random).
+  # 0 turns them off.
+  every-days: 7
+  # How long one lasts. The overworld stays at night until it sets.
+  minutes: 20
+  # PvP kills move this many times the usual hearts during a Blood Moon.
+  kill-multiplier: 2
+  # Chance (0 to 1) that a hostile mob killed by a player drops a Heart Fragment.
+  fragment-chance: 0.02
+  # A Blood Moon waits until at least this many players are online.
+  min-players-online: 3
+
+airdrops:
+  # Roughly how often a heart crate falls, in minutes. 0 turns airdrops off.
+  every-minutes: 90
+  # Crates land within this many blocks of the overworld spawn.
+  radius: 1500
+  # The exact landing spot is announced this many minutes ahead.
+  warning-minutes: 5
+  # A crate disappears this many minutes after landing, opened or not.
+  despawn-minutes: 20
+  # Drops wait until at least this many players are online.
+  min-players-online: 3
+
+finale:
+  # Started by an admin with /lifesteal finale start <minutes> [final size]. While it runs,
+  # Purgatory can't revive anyone. This is how much the border hurts per block outside it.
+  damage-per-block: 1.0
+
 database:
   # SQLite file inside the plugin folder. Changing this needs a restart.
   file: lifesteal.db

@@ -16,6 +16,7 @@ import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ThreadLocalRandom;
+import java.util.function.BooleanSupplier;
 import java.util.logging.Level;
 import net.kyori.adventure.bossbar.BossBar;
 import net.kyori.adventure.text.Component;
@@ -60,6 +61,8 @@ public final class TrialManager {
     private final PurgatoryWorld world;
     private final NamespacedKey mobTag;
     private final BukkitTask ticker;
+    /** True during the season finale: trials can't bring anyone back. */
+    private final BooleanSupplier sealed;
 
     private Phase phase = Phase.IDLE;
     private int seconds;
@@ -70,7 +73,9 @@ public final class TrialManager {
     private LivingEntity boss;
     private BossBar bossBar;
 
-    public TrialManager(LifestealPlugin plugin, HeartService hearts, HeartTracker tracker, Purgatory purgatory) {
+    public TrialManager(LifestealPlugin plugin, HeartService hearts, HeartTracker tracker, Purgatory purgatory,
+                        BooleanSupplier sealed) {
+        this.sealed = sealed;
         this.plugin = plugin;
         this.hearts = hearts;
         this.tracker = tracker;
@@ -87,6 +92,10 @@ public final class TrialManager {
     /** Right-clicking the altar or /purgatory start. Joins the gathering trial if there is one. */
     public void call(Player player) {
         if (!canTakePart(player)) return;
+        if (sealed.getAsBoolean()) {
+            player.sendRichMessage("<dark_red>Purgatory is sealed for the finale. Nobody returns now.");
+            return;
+        }
         switch (phase) {
             case IDLE -> {
                 phase = Phase.GATHERING;
@@ -279,6 +288,15 @@ public final class TrialManager {
         Map<UUID, Boolean> survivors = new LinkedHashMap<>(participants);
         reset();
         int needed = settings().fragmentsNeeded();
+        if (sealed.getAsBoolean()) {
+            announce(MiniMessage.miniMessage().deserialize(
+                    "<dark_red>The trial is won, but the finale has sealed Purgatory: no fragments now."));
+            survivors.keySet().forEach(id -> {
+                Player p = plugin.getServer().getPlayer(id);
+                if (p != null) p.teleport(world.hub());
+            });
+            return;
+        }
         announce(MiniMessage.miniMessage().deserialize("<aqua>The trial is won."));
         survivors.forEach((id, earns) -> {
             Player p = plugin.getServer().getPlayer(id);

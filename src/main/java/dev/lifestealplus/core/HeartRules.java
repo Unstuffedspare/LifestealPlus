@@ -26,6 +26,12 @@ public record HeartRules(int startingHearts, int maxHearts, int reviveHearts, in
                 Duration.ZERO);
     }
 
+    /** The same rules with a different heartsPerKill (a Blood Moon doubles it). */
+    public HeartRules withHeartsPerKill(int perKill) {
+        return new HeartRules(startingHearts, maxHearts, reviveHearts, perKill, repeatKillWindow, vengeanceWindow,
+                vengeanceBonus, newbieShield);
+    }
+
     public HeartRules {
         if (newbieShield == null || newbieShield.isNegative()) {
             throw new IllegalArgumentException("newbieShield can't be negative");
