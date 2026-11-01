@@ -21,6 +21,7 @@ import io.papermc.paper.plugin.lifecycle.event.types.LifecycleEvents;
 import java.time.Clock;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.concurrent.CompletableFuture;
 import java.util.logging.Level;
 import org.bukkit.configuration.Configuration;
 import org.bukkit.configuration.file.FileConfiguration;
@@ -36,6 +37,8 @@ public final class LifestealPlugin extends JavaPlugin {
     private BloodMoon bloodMoon;
     private Airdrops airdrops;
     private Finale finale;
+    private Purgatory purgatory;
+    private CapSchedule capSchedule;
 
     @Override
     public void onEnable() {
@@ -77,12 +80,21 @@ public final class LifestealPlugin extends JavaPlugin {
             getLogger().log(Level.SEVERE, "Couldn't start alt-account tracking; logins won't be recorded", e);
         }
         AdminCommands admin = new AdminCommands(this, hearts, tracker,
-                new SeasonReset(this, hearts, tracker, shield, bodies, finale));
+                new SeasonReset(this, hearts, tracker, shield, bodies, finale, () -> capSchedule.seasonStarted()));
         LifestealCommands commands = new LifestealCommands(this, hearts, tracker, mostWanted, shield,
                 new EventCommands(this, heartItems, bloodMoon, airdrops, finale), admin);
         PurgatoryCommands purgatoryCommands = settings.purgatory().enabled() ? startPurgatory(tracker) : null;
+        capSchedule = new CapSchedule(this, hearts);
+        SocialCommands social = new SocialCommands(this, hearts, tracker, heartItems, finale, purgatory);
+        getServer().getPluginManager().registerEvents(new GhostChat(this, tracker), this);
+        // Pact shares and pledge refunds happen inside other changes; mirror them and tell the players.
+        hearts.onSideEffects(changes -> {
+            tracker.track(CompletableFuture.completedFuture(changes));
+            tracker.mainThread().execute(() -> changes.forEach(social::explainFollowOn));
+        });
         getLifecycleManager().registerEventHandler(LifecycleEvents.COMMANDS, event -> {
             commands.register(event.registrar());
+            social.register(event.registrar());
             if (purgatoryCommands != null) purgatoryCommands.register(event.registrar());
         });
 
@@ -126,7 +138,7 @@ public final class LifestealPlugin extends JavaPlugin {
             getLogger().log(Level.SEVERE, "Couldn't set up Purgatory; eliminated players will spectate instead", e);
             return null;
         }
-        Purgatory purgatory = new Purgatory(this, world);
+        purgatory = new Purgatory(this, world);
         trials = new TrialManager(this, hearts, tracker, purgatory, finale::isActive);
         purgatory.setTrials(trials);
         tracker.setEliminationHandler(purgatory);
@@ -159,6 +171,7 @@ public final class LifestealPlugin extends JavaPlugin {
         boolean wantedTimerChanged = !fresh.mostWanted().interval().equals(settings.mostWanted().interval());
         settings = fresh;
         hearts.setRules(fresh.rules());
+        capSchedule.refresh();
         if (wantedTimerChanged) mostWanted.schedule();
     }
 }

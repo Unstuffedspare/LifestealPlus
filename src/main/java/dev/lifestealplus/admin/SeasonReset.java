@@ -41,10 +41,13 @@ public final class SeasonReset {
     private final NewbieShield shield;
     private final CombatBodies bodies;
     private final Finale finale;
+    /** Runs once a new season has begun (the rising cap counts weeks from here). */
+    private final Runnable onNewSeason;
     private final Map<String, Pending> pending = new ConcurrentHashMap<>();
 
     public SeasonReset(LifestealPlugin plugin, HeartService hearts, HeartTracker tracker, NewbieShield shield,
-                       CombatBodies bodies, Finale finale) {
+                       CombatBodies bodies, Finale finale, Runnable onNewSeason) {
+        this.onNewSeason = onNewSeason;
         this.plugin = plugin;
         this.hearts = hearts;
         this.tracker = tracker;
@@ -100,6 +103,7 @@ public final class SeasonReset {
                         return;
                     }
                     announce(archived, request.nextName());
+                    onNewSeason.run();
                     for (Player player : plugin.getServer().getOnlinePlayers()) restart(player);
                 }, tracker.mainThread());
     }

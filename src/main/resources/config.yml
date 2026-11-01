@@ -13,6 +13,10 @@ hearts:
   per-kill: 1
   # Hearts lost dying to anything other than a player (mobs, fall, lava). 0 turns it off.
   natural-death-loss: 1
+  # Optional: a cap that rises through the season, one value per week from the season's
+  # start (or last /lifesteal season reset), e.g. [15, 20, 25]. After the last week the
+  # last value holds. Leave it empty to always use max above.
+  max-by-week: []
 
 pvp:
   # After a killer takes a heart from someone, killing that same person again within
@@ -74,11 +78,39 @@ purgatory:
   trial-cooldown-minutes: 20
   # Scales how many enemies each trial sends. 1.0 is normal; 0.5 is gentler, 1.5 harsher.
   difficulty: 1.0
+  # /rift <player>: one living player pays this many of their own hearts to bring an
+  # eliminated player back (with hearts.revive). Closed during the finale.
+  rift-cost: 6
+
+revival-vote:
+  # /pledge <player> <hearts>: living players chip in hearts to bring someone back. They
+  # return once the pledges add up to this many hearts from at least this many players.
+  # Pledges are refunded if the player comes back another way. Closed during the finale.
+  hearts-needed: 6
+  min-players: 3
+
+blood-pact:
+  # /pact <player>: two players share hearts won from kills and bounties, and when either
+  # dies the other loses a heart too. Breaking a pact means waiting this long for a new one.
+  break-cooldown-hours: 24
+
+ghosts:
+  # Eliminated players can /ghost to roam the overworld as spectators, and /whisper one
+  # message to a living player this often.
+  whisper-minutes: 60
+  # When true, eliminated players' chat only reaches other eliminated players and admins,
+  # and they can't /msg the living: /whisper is their only way through.
+  limit-chat: true
 
 heart-items:
   # Heart items come from airdrops and Blood Moons. Right-click a Heart to gain a heart;
   # right-click with this many Heart Fragments to turn them into a Heart.
   fragments-per-heart: 4
+  # Heart items fade so nobody can hoard them: each loses an equal share of its value per
+  # day and is gone after this many days. A faded Heart turns into the fragments it's still
+  # worth when used. Its tooltip shows the dates. 0 means they never fade. Players can make
+  # Heart items from their own hearts with /withdraw.
+  decay-days: 4
 
 blood-moon:
   # Roughly how often a Blood Moon rises, in real days (the exact time is random).

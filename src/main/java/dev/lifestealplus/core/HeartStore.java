@@ -25,7 +25,7 @@ import org.sqlite.SQLiteDataSource;
  */
 public final class HeartStore implements AutoCloseable {
 
-    private static final int SCHEMA_VERSION = 7;
+    private static final int SCHEMA_VERSION = 8;
 
     private final Connection conn;
     private final Clock clock;
@@ -228,6 +228,282 @@ public final class HeartStore implements AutoCloseable {
                 return null;
             });
         }
+        if (version < 8) {
+            inTransaction(() -> {
+                try (Statement st = conn.createStatement()) {
+                    st.execute("""
+                            CREATE TABLE revival_pledges (
+                                target  TEXT    NOT NULL,
+                                pledger TEXT    NOT NULL,
+                                hearts  INTEGER NOT NULL,
+                                at      INTEGER NOT NULL,
+                                PRIMARY KEY (target, pledger)
+                            )""");
+                    // Each pact is stored once, with the two players in UUID order.
+                    st.execute("""
+                            CREATE TABLE pacts (
+                                a     TEXT    NOT NULL,
+                                b     TEXT    NOT NULL,
+                                since INTEGER NOT NULL,
+                                PRIMARY KEY (a, b)
+                            )""");
+                    st.execute("""
+                            CREATE TABLE pact_cooldowns (
+                                uuid  TEXT PRIMARY KEY,
+                                until INTEGER NOT NULL
+                            )""");
+                    st.execute("PRAGMA user_version = 8");
+                }
+                return null;
+            });
+        }
+    }
+
+    /**
+     * Heart changes that happened because of another one: a pact partner's share, a pledge
+     * refund. The service hands them to the plugin after each call so they reach players too.
+     */
+    private final List<HeartChange> sideEffects = new ArrayList<>();
+
+    public List<HeartChange> drainSideEffects() {
+        List<HeartChange> drained = List.copyOf(sideEffects);
+        sideEffects.clear();
+        return drained;
+    }
+
+    /** Turns some of a player's own hearts into items. They keep at least one. */
+    public HeartChange withdraw(UUID player, int hearts, HeartRules rules) throws SQLException {
+        return inTransaction(() -> {
+            if (hearts < 1) throw new RuleException("Withdraw at least 1 heart.");
+            PlayerHearts current = require(player);
+            if (current.hearts() - hearts < 1) {
+                throw new RuleException("You have " + current.hearts() + " hearts and must keep at least 1.");
+            }
+            return applyOne(HeartRequest.add(player, -hearts, HeartCause.HEART_WITHDRAW, current.name()),
+                    rules, nextEventId(), clock.millis());
+        });
+    }
+
+    /**
+     * One living player pays {@code cost} of their own hearts to bring an eliminated player
+     * back with reviveHearts. Returns the rescuer's change, then the revival.
+     */
+    public List<HeartChange> openRift(UUID rescuer, UUID target, int cost, HeartRules rules) throws SQLException {
+        return inTransaction(() -> {
+            if (rescuer.equals(target)) throw new RuleException("You can't open a rift for yourself.");
+            PlayerHearts from = require(rescuer);
+            PlayerHearts to = require(target);
+            if (!to.eliminated()) throw new RuleException(to.name() + " isn't eliminated.");
+            if (from.hearts() - cost < 1) {
+                throw new RuleException("A rift costs " + cost + " hearts and you must keep at least 1 (you have " + from.hearts() + ").");
+            }
+            long eventId = nextEventId();
+            long now = clock.millis();
+            HeartChange paid = applyOne(HeartRequest.add(rescuer, -cost, HeartCause.RIFT, from.name()).withOther(target, to.name()),
+                    rules, eventId, now);
+            HeartChange revive = applyOne(HeartRequest.set(target, rules.reviveHearts(), HeartCause.REVIVE, from.name())
+                    .withOther(rescuer, from.name()).withNote("rift"), rules, eventId, now);
+            return List.of(paid, revive);
+        });
+    }
+
+    /**
+     * Puts some of the pledger's hearts toward reviving an eliminated player. When the pledges
+     * reach {@code needed} hearts from at least {@code minVoters} players, the target comes back
+     * and the pledges are spent. Pledging again adds to your earlier pledge.
+     */
+    public PledgeOutcome pledge(UUID pledger, UUID target, int hearts, int needed, int minVoters, HeartRules rules)
+            throws SQLException {
+        return inTransaction(() -> {
+            if (hearts < 1) throw new RuleException("Pledge at least 1 heart.");
+            if (pledger.equals(target)) throw new RuleException("You can't pledge for yourself.");
+            PlayerHearts from = require(pledger);
+            PlayerHearts to = require(target);
+            if (!to.eliminated()) throw new RuleException(to.name() + " isn't eliminated.");
+            if (from.hearts() - hearts < 1) {
+                throw new RuleException("You have " + from.hearts() + " hearts and must keep at least 1.");
+            }
+            long eventId = nextEventId();
+            long now = clock.millis();
+            HeartChange paid = applyOne(HeartRequest.add(pledger, -hearts, HeartCause.REVIVAL_PLEDGE, from.name())
+                    .withOther(target, to.name()), rules, eventId, now);
+            try (PreparedStatement ps = conn.prepareStatement("""
+                    INSERT INTO revival_pledges (target, pledger, hearts, at) VALUES (?, ?, ?, ?)
+                    ON CONFLICT(target, pledger) DO UPDATE SET hearts = hearts + excluded.hearts, at = excluded.at""")) {
+                ps.setString(1, target.toString());
+                ps.setString(2, pledger.toString());
+                ps.setInt(3, hearts);
+                ps.setLong(4, now);
+                ps.executeUpdate();
+            }
+            PledgeTotal total = pledgeTotal(target, to.name());
+            HeartChange revive = null;
+            if (total.hearts() >= needed && total.voters() >= minVoters) {
+                // Spent, not refunded: clear them before the revival so its refund hook finds none.
+                deletePledges(target);
+                revive = applyOne(HeartRequest.set(target, rules.reviveHearts(), HeartCause.REVIVE, "revival vote")
+                        .withNote(total.voters() + " players pledged " + total.hearts() + " hearts"), rules, eventId, now);
+            }
+            return new PledgeOutcome(paid, total, revive);
+        });
+    }
+
+    /** Takes back your pledge for a target and refunds it. */
+    public HeartChange cancelPledge(UUID pledger, UUID target, HeartRules rules) throws SQLException {
+        return inTransaction(() -> {
+            int pledged;
+            try (PreparedStatement ps = conn.prepareStatement(
+                    "SELECT hearts FROM revival_pledges WHERE target = ? AND pledger = ?")) {
+                ps.setString(1, target.toString());
+                ps.setString(2, pledger.toString());
+                try (ResultSet rs = ps.executeQuery()) {
+                    if (!rs.next()) throw new RuleException("You haven't pledged anything for " + require(target).name() + ".");
+                    pledged = rs.getInt(1);
+                }
+            }
+            try (PreparedStatement ps = conn.prepareStatement("DELETE FROM revival_pledges WHERE target = ? AND pledger = ?")) {
+                ps.setString(1, target.toString());
+                ps.setString(2, pledger.toString());
+                ps.executeUpdate();
+            }
+            return applyOne(HeartRequest.add(pledger, pledged, HeartCause.REVIVAL_REFUND, require(pledger).name())
+                    .withOther(target, require(target).name()), rules, nextEventId(), clock.millis());
+        });
+    }
+
+    /** Every eliminated player someone has pledged for, most hearts first. */
+    public List<PledgeTotal> pledges() throws SQLException {
+        try (Statement st = conn.createStatement(); ResultSet rs = st.executeQuery("""
+                SELECT r.target, p.name, SUM(r.hearts) AS total, COUNT(*) AS voters
+                FROM revival_pledges r JOIN players p ON p.uuid = r.target
+                GROUP BY r.target, p.name ORDER BY total DESC, p.name""")) {
+            List<PledgeTotal> totals = new ArrayList<>();
+            while (rs.next()) {
+                totals.add(new PledgeTotal(UUID.fromString(rs.getString(1)), rs.getString(2), rs.getInt(3), rs.getInt(4)));
+            }
+            return totals;
+        }
+    }
+
+    private PledgeTotal pledgeTotal(UUID target, String name) throws SQLException {
+        try (PreparedStatement ps = conn.prepareStatement(
+                "SELECT COALESCE(SUM(hearts), 0), COUNT(*) FROM revival_pledges WHERE target = ?")) {
+            ps.setString(1, target.toString());
+            try (ResultSet rs = ps.executeQuery()) {
+                rs.next();
+                return new PledgeTotal(target, name, rs.getInt(1), rs.getInt(2));
+            }
+        }
+    }
+
+    private void deletePledges(UUID target) throws SQLException {
+        try (PreparedStatement ps = conn.prepareStatement("DELETE FROM revival_pledges WHERE target = ?")) {
+            ps.setString(1, target.toString());
+            ps.executeUpdate();
+        }
+    }
+
+    /** The target came back some other way: everyone who pledged gets their hearts back. */
+    private void refundPledges(UUID target, String targetName, HeartRules rules, long eventId, long now) throws SQLException {
+        List<Object[]> rows = new ArrayList<>();
+        try (PreparedStatement ps = conn.prepareStatement("SELECT pledger, hearts FROM revival_pledges WHERE target = ?")) {
+            ps.setString(1, target.toString());
+            try (ResultSet rs = ps.executeQuery()) {
+                while (rs.next()) rows.add(new Object[] {rs.getString(1), rs.getInt(2)});
+            }
+        }
+        if (rows.isEmpty()) return;
+        deletePledges(target);
+        for (Object[] row : rows) {
+            sideEffects.add(applyOne(HeartRequest.add(UUID.fromString((String) row[0]), (Integer) row[1], HeartCause.REVIVAL_REFUND,
+                    "server").withOther(target, targetName).withNote("came back another way"), rules, eventId, now));
+        }
+    }
+
+    /** Links two players' fates. Both must be alive, unshielded, unpacted and off cooldown. */
+    public void formPact(UUID first, UUID second) throws SQLException {
+        inTransaction(() -> {
+            if (first.equals(second)) throw new RuleException("You can't make a pact with yourself.");
+            PlayerHearts a = require(first), b = require(second);
+            long now = clock.millis();
+            for (PlayerHearts p : List.of(a, b)) {
+                if (p.eliminated()) throw new RuleException(p.name() + " is eliminated.");
+                if (!shieldLeft(p.uuid()).isZero()) throw new RuleException(p.name() + " still has a new-player shield.");
+                if (pactPartner(p.uuid()).isPresent()) throw new RuleException(p.name() + " is already in a Blood Pact.");
+                try (PreparedStatement ps = conn.prepareStatement("SELECT until FROM pact_cooldowns WHERE uuid = ? AND until > ?")) {
+                    ps.setString(1, p.uuid().toString());
+                    ps.setLong(2, now);
+                    try (ResultSet rs = ps.executeQuery()) {
+                        if (rs.next()) throw new RuleException(p.name() + " broke a pact recently and can't make another yet.");
+                    }
+                }
+            }
+            boolean ordered = first.toString().compareTo(second.toString()) < 0;
+            try (PreparedStatement ps = conn.prepareStatement("INSERT INTO pacts (a, b, since) VALUES (?, ?, ?)")) {
+                ps.setString(1, (ordered ? first : second).toString());
+                ps.setString(2, (ordered ? second : first).toString());
+                ps.setLong(3, now);
+                ps.executeUpdate();
+            }
+            return null;
+        });
+    }
+
+    /** Ends the player's pact; they can't make a new one for {@code cooldown}. Returns who they were bound to. */
+    public PlayerHearts breakPact(UUID player, java.time.Duration cooldown) throws SQLException {
+        return inTransaction(() -> {
+            PlayerHearts partner = pactPartner(player)
+                    .orElseThrow(() -> new RuleException("You're not in a Blood Pact."));
+            dissolvePact(player);
+            try (PreparedStatement ps = conn.prepareStatement("""
+                    INSERT INTO pact_cooldowns (uuid, until) VALUES (?, ?)
+                    ON CONFLICT(uuid) DO UPDATE SET until = excluded.until""")) {
+                ps.setString(1, player.toString());
+                ps.setLong(2, clock.millis() + cooldown.toMillis());
+                ps.executeUpdate();
+            }
+            return partner;
+        });
+    }
+
+    public Optional<PlayerHearts> pactPartner(UUID player) throws SQLException {
+        try (PreparedStatement ps = conn.prepareStatement(
+                "SELECT CASE WHEN a = ? THEN b ELSE a END FROM pacts WHERE a = ? OR b = ?")) {
+            ps.setString(1, player.toString());
+            ps.setString(2, player.toString());
+            ps.setString(3, player.toString());
+            try (ResultSet rs = ps.executeQuery()) {
+                if (!rs.next()) return Optional.empty();
+                return find(UUID.fromString(rs.getString(1)));
+            }
+        }
+    }
+
+    private void dissolvePact(UUID player) throws SQLException {
+        try (PreparedStatement ps = conn.prepareStatement("DELETE FROM pacts WHERE a = ? OR b = ?")) {
+            ps.setString(1, player.toString());
+            ps.setString(2, player.toString());
+            ps.executeUpdate();
+        }
+    }
+
+    /**
+     * A pact partner shares in gains from kills and bounties (the same amount) and in deaths
+     * (one heart). Never between the two partners themselves, and never from a share.
+     */
+    private void sharePact(HeartRequest request, HeartChange change, HeartRules rules, long eventId, long now)
+            throws SQLException {
+        if (change.delta() == 0 || request.cause() == HeartCause.PACT_SHARE) return;
+        int share = switch (request.cause()) {
+            case PVP_KILL, BOUNTY_CLAIM -> Math.max(0, change.delta());
+            case PVP_DEATH, DEATH -> change.delta() < 0 ? -1 : 0;
+            default -> 0;
+        };
+        if (share == 0) return;
+        Optional<PlayerHearts> partner = pactPartner(request.player());
+        if (partner.isEmpty() || partner.get().uuid().equals(request.otherUuid())) return;
+        sideEffects.add(applyOne(HeartRequest.add(partner.get().uuid(), share, HeartCause.PACT_SHARE, "server")
+                .withOther(request.player(), change.name()), rules, eventId, now));
     }
 
     /**
@@ -349,7 +625,8 @@ public final class HeartStore implements AutoCloseable {
                 ps.executeUpdate();
             }
             try (Statement st = conn.createStatement()) {
-                for (String table : List.of("heart_ledger", "players", "purgatory_progress", "vengeance_marks", "bounties", "body_deaths")) {
+                for (String table : List.of("heart_ledger", "players", "purgatory_progress", "vengeance_marks", "bounties",
+                        "body_deaths", "revival_pledges", "pacts", "pact_cooldowns")) {
                     st.execute("DELETE FROM " + table);
                 }
             }
@@ -913,7 +1190,12 @@ public final class HeartStore implements AutoCloseable {
                 ledgerId = keys.getLong(1);
             }
         }
-        return new HeartChange(ledgerId, eventId, request.player(), current.name(), request.cause(), before, after);
+        HeartChange change = new HeartChange(ledgerId, eventId, request.player(), current.name(), request.cause(), before, after,
+                request.otherName());
+        if (!blocked) sharePact(request, change, rules, eventId, now);
+        if (change.eliminatedNow()) dissolvePact(request.player());
+        if (change.revivedNow()) refundPledges(request.player(), current.name(), rules, eventId, now);
+        return change;
     }
 
     public PurgatoryProgress progress(UUID player) throws SQLException {

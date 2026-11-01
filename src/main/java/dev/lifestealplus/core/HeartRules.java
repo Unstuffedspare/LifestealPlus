@@ -26,6 +26,21 @@ public record HeartRules(int startingHearts, int maxHearts, int reviveHearts, in
                 Duration.ZERO);
     }
 
+    /** The same rules with a different cap (the rising-cap schedule moves it week by week). */
+    public HeartRules withMaxHearts(int max) {
+        return new HeartRules(startingHearts, max, reviveHearts, heartsPerKill, repeatKillWindow, vengeanceWindow,
+                vengeanceBonus, newbieShield);
+    }
+
+    /**
+     * The cap for a week of the season (0 is the first week) from a schedule like [15, 20, 25];
+     * past the end of the schedule the last value holds. An empty schedule means {@code fixed}.
+     */
+    public static int capForWeek(java.util.List<Integer> schedule, int fixed, long week) {
+        if (schedule.isEmpty()) return fixed;
+        return schedule.get((int) Math.min(Math.max(week, 0), schedule.size() - 1));
+    }
+
     /** The same rules with a different heartsPerKill (a Blood Moon doubles it). */
     public HeartRules withHeartsPerKill(int perKill) {
         return new HeartRules(startingHearts, maxHearts, reviveHearts, perKill, repeatKillWindow, vengeanceWindow,

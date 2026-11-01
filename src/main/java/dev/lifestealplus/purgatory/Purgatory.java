@@ -30,6 +30,8 @@ public final class Purgatory implements EliminationHandler {
     private final PurgatoryWorld world;
     private final Kit kit;
     private final NamespacedKey stashKey;
+    /** Set while an eliminated player roams the overworld as a ghost instead of waiting in Purgatory. */
+    private final NamespacedKey ghostKey;
     private TrialManager trials;
 
     public Purgatory(LifestealPlugin plugin, PurgatoryWorld world) {
@@ -37,6 +39,7 @@ public final class Purgatory implements EliminationHandler {
         this.world = world;
         this.kit = new Kit(plugin);
         this.stashKey = new NamespacedKey(plugin, "purgatory_stash");
+        this.ghostKey = new NamespacedKey(plugin, "ghost");
     }
 
     PurgatoryWorld world() {
@@ -71,6 +74,10 @@ public final class Purgatory implements EliminationHandler {
 
     @Override
     public void enforce(Player player) {
+        if (isGhost(player)) {
+            if (player.getGameMode() != GameMode.SPECTATOR) player.setGameMode(GameMode.SPECTATOR);
+            return;
+        }
         Location at = player.getLocation();
         if (!world.contains(at) || (world.inArena(at) && !trials.isParticipant(player))) {
             player.teleport(world.hub());
@@ -82,6 +89,7 @@ public final class Purgatory implements EliminationHandler {
     @Override
     public void restore(Player player, int hearts) {
         trials.leave(player);
+        player.getPersistentDataContainer().remove(ghostKey);
         player.getInventory().clear();
         unstash(player);
         player.setGameMode(GameMode.SURVIVAL);
@@ -99,6 +107,33 @@ public final class Purgatory implements EliminationHandler {
     @Override
     public double eliminatedMaxHealth() {
         return 20.0;
+    }
+
+    public boolean isGhost(Player player) {
+        return player.getPersistentDataContainer().has(ghostKey, PersistentDataType.BOOLEAN);
+    }
+
+    /**
+     * Swaps an eliminated player between waiting in Purgatory and drifting through the
+     * overworld as a spectator. Returns true if they're a ghost now.
+     */
+    public boolean toggleGhost(Player player) {
+        var data = player.getPersistentDataContainer();
+        if (isGhost(player)) {
+            data.remove(ghostKey);
+            player.teleport(world.hub());
+            player.setGameMode(GameMode.ADVENTURE);
+            kit.give(player);
+            player.sendRichMessage("<dark_aqua>You drift back into Purgatory.");
+            return false;
+        }
+        trials.leave(player);
+        data.set(ghostKey, PersistentDataType.BOOLEAN, true);
+        player.setGameMode(GameMode.SPECTATOR);
+        player.teleport(plugin.getServer().getWorlds().getFirst().getSpawnLocation());
+        player.sendRichMessage("<gray>👻 You slip out of Purgatory as a ghost. You can watch, but not touch. "
+                + "<white>/whisper</white> reaches one living player an hour; <white>/ghost</white> takes you back.");
+        return true;
     }
 
     @Override

@@ -25,6 +25,10 @@ public final class HeartService implements AutoCloseable {
         return t;
     });
     private volatile HeartRules rules;
+    /** The rising-cap schedule's current cap, or null to use the configured one. */
+    private volatile Integer capOverride;
+    /** Gets heart changes that followed from another (pact shares, pledge refunds), on the database thread. */
+    private volatile java.util.function.Consumer<List<HeartChange>> sideEffects = changes -> { };
     /** Multiplies heartsPerKill while an event (a Blood Moon) is running. */
     private volatile int killMultiplier = 1;
 
@@ -33,8 +37,53 @@ public final class HeartService implements AutoCloseable {
         this.rules = rules;
     }
 
+    /** The rules in force right now: the configured ones, with the scheduled cap if there is one. */
     public HeartRules rules() {
-        return rules;
+        Integer cap = capOverride;
+        return cap == null ? rules : rules.withMaxHearts(cap);
+    }
+
+    public void setCapOverride(Integer cap) {
+        this.capOverride = cap;
+    }
+
+    public void onSideEffects(java.util.function.Consumer<List<HeartChange>> listener) {
+        this.sideEffects = listener;
+    }
+
+    public CompletableFuture<HeartChange> withdraw(UUID player, int hearts) {
+        return submit(() -> store.withdraw(player, hearts, rules()));
+    }
+
+    public CompletableFuture<List<HeartChange>> openRift(UUID rescuer, UUID target, int cost) {
+        return submit(() -> store.openRift(rescuer, target, cost, rules()));
+    }
+
+    public CompletableFuture<PledgeOutcome> pledge(UUID pledger, UUID target, int hearts, int needed, int minVoters) {
+        return submit(() -> store.pledge(pledger, target, hearts, needed, minVoters, rules()));
+    }
+
+    public CompletableFuture<HeartChange> cancelPledge(UUID pledger, UUID target) {
+        return submit(() -> store.cancelPledge(pledger, target, rules()));
+    }
+
+    public CompletableFuture<List<PledgeTotal>> pledges() {
+        return submit(store::pledges);
+    }
+
+    public CompletableFuture<Void> formPact(UUID first, UUID second) {
+        return submit(() -> {
+            store.formPact(first, second);
+            return null;
+        });
+    }
+
+    public CompletableFuture<PlayerHearts> breakPact(UUID player, Duration cooldown) {
+        return submit(() -> store.breakPact(player, cooldown));
+    }
+
+    public CompletableFuture<Optional<PlayerHearts>> pactPartner(UUID player) {
+        return submit(() -> store.pactPartner(player));
     }
 
     public void setRules(HeartRules rules) {
@@ -42,11 +91,11 @@ public final class HeartService implements AutoCloseable {
     }
 
     public CompletableFuture<PlayerHearts> touch(UUID uuid, String name) {
-        return submit(() -> store.touch(uuid, name, rules));
+        return submit(() -> store.touch(uuid, name, rules()));
     }
 
     public CompletableFuture<List<HeartChange>> apply(List<HeartRequest> requests) {
-        return submit(() -> store.apply(requests, rules));
+        return submit(() -> store.apply(requests, rules()));
     }
 
     public CompletableFuture<HeartChange> apply(HeartRequest request) {
@@ -62,18 +111,18 @@ public final class HeartService implements AutoCloseable {
     }
 
     public CompletableFuture<KillOutcome> kill(UUID victim, UUID killer) {
-        HeartRules now = rules;
+        HeartRules now = rules();
         HeartRules applied = killMultiplier == 1 ? now : now.withHeartsPerKill(now.heartsPerKill() * killMultiplier);
         return submit(() -> store.kill(victim, killer, applied));
     }
 
     /** Fails with {@link BountyException} (wrapped) when the rules don't allow it. */
     public CompletableFuture<BountyPlacement> placeBounty(UUID placer, UUID target, int hearts) {
-        return submit(() -> store.placeBounty(placer, target, hearts, rules));
+        return submit(() -> store.placeBounty(placer, target, hearts, rules()));
     }
 
     public CompletableFuture<List<HeartChange>> clearBounties(UUID target, String actor) {
-        return submit(() -> store.clearBounties(target, actor, rules));
+        return submit(() -> store.clearBounties(target, actor, rules()));
     }
 
     public CompletableFuture<Integer> bountyOn(UUID target) {
@@ -180,7 +229,7 @@ public final class HeartService implements AutoCloseable {
     }
 
     public CompletableFuture<TrialReward> awardFragment(UUID player, int needed) {
-        return submit(() -> store.awardFragment(player, needed, rules));
+        return submit(() -> store.awardFragment(player, needed, rules()));
     }
 
     public CompletableFuture<Optional<PlayerHearts>> find(UUID uuid) {
@@ -209,9 +258,15 @@ public final class HeartService implements AutoCloseable {
     private <T> CompletableFuture<T> submit(StoreCall<T> call) {
         return CompletableFuture.supplyAsync(() -> {
             try {
-                return call.call();
+                T result = call.call();
+                List<HeartChange> followOn = store.drainSideEffects();
+                if (!followOn.isEmpty()) sideEffects.accept(followOn);
+                return result;
             } catch (SQLException e) {
                 throw new CompletionException(e);
+            } finally {
+                // If the call failed, its transaction rolled back: forget anything it queued.
+                store.drainSideEffects();
             }
         }, db);
     }

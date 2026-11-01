@@ -7,6 +7,10 @@ import dev.lifestealplus.core.HeartRequest;
 import dev.lifestealplus.core.HeartService;
 import io.papermc.paper.datacomponent.DataComponentTypes;
 import io.papermc.paper.datacomponent.item.ItemLore;
+import java.time.Duration;
+import java.time.Instant;
+import java.time.ZoneId;
+import java.time.format.DateTimeFormatter;
 import java.util.List;
 import net.kyori.adventure.text.Component;
 import net.kyori.adventure.text.format.NamedTextColor;
@@ -49,11 +53,43 @@ public final class HeartItems implements Listener {
         this.hearts = hearts;
         this.tracker = tracker;
         this.kindKey = new NamespacedKey(plugin, "heart_item");
+        this.mintedKey = new NamespacedKey(plugin, "heart_minted");
     }
 
+    private static final DateTimeFormatter DATE = DateTimeFormatter.ofPattern("MMM d, HH:mm").withZone(ZoneId.systemDefault());
+    private final NamespacedKey mintedKey;
+
+    /** A fresh Heart: its fading (if any) counts from now, and its tooltip says when. */
     public ItemStack heart(int amount) {
-        return make(Kind.HEART, Material.RED_DYE, amount, Component.text("Heart", NamedTextColor.RED),
+        ItemStack item = make(Kind.HEART, Material.RED_DYE, amount, Component.text("Heart", NamedTextColor.RED),
                 "Right-click the air (or sneak-click a block) to gain a heart.");
+        long now = System.currentTimeMillis();
+        item.editPersistentDataContainer(data -> data.set(mintedKey, PersistentDataType.LONG, now));
+        int decayDays = plugin.settings().social().decayDays();
+        if (decayDays > 0) {
+            Instant minted = Instant.ofEpochMilli(now);
+            item.setData(DataComponentTypes.LORE, ItemLore.lore(List.of(
+                    loreLine("Right-click the air (or sneak-click a block) to gain a heart.", NamedTextColor.GRAY),
+                    loreLine("Starts fading " + DATE.format(minted.plus(Duration.ofDays(1)))
+                            + ", gone by " + DATE.format(minted.plus(Duration.ofDays(decayDays))) + ".", NamedTextColor.DARK_GRAY))));
+        }
+        return item;
+    }
+
+    private static Component loreLine(String text, NamedTextColor color) {
+        return Component.text(text, color).decoration(TextDecoration.ITALIC, false);
+    }
+
+    /**
+     * How much of a Heart is left, in days of value out of decayDays: each full day since it
+     * was made takes one off. Hearts from before decay existed never fade.
+     */
+    private int daysLeft(ItemStack item) {
+        int decayDays = plugin.settings().social().decayDays();
+        Long minted = item.getPersistentDataContainer().get(mintedKey, PersistentDataType.LONG);
+        if (decayDays <= 0 || minted == null) return decayDays <= 0 ? 1 : decayDays;
+        long age = Duration.between(Instant.ofEpochMilli(minted), Instant.now()).toDays();
+        return (int) Math.max(0, decayDays - age);
     }
 
     public ItemStack fragment(int amount) {
@@ -107,13 +143,22 @@ public final class HeartItems implements Listener {
             return;
         }
         ItemStack held = player.getInventory().getItem(hand);
+        ItemStack original = held.asOne();
+        int decayDays = plugin.settings().social().decayDays();
+        int left = daysLeft(held);
+        if (decayDays > 0 && left < decayDays) {
+            held.subtract();
+            fadedHeart(player, left, decayDays);
+            return;
+        }
         held.subtract();
         // Take it now, give it back if it did nothing, so a double-click can't spend one heart twice.
         tracker.track(hearts.apply(List.of(HeartRequest.add(player.getUniqueId(), 1, HeartCause.HEART_ITEM, player.getName()))))
                 .whenCompleteAsync((changes, error) -> {
                     if (error != null || changes.getFirst().delta() == 0) {
-                        player.getInventory().addItem(heart(1)).values()
-                                .forEach(left -> player.getWorld().dropItem(player.getLocation(), left));
+                        // The very same item, so its fade date doesn't reset.
+                        player.getInventory().addItem(original).values()
+                                .forEach(leftOver -> player.getWorld().dropItem(player.getLocation(), leftOver));
                         player.sendRichMessage(error != null
                                 ? "<red>That didn't work; the error is in the server log."
                                 : "<gray>You're already at the most hearts you can have.");
@@ -123,6 +168,21 @@ public final class HeartItems implements Listener {
                     player.sendRichMessage("<red>❤</red> <green>+1 heart.</green> <gray>You have <hearts> now.",
                             Placeholder.unparsed("hearts", String.valueOf(changes.getFirst().after())));
                 }, tracker.mainThread());
+    }
+
+    /** A Heart that has lost value breaks into the fragments it's still worth, or into nothing. */
+    private void fadedHeart(Player player, int daysLeft, int decayDays) {
+        int fragments = plugin.settings().events().fragmentsPerHeart() * daysLeft / decayDays;
+        if (fragments <= 0) {
+            player.playSound(player, Sound.BLOCK_SAND_BREAK, 1f, 0.8f);
+            player.sendRichMessage("<gray>That Heart was too old: it crumbles to dust in your hand.");
+            return;
+        }
+        player.getInventory().addItem(fragment(fragments)).values()
+                .forEach(left -> player.getWorld().dropItem(player.getLocation(), left));
+        player.playSound(player, Sound.BLOCK_AMETHYST_BLOCK_BREAK, 1f, 0.9f);
+        player.sendRichMessage("<gray>That Heart had faded. It breaks into <light_purple><n> Heart Fragments</light_purple>.",
+                Placeholder.unparsed("n", String.valueOf(fragments)));
     }
 
     private void combineFragments(Player player, EquipmentSlot hand) {

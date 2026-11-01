@@ -16,7 +16,12 @@ public enum HeartCause {
     BOUNTY_PLACE(false),
     BOUNTY_CLAIM(false),
     BOUNTY_REFUND(false),
-    HEART_ITEM(false);
+    HEART_ITEM(false),
+    HEART_WITHDRAW(false),
+    RIFT(false),
+    REVIVAL_PLEDGE(false),
+    REVIVAL_REFUND(false),
+    PACT_SHARE(false);
 
     private final boolean canRevive;
 
