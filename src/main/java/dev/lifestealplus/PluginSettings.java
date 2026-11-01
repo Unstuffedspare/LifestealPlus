@@ -42,6 +42,8 @@ public record PluginSettings(HeartRules rules, int naturalDeathLoss, String data
         if (repeatHours < 0) throw new IllegalArgumentException("pvp.repeat-kill-cooldown-hours can't be negative");
         double vengeanceMinutes = config.getDouble("pvp.vengeance-minutes", 30);
         if (vengeanceMinutes < 0) throw new IllegalArgumentException("pvp.vengeance-minutes can't be negative");
+        double shieldHours = config.getDouble("newbie-shield.hours", 3);
+        if (shieldHours < 0) throw new IllegalArgumentException("newbie-shield.hours can't be negative");
         HeartRules rules = new HeartRules(
                 config.getInt("hearts.starting", 10),
                 config.getInt("hearts.max", 20),
@@ -49,7 +51,8 @@ public record PluginSettings(HeartRules rules, int naturalDeathLoss, String data
                 config.getInt("hearts.per-kill", 1),
                 Duration.ofMinutes(Math.round(repeatHours * 60)),
                 Duration.ofSeconds(Math.round(vengeanceMinutes * 60)),
-                config.getInt("pvp.vengeance-bonus-hearts", 1));
+                config.getInt("pvp.vengeance-bonus-hearts", 1),
+                Duration.ofMinutes(Math.round(shieldHours * 60)));
         int naturalDeathLoss = config.getInt("hearts.natural-death-loss", 1);
         if (naturalDeathLoss < 0) throw new IllegalArgumentException("hearts.natural-death-loss can't be negative");
 

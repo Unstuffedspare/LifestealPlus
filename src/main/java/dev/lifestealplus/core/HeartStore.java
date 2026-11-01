@@ -8,6 +8,7 @@ import java.sql.SQLException;
 import java.sql.Statement;
 import java.sql.Types;
 import java.time.Clock;
+import java.time.Duration;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
@@ -24,7 +25,7 @@ import org.sqlite.SQLiteDataSource;
  */
 public final class HeartStore implements AutoCloseable {
 
-    private static final int SCHEMA_VERSION = 4;
+    private static final int SCHEMA_VERSION = 5;
 
     private final Connection conn;
     private final Clock clock;
@@ -141,6 +142,55 @@ public final class HeartStore implements AutoCloseable {
                 return null;
             });
         }
+        if (version < 5) {
+            inTransaction(() -> {
+                try (Statement st = conn.createStatement()) {
+                    // Players who already exist aren't new, so they start unshielded.
+                    st.execute("ALTER TABLE players ADD COLUMN shield_ms INTEGER NOT NULL DEFAULT 0");
+                    st.execute("PRAGMA user_version = 5");
+                }
+                return null;
+            });
+        }
+    }
+
+    /** Playtime left on the player's newbie shield; zero once it's worn off or been broken. */
+    public Duration shieldLeft(UUID player) throws SQLException {
+        try (PreparedStatement ps = conn.prepareStatement("SELECT shield_ms FROM players WHERE uuid = ?")) {
+            ps.setString(1, player.toString());
+            try (ResultSet rs = ps.executeQuery()) {
+                return rs.next() ? Duration.ofMillis(rs.getLong(1)) : Duration.ZERO;
+            }
+        }
+    }
+
+    /** Wears the shield down by {@code played}; returns what's left. */
+    public Duration spendShield(UUID player, Duration played) throws SQLException {
+        try (PreparedStatement ps = conn.prepareStatement(
+                "UPDATE players SET shield_ms = MAX(0, shield_ms - ?) WHERE uuid = ?")) {
+            ps.setLong(1, played.toMillis());
+            ps.setString(2, player.toString());
+            ps.executeUpdate();
+        }
+        return shieldLeft(player);
+    }
+
+    /** Ends the shield for good (the player attacked someone). True if there was one to break. */
+    public boolean breakShield(UUID player) throws SQLException {
+        try (PreparedStatement ps = conn.prepareStatement(
+                "UPDATE players SET shield_ms = 0 WHERE uuid = ? AND shield_ms > 0")) {
+            ps.setString(1, player.toString());
+            return ps.executeUpdate() > 0;
+        }
+    }
+
+    /** Admin tool: give or take away a shield. */
+    public void setShield(UUID player, Duration left) throws SQLException {
+        try (PreparedStatement ps = conn.prepareStatement("UPDATE players SET shield_ms = ? WHERE uuid = ?")) {
+            ps.setLong(1, Math.max(0, left.toMillis()));
+            ps.setString(2, player.toString());
+            ps.executeUpdate();
+        }
     }
 
     /** A combat-logger's body was killed while they were offline; their next login finishes the death. */
@@ -187,6 +237,7 @@ public final class HeartStore implements AutoCloseable {
                 ps.setLong(4, now);
                 ps.executeUpdate();
             }
+            setShield(uuid, rules.newbieShield());
             HeartRequest start = HeartRequest.set(uuid, rules.startingHearts(), HeartCause.FIRST_JOIN, "server");
             HeartChange change = applyOne(start, rules, nextEventId(), now);
             return new PlayerHearts(uuid, name, change.after());
@@ -226,6 +277,18 @@ public final class HeartStore implements AutoCloseable {
             String victimName = require(victim).name();
             String killerName = require(killer).name();
 
+            if (!shieldLeft(victim).isZero() || !shieldLeft(killer).isZero()) {
+                HeartChange loss = applyOne(
+                        HeartRequest.add(victim, -rules.heartsPerKill(), HeartCause.PVP_DEATH, "server")
+                                .withOther(killer, killerName).withNote(NEWBIE_SHIELD),
+                        rules, eventId, now, true);
+                HeartChange gain = applyOne(
+                        HeartRequest.add(killer, rules.heartsPerKill(), HeartCause.PVP_KILL, "server")
+                                .withOther(victim, victimName).withNote(NEWBIE_SHIELD),
+                        rules, eventId, now, true);
+                return new KillOutcome(loss, gain, false, false, false, null, true);
+            }
+
             if (paidKillSince(victim, killer, now - rules.repeatKillWindow().toMillis(), rules)) {
                 HeartChange loss = applyOne(
                         HeartRequest.add(victim, -rules.heartsPerKill(), HeartCause.PVP_DEATH, "server")
@@ -236,7 +299,7 @@ public final class HeartStore implements AutoCloseable {
                                 .withOther(victim, victimName).withNote(REPEAT_KILL),
                         rules, eventId, now, true);
                 BountyClaim bounty = claimBounties(victim, victimName, killer, rules, eventId, now);
-                return new KillOutcome(loss, gain, true, false, false, bounty);
+                return new KillOutcome(loss, gain, true, false, false, bounty, false);
             }
 
             boolean vengeance = consumeMark(victim, killer, now);
@@ -255,12 +318,21 @@ public final class HeartStore implements AutoCloseable {
             boolean marked = !vengeance && taken > 0 && !rules.vengeanceWindow().isZero();
             if (marked) mark(killer, victim, now + rules.vengeanceWindow().toMillis());
             BountyClaim bounty = claimBounties(victim, victimName, killer, rules, eventId, now);
-            return new KillOutcome(loss, gain, false, vengeance, marked, bounty);
+            return new KillOutcome(loss, gain, false, vengeance, marked, bounty, false);
         });
     }
 
     private static final String REPEAT_KILL = "repeat kill";
     private static final String VENGEANCE = "vengeance";
+    private static final String NEWBIE_SHIELD = "newbie shield";
+
+    /** Heart changes a newbie shield stops: deaths, and anything won from other players. Admin changes still apply. */
+    private static boolean shieldStops(HeartCause cause) {
+        return switch (cause) {
+            case DEATH, PVP_DEATH, PVP_KILL, BOUNTY_CLAIM -> true;
+            default -> false;
+        };
+    }
 
     /** Marks {@code marked} for {@code avenger}'s vengeance, replacing any older mark between the two. */
     private void mark(UUID marked, UUID avenger, long expiresAt) throws SQLException {
@@ -326,6 +398,9 @@ public final class HeartStore implements AutoCloseable {
             if (placer.equals(target)) throw new BountyException("You can't put a bounty on yourself.");
             PlayerHearts from = require(placer);
             PlayerHearts on = require(target);
+            if (!shieldLeft(placer).isZero()) {
+                throw new BountyException("You can't place bounties while your new-player shield is up.");
+            }
             if (on.eliminated()) throw new BountyException(on.name() + " is eliminated.");
             if (from.hearts() - hearts < 1) {
                 throw new BountyException("You have " + from.hearts() + " hearts and must keep at least 1.");
@@ -488,8 +563,12 @@ public final class HeartStore implements AutoCloseable {
             throws SQLException {
         PlayerHearts current = require(request.player());
         int before = current.hearts();
-        int after = blocked ? before : rules.resolve(before, request);
         String note = request.note();
+        if (!blocked && shieldStops(request.cause()) && !shieldLeft(request.player()).isZero()) {
+            blocked = true;
+            note = NEWBIE_SHIELD;
+        }
+        int after = blocked ? before : rules.resolve(before, request);
         if (note == null) note = autoNote(before, after, request);
 
         if (after != before) {

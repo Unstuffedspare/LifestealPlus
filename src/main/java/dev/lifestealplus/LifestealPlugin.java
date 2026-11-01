@@ -2,6 +2,7 @@ package dev.lifestealplus;
 
 import dev.lifestealplus.combat.CombatBodies;
 import dev.lifestealplus.combat.CombatTagger;
+import dev.lifestealplus.combat.NewbieShield;
 import dev.lifestealplus.core.HeartService;
 import dev.lifestealplus.core.HeartStore;
 import dev.lifestealplus.purgatory.Purgatory;
@@ -48,10 +49,12 @@ public final class LifestealPlugin extends JavaPlugin {
         bodies = new CombatBodies(this, hearts, kills, tagger);
         getServer().getPluginManager().registerEvents(tagger, this);
         getServer().getPluginManager().registerEvents(bodies, this);
+        NewbieShield shield = new NewbieShield(this, hearts);
+        getServer().getPluginManager().registerEvents(shield, this);
         getServer().getPluginManager().registerEvents(new PlayerListener(this, hearts, tracker, kills, bodies), this);
         mostWanted = new MostWanted(this, tracker);
         mostWanted.schedule();
-        LifestealCommands commands = new LifestealCommands(this, hearts, tracker, mostWanted);
+        LifestealCommands commands = new LifestealCommands(this, hearts, tracker, mostWanted, shield);
         PurgatoryCommands purgatoryCommands = settings.purgatory().enabled() ? startPurgatory(tracker) : null;
         getLifecycleManager().registerEventHandler(LifecycleEvents.COMMANDS, event -> {
             commands.register(event.registrar());

@@ -9,16 +9,27 @@ import java.time.Duration;
  *     nothing for killing the same victim again; zero turns the rule off
  * @param vengeanceWindow how long a victim has to kill their killer back for a bonus; zero turns vengeance off
  * @param vengeanceBonus extra hearts a vengeance kill takes from the killer, on top of the usual heartsPerKill
+ * @param newbieShield playtime a brand-new player spends unable to lose or gain hearts; zero means no shield
  */
 public record HeartRules(int startingHearts, int maxHearts, int reviveHearts, int heartsPerKill, Duration repeatKillWindow,
-                         Duration vengeanceWindow, int vengeanceBonus) {
+                         Duration vengeanceWindow, int vengeanceBonus, Duration newbieShield) {
 
-    /** Rules without vengeance. */
+    /** Rules without vengeance or a newbie shield. */
     public HeartRules(int startingHearts, int maxHearts, int reviveHearts, int heartsPerKill, Duration repeatKillWindow) {
         this(startingHearts, maxHearts, reviveHearts, heartsPerKill, repeatKillWindow, Duration.ZERO, 0);
     }
 
+    /** Rules without a newbie shield. */
+    public HeartRules(int startingHearts, int maxHearts, int reviveHearts, int heartsPerKill, Duration repeatKillWindow,
+                      Duration vengeanceWindow, int vengeanceBonus) {
+        this(startingHearts, maxHearts, reviveHearts, heartsPerKill, repeatKillWindow, vengeanceWindow, vengeanceBonus,
+                Duration.ZERO);
+    }
+
     public HeartRules {
+        if (newbieShield == null || newbieShield.isNegative()) {
+            throw new IllegalArgumentException("newbieShield can't be negative");
+        }
         if (vengeanceWindow == null || vengeanceWindow.isNegative()) {
             throw new IllegalArgumentException("vengeanceWindow can't be negative");
         }

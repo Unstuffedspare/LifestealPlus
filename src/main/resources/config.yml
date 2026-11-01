@@ -26,6 +26,12 @@ pvp:
   vengeance-minutes: 30
   vengeance-bonus-hearts: 1
 
+newbie-shield:
+  # Players joining for the first time get this many hours of playtime during which other
+  # players can't hurt them and they can't lose or gain hearts. Attacking another player
+  # ends it early. Players who joined before this setting existed don't get one. 0 turns it off.
+  hours: 3
+
 combat:
   # Hitting another player, or being hit by one, puts you both in combat for this many
   # seconds (shown above the hotbar). 0 turns combat tagging off.

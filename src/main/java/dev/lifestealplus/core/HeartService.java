@@ -1,6 +1,7 @@
 package dev.lifestealplus.core;
 
 import java.sql.SQLException;
+import java.time.Duration;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
@@ -77,6 +78,25 @@ public final class HeartService implements AutoCloseable {
     }
 
     public record Marks(List<VengeanceMark> held, List<VengeanceMark> against) {
+    }
+
+    public CompletableFuture<Duration> shieldLeft(UUID player) {
+        return submit(() -> store.shieldLeft(player));
+    }
+
+    public CompletableFuture<Duration> spendShield(UUID player, Duration played) {
+        return submit(() -> store.spendShield(player, played));
+    }
+
+    public CompletableFuture<Boolean> breakShield(UUID player) {
+        return submit(() -> store.breakShield(player));
+    }
+
+    public CompletableFuture<Void> setShield(UUID player, Duration left) {
+        return submit(() -> {
+            store.setShield(player, left);
+            return null;
+        });
     }
 
     public CompletableFuture<Void> recordBodyDeath(UUID player) {

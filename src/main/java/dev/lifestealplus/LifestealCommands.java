@@ -6,6 +6,7 @@ import com.mojang.brigadier.arguments.StringArgumentType;
 import com.mojang.brigadier.context.CommandContext;
 import com.mojang.brigadier.suggestion.SuggestionProvider;
 import com.mojang.brigadier.tree.LiteralCommandNode;
+import dev.lifestealplus.combat.NewbieShield;
 import dev.lifestealplus.core.BountyException;
 import dev.lifestealplus.core.BountyTotal;
 import dev.lifestealplus.core.HeartCause;
@@ -45,12 +46,15 @@ final class LifestealCommands {
     private final HeartService hearts;
     private final HeartTracker tracker;
     private final MostWanted mostWanted;
+    private final NewbieShield shield;
 
-    LifestealCommands(LifestealPlugin plugin, HeartService hearts, HeartTracker tracker, MostWanted mostWanted) {
+    LifestealCommands(LifestealPlugin plugin, HeartService hearts, HeartTracker tracker, MostWanted mostWanted,
+                      NewbieShield shield) {
         this.plugin = plugin;
         this.hearts = hearts;
         this.tracker = tracker;
         this.mostWanted = mostWanted;
+        this.shield = shield;
     }
 
     void register(Commands commands) {
@@ -58,6 +62,26 @@ final class LifestealCommands {
         commands.register(adminCommand(), "Lifesteal admin tools", List.of("lsp"));
         commands.register(bountyCommand(), "Stake your hearts on another player's head");
         commands.register(vengeanceCommand(), "See who you can take vengeance on, and who can on you");
+        commands.register(shieldCommand(), "See how long your new-player shield lasts");
+    }
+
+    private LiteralCommandNode<CommandSourceStack> shieldCommand() {
+        return Commands.literal("shield")
+                .executes(ctx -> {
+                    if (!(ctx.getSource().getSender() instanceof Player player)) {
+                        ctx.getSource().getSender().sendRichMessage("<red>Only players have shields.");
+                        return 0;
+                    }
+                    if (shield.isShielded(player)) {
+                        player.sendRichMessage("<aqua>🛡 Your new-player shield lasts another <time> of playtime.</aqua> "
+                                        + "<gray>Attacking another player ends it.",
+                                Placeholder.unparsed("time", NewbieShield.describe(shield.left(player))));
+                    } else {
+                        player.sendRichMessage("<gray>You don't have a new-player shield.");
+                    }
+                    return Command.SINGLE_SUCCESS;
+                })
+                .build();
     }
 
     private LiteralCommandNode<CommandSourceStack> bountyCommand() {
@@ -235,6 +259,28 @@ final class LifestealCommands {
                                                                         Placeholder.unparsed("count", String.valueOf(refunds.size())),
                                                                         Placeholder.unparsed("player", target.name()));
                                                             }, tracker.mainThread()));
+                                            return Command.SINGLE_SUCCESS;
+                                        }))))
+                .then(Commands.literal("shield")
+                        .then(Commands.argument("player", StringArgumentType.word())
+                                .suggests(ONLINE_NAMES)
+                                .then(Commands.argument("minutes", IntegerArgumentType.integer(0))
+                                        .executes(ctx -> {
+                                            CommandSender sender = ctx.getSource().getSender();
+                                            Duration amount = Duration.ofMinutes(IntegerArgumentType.getInteger(ctx, "minutes"));
+                                            withPlayer(sender, StringArgumentType.getString(ctx, "player"), target ->
+                                                    hearts.setShield(target.uuid(), amount).whenCompleteAsync((ok, error) -> {
+                                                        if (error != null) {
+                                                            fail(sender, error);
+                                                            return;
+                                                        }
+                                                        shield.changed(target.uuid(), amount);
+                                                        sender.sendRichMessage(amount.isZero()
+                                                                        ? "<green>Removed <player>'s new-player shield."
+                                                                        : "<green><player> now has a new-player shield for <time>.",
+                                                                Placeholder.unparsed("player", target.name()),
+                                                                Placeholder.unparsed("time", NewbieShield.describe(amount)));
+                                                    }, tracker.mainThread()));
                                             return Command.SINGLE_SUCCESS;
                                         }))))
                 .then(Commands.literal("mostwanted")

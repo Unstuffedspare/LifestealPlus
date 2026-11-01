@@ -11,9 +11,10 @@ import java.util.List;
  *     so the killer took it back plus the bonus
  * @param marked this kill marked the killer: the victim can now take vengeance
  * @param bounty what the killer collected from bounties on the victim, or null if there were none
+ * @param shielded one of them still had a newbie shield, so nothing moved and no bounty paid
  */
 public record KillOutcome(HeartChange victim, HeartChange killer, boolean repeat, boolean vengeance, boolean marked,
-                          BountyClaim bounty) {
+                          BountyClaim bounty, boolean shielded) {
 
     public List<HeartChange> changes() {
         List<HeartChange> changes = new ArrayList<>(List.of(victim, killer));
