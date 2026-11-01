@@ -1,14 +1,23 @@
 package dev.lifestealplus.core;
 
+import java.util.ArrayList;
 import java.util.List;
 
 /**
- * Both sides of a PvP kill. {@code repeat} means the same killer already took a heart
- * from this victim within the repeat-kill window, so nothing moved.
+ * Everything a PvP kill did.
+ *
+ * @param repeat the killer already took a heart from this victim recently, so no hearts moved
+ * @param vengeance the victim had taken the killer's heart within the vengeance window,
+ *     so the killer took it back plus the bonus
+ * @param marked this kill marked the killer: the victim can now take vengeance
+ * @param bounty what the killer collected from bounties on the victim, or null if there were none
  */
-public record KillOutcome(HeartChange victim, HeartChange killer, boolean repeat) {
+public record KillOutcome(HeartChange victim, HeartChange killer, boolean repeat, boolean vengeance, boolean marked,
+                          BountyClaim bounty) {
 
     public List<HeartChange> changes() {
-        return List.of(victim, killer);
+        List<HeartChange> changes = new ArrayList<>(List.of(victim, killer));
+        if (bounty != null) changes.add(bounty.change());
+        return changes;
     }
 }

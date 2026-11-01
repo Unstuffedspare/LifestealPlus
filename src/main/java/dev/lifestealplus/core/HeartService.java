@@ -54,6 +54,31 @@ public final class HeartService implements AutoCloseable {
         return submit(() -> store.kill(victim, killer, rules));
     }
 
+    /** Fails with {@link BountyException} (wrapped) when the rules don't allow it. */
+    public CompletableFuture<BountyPlacement> placeBounty(UUID placer, UUID target, int hearts) {
+        return submit(() -> store.placeBounty(placer, target, hearts, rules));
+    }
+
+    public CompletableFuture<List<HeartChange>> clearBounties(UUID target, String actor) {
+        return submit(() -> store.clearBounties(target, actor, rules));
+    }
+
+    public CompletableFuture<Integer> bountyOn(UUID target) {
+        return submit(() -> store.bountyOn(target));
+    }
+
+    public CompletableFuture<List<BountyTotal>> topBounties(int limit) {
+        return submit(() -> store.topBounties(limit));
+    }
+
+    /** Marks this player can use, then marks others hold on them. */
+    public CompletableFuture<Marks> marks(UUID player) {
+        return submit(() -> new Marks(store.marksHeldBy(player), store.marksOn(player)));
+    }
+
+    public record Marks(List<VengeanceMark> held, List<VengeanceMark> against) {
+    }
+
     public CompletableFuture<PurgatoryProgress> progress(UUID player) {
         return submit(() -> store.progress(player));
     }

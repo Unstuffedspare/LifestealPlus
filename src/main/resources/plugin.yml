@@ -13,6 +13,12 @@ permissions:
   lifestealplus.hearts.others:
     description: Check another player's hearts with /hearts <player>.
     default: true
+  lifestealplus.bounty:
+    description: Place, list and check bounties with /bounty.
+    default: true
+  lifestealplus.vengeance:
+    description: See your vengeance marks with /vengeance.
+    default: true
   lifestealplus.purgatory:
     description: Use /purgatory to see your progress and call or join trials while eliminated.
     default: true

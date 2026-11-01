@@ -10,7 +10,9 @@ import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.TimeUnit;
 import java.util.logging.Level;
 import net.kyori.adventure.text.Component;
+import net.kyori.adventure.text.minimessage.MiniMessage;
 import net.kyori.adventure.text.minimessage.tag.resolver.Placeholder;
+import net.kyori.adventure.text.minimessage.tag.resolver.TagResolver;
 import org.bukkit.entity.Player;
 import org.bukkit.event.EventHandler;
 import org.bukkit.event.EventPriority;
@@ -77,9 +79,7 @@ final class PlayerListener implements Listener {
         if (killer != null && !killer.getUniqueId().equals(victim.getUniqueId())) {
             CompletableFuture<KillOutcome> kill = hearts.kill(victim.getUniqueId(), killer.getUniqueId());
             tracker.track(kill.thenApply(KillOutcome::changes));
-            kill.thenAcceptAsync(outcome -> {
-                if (outcome.repeat()) explainRepeatKill(outcome);
-            }, tracker.mainThread());
+            kill.thenAcceptAsync(this::tellAboutKill, tracker.mainThread());
             return;
         }
         int loss = plugin.settings().naturalDeathLoss();
@@ -88,6 +88,52 @@ final class PlayerListener implements Listener {
             tracker.track(hearts.apply(List.of(
                     HeartRequest.add(victim.getUniqueId(), -loss, HeartCause.DEATH, "server").withNote(cause))));
         }
+    }
+
+    /** Anything about a kill beyond the plain heart transfer gets said out loud; the server hears vengeance and bounties. */
+    private void tellAboutKill(KillOutcome outcome) {
+        String killerName = outcome.killer().name(), victimName = outcome.victim().name();
+        if (outcome.repeat()) explainRepeatKill(outcome);
+        if (outcome.vengeance()) {
+            broadcast("<red>⚔ <killer> took vengeance on <victim>, taking back <hearts> hearts.",
+                    Placeholder.unparsed("killer", killerName),
+                    Placeholder.unparsed("victim", victimName),
+                    Placeholder.unparsed("hearts", String.valueOf(outcome.killer().delta())));
+        }
+        if (outcome.marked()) {
+            String window = formatWindow(hearts.rules().vengeanceWindow());
+            int back = hearts.rules().heartsPerKill() + hearts.rules().vengeanceBonus();
+            Player avenger = plugin.getServer().getPlayer(outcome.victim().player());
+            if (avenger != null) {
+                avenger.sendRichMessage("<red>You've marked <killer> for vengeance.</red> <gray>Kill them within <window> "
+                                + "to take back <back> hearts.",
+                        Placeholder.unparsed("killer", killerName),
+                        Placeholder.unparsed("window", window),
+                        Placeholder.unparsed("back", String.valueOf(back)));
+            }
+            Player marked = plugin.getServer().getPlayer(outcome.killer().player());
+            if (marked != null) {
+                marked.sendRichMessage("<red><victim> has marked you for vengeance</red> <gray>for the next <window>.",
+                        Placeholder.unparsed("victim", victimName),
+                        Placeholder.unparsed("window", window));
+            }
+        }
+        if (outcome.bounty() != null && outcome.bounty().change().delta() > 0) {
+            broadcast("<gold>💰 <killer> claimed the bounty on <victim>: <hearts> hearts.",
+                    Placeholder.unparsed("killer", killerName),
+                    Placeholder.unparsed("victim", victimName),
+                    Placeholder.unparsed("hearts", String.valueOf(outcome.bounty().change().delta())));
+        }
+        if (outcome.bounty() != null && outcome.bounty().remaining() > 0) {
+            broadcast("<gold><left> hearts of bounty are still on <victim> <gray>(<killer> couldn't carry more).",
+                    Placeholder.unparsed("left", String.valueOf(outcome.bounty().remaining())),
+                    Placeholder.unparsed("victim", victimName),
+                    Placeholder.unparsed("killer", killerName));
+        }
+    }
+
+    private void broadcast(String message, TagResolver... tags) {
+        plugin.getServer().broadcast(MiniMessage.miniMessage().deserialize(message, tags));
     }
 
     /** Without this, a kill that pays nothing looks like a bug to both players. */

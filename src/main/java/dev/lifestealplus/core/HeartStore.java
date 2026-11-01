@@ -24,7 +24,7 @@ import org.sqlite.SQLiteDataSource;
  */
 public final class HeartStore implements AutoCloseable {
 
-    private static final int SCHEMA_VERSION = 2;
+    private static final int SCHEMA_VERSION = 3;
 
     private final Connection conn;
     private final Clock clock;
@@ -101,6 +101,33 @@ public final class HeartStore implements AutoCloseable {
                 return null;
             });
         }
+        if (version < 3) {
+            inTransaction(() -> {
+                try (Statement st = conn.createStatement()) {
+                    st.execute("""
+                            CREATE TABLE vengeance_marks (
+                                marked     TEXT    NOT NULL,
+                                avenger    TEXT    NOT NULL,
+                                expires_at INTEGER NOT NULL,
+                                PRIMARY KEY (marked, avenger)
+                            )""");
+                    st.execute("""
+                            CREATE TABLE bounties (
+                                id            INTEGER PRIMARY KEY AUTOINCREMENT,
+                                target        TEXT    NOT NULL,
+                                placer        TEXT    NOT NULL,
+                                hearts        INTEGER NOT NULL,
+                                placed_at     INTEGER NOT NULL,
+                                closed_at     INTEGER,
+                                closed_by     TEXT,
+                                closed_reason TEXT
+                            )""");
+                    st.execute("CREATE INDEX bounties_open ON bounties(target) WHERE closed_at IS NULL");
+                    st.execute("PRAGMA user_version = 3");
+                }
+                return null;
+            });
+        }
     }
 
     /**
@@ -149,10 +176,17 @@ public final class HeartStore implements AutoCloseable {
     }
 
     /**
-     * A PvP kill: the victim loses {@code heartsPerKill} and the killer gains exactly
-     * what the victim lost (less if the killer is at the cap). If this killer already
-     * took a heart from this victim within the repeat-kill window, neither changes; both
-     * rows are still logged, noted "repeat kill".
+     * A PvP kill, as one event:
+     * <ul>
+     *   <li>The victim loses {@code heartsPerKill} and the killer gains exactly what the victim
+     *       lost (less if the killer is at the cap).</li>
+     *   <li>If this killer already took a heart from this victim within the repeat-kill window,
+     *       neither changes; both rows are still logged, noted "repeat kill".</li>
+     *   <li>If the victim had taken the killer's heart within the vengeance window, the killer
+     *       takes {@code vengeanceBonus} extra hearts back and the feud ends there. Otherwise a
+     *       kill that moved hearts marks the killer for the victim's vengeance.</li>
+     *   <li>Whatever the hearts did, the killer collects any bounties on the victim.</li>
+     * </ul>
      */
     public KillOutcome kill(UUID victim, UUID killer, HeartRules rules) throws SQLException {
         return inTransaction(() -> {
@@ -160,29 +194,238 @@ public final class HeartStore implements AutoCloseable {
             long now = clock.millis();
             String victimName = require(victim).name();
             String killerName = require(killer).name();
-            HeartRequest lossRequest = HeartRequest.add(victim, -rules.heartsPerKill(), HeartCause.PVP_DEATH, "server")
-                    .withOther(killer, killerName);
 
             if (paidKillSince(victim, killer, now - rules.repeatKillWindow().toMillis(), rules)) {
-                HeartChange loss = applyOne(lossRequest.withNote(REPEAT_KILL), rules, eventId, now, true);
+                HeartChange loss = applyOne(
+                        HeartRequest.add(victim, -rules.heartsPerKill(), HeartCause.PVP_DEATH, "server")
+                                .withOther(killer, killerName).withNote(REPEAT_KILL),
+                        rules, eventId, now, true);
                 HeartChange gain = applyOne(
                         HeartRequest.add(killer, rules.heartsPerKill(), HeartCause.PVP_KILL, "server")
                                 .withOther(victim, victimName).withNote(REPEAT_KILL),
                         rules, eventId, now, true);
-                return new KillOutcome(loss, gain, true);
+                BountyClaim bounty = claimBounties(victim, victimName, killer, rules, eventId, now);
+                return new KillOutcome(loss, gain, true, false, false, bounty);
             }
 
-            HeartChange loss = applyOne(lossRequest, rules, eventId, now);
+            boolean vengeance = consumeMark(victim, killer, now);
+            String note = vengeance ? VENGEANCE : null;
+            int amount = rules.heartsPerKill() + (vengeance ? rules.vengeanceBonus() : 0);
+            HeartChange loss = applyOne(
+                    HeartRequest.add(victim, -amount, HeartCause.PVP_DEATH, "server")
+                            .withOther(killer, killerName).withNote(note),
+                    rules, eventId, now);
             int taken = loss.before() - loss.after();
             HeartChange gain = applyOne(
                     HeartRequest.add(killer, taken, HeartCause.PVP_KILL, "server")
-                            .withOther(victim, victimName),
+                            .withOther(victim, victimName).withNote(note),
                     rules, eventId, now);
-            return new KillOutcome(loss, gain, false);
+
+            boolean marked = !vengeance && taken > 0 && !rules.vengeanceWindow().isZero();
+            if (marked) mark(killer, victim, now + rules.vengeanceWindow().toMillis());
+            BountyClaim bounty = claimBounties(victim, victimName, killer, rules, eventId, now);
+            return new KillOutcome(loss, gain, false, vengeance, marked, bounty);
         });
     }
 
     private static final String REPEAT_KILL = "repeat kill";
+    private static final String VENGEANCE = "vengeance";
+
+    /** Marks {@code marked} for {@code avenger}'s vengeance, replacing any older mark between the two. */
+    private void mark(UUID marked, UUID avenger, long expiresAt) throws SQLException {
+        try (PreparedStatement ps = conn.prepareStatement("""
+                INSERT INTO vengeance_marks (marked, avenger, expires_at) VALUES (?, ?, ?)
+                ON CONFLICT(marked, avenger) DO UPDATE SET expires_at = excluded.expires_at""")) {
+            ps.setString(1, marked.toString());
+            ps.setString(2, avenger.toString());
+            ps.setLong(3, expiresAt);
+            ps.executeUpdate();
+        }
+    }
+
+    /** Uses up {@code avenger}'s live mark on {@code marked}, if there is one. */
+    private boolean consumeMark(UUID marked, UUID avenger, long now) throws SQLException {
+        try (PreparedStatement ps = conn.prepareStatement(
+                "DELETE FROM vengeance_marks WHERE marked = ? AND avenger = ? AND expires_at > ?")) {
+            ps.setString(1, marked.toString());
+            ps.setString(2, avenger.toString());
+            ps.setLong(3, now);
+            return ps.executeUpdate() > 0;
+        }
+    }
+
+    /** Live marks {@code avenger} holds: the players they can take vengeance on. Soonest to expire first. */
+    public List<VengeanceMark> marksHeldBy(UUID avenger) throws SQLException {
+        return marks("m.avenger = ?", avenger);
+    }
+
+    /** Live marks on {@code marked}: the players who can take vengeance on them. */
+    public List<VengeanceMark> marksOn(UUID marked) throws SQLException {
+        return marks("m.marked = ?", marked);
+    }
+
+    private List<VengeanceMark> marks(String where, UUID who) throws SQLException {
+        try (PreparedStatement ps = conn.prepareStatement("""
+                SELECT m.marked, pm.name, m.avenger, pa.name, m.expires_at
+                FROM vengeance_marks m
+                JOIN players pm ON pm.uuid = m.marked
+                JOIN players pa ON pa.uuid = m.avenger
+                WHERE %s AND m.expires_at > ?
+                ORDER BY m.expires_at""".formatted(where))) {
+            ps.setString(1, who.toString());
+            ps.setLong(2, clock.millis());
+            List<VengeanceMark> marks = new ArrayList<>();
+            try (ResultSet rs = ps.executeQuery()) {
+                while (rs.next()) {
+                    marks.add(new VengeanceMark(UUID.fromString(rs.getString(1)), rs.getString(2),
+                            UUID.fromString(rs.getString(3)), rs.getString(4), Instant.ofEpochMilli(rs.getLong(5))));
+                }
+            }
+            return marks;
+        }
+    }
+
+    /**
+     * Stakes {@code hearts} of the placer's own hearts on {@code target}. The hearts leave the
+     * placer now and sit on the target until someone kills them (or an admin clears it).
+     */
+    public BountyPlacement placeBounty(UUID placer, UUID target, int hearts, HeartRules rules) throws SQLException {
+        return inTransaction(() -> {
+            if (hearts < 1) throw new BountyException("A bounty has to be at least 1 heart.");
+            if (placer.equals(target)) throw new BountyException("You can't put a bounty on yourself.");
+            PlayerHearts from = require(placer);
+            PlayerHearts on = require(target);
+            if (on.eliminated()) throw new BountyException(on.name() + " is eliminated.");
+            if (from.hearts() - hearts < 1) {
+                throw new BountyException("You have " + from.hearts() + " hearts and must keep at least 1.");
+            }
+            long now = clock.millis();
+            HeartChange paid = applyOne(
+                    HeartRequest.add(placer, -hearts, HeartCause.BOUNTY_PLACE, from.name()).withOther(target, on.name()),
+                    rules, nextEventId(), now);
+            try (PreparedStatement ps = conn.prepareStatement(
+                    "INSERT INTO bounties (target, placer, hearts, placed_at) VALUES (?, ?, ?, ?)")) {
+                ps.setString(1, target.toString());
+                ps.setString(2, placer.toString());
+                ps.setInt(3, hearts);
+                ps.setLong(4, now);
+                ps.executeUpdate();
+            }
+            return new BountyPlacement(paid, bountyOn(target));
+        });
+    }
+
+    /** Pays the killer every open bounty on the victim, as far as the cap allows; the rest stays open. */
+    private BountyClaim claimBounties(UUID victim, String victimName, UUID killer, HeartRules rules, long eventId, long now)
+            throws SQLException {
+        List<long[]> open = openBounties(victim);
+        if (open.isEmpty()) return null;
+        int pot = 0;
+        for (long[] row : open) pot += (int) row[1];
+        HeartChange paid = applyOne(
+                HeartRequest.add(killer, pot, HeartCause.BOUNTY_CLAIM, "server").withOther(victim, victimName),
+                rules, eventId, now);
+        int unpaid = pot - paid.delta();
+        // Settle oldest first; whatever the cap didn't let through stays on the newest bounties.
+        int left = paid.delta();
+        for (long[] row : open) {
+            int hearts = (int) row[1];
+            if (left >= hearts) {
+                closeBounty(row[0], killer.toString(), "claimed", now);
+                left -= hearts;
+            } else {
+                if (left > 0) {
+                    try (PreparedStatement ps = conn.prepareStatement("UPDATE bounties SET hearts = ? WHERE id = ?")) {
+                        ps.setInt(1, hearts - left);
+                        ps.setLong(2, row[0]);
+                        ps.executeUpdate();
+                    }
+                }
+                left = 0;
+            }
+        }
+        return new BountyClaim(paid, unpaid);
+    }
+
+    /** Admin tool: closes every open bounty on {@code target} and gives each placer their hearts back. */
+    public List<HeartChange> clearBounties(UUID target, String actor, HeartRules rules) throws SQLException {
+        return inTransaction(() -> {
+            String targetName = require(target).name();
+            long eventId = nextEventId();
+            long now = clock.millis();
+            List<HeartChange> refunds = new ArrayList<>();
+            try (PreparedStatement ps = conn.prepareStatement(
+                    "SELECT id, placer, hearts FROM bounties WHERE target = ? AND closed_at IS NULL ORDER BY id")) {
+                ps.setString(1, target.toString());
+                List<Object[]> rows = new ArrayList<>();
+                try (ResultSet rs = ps.executeQuery()) {
+                    while (rs.next()) rows.add(new Object[] {rs.getLong(1), rs.getString(2), rs.getInt(3)});
+                }
+                for (Object[] row : rows) {
+                    refunds.add(applyOne(
+                            HeartRequest.add(UUID.fromString((String) row[1]), (Integer) row[2], HeartCause.BOUNTY_REFUND, actor)
+                                    .withOther(target, targetName),
+                            rules, eventId, now));
+                    closeBounty((Long) row[0], null, "refunded", now);
+                }
+            }
+            return refunds;
+        });
+    }
+
+    /** Total hearts in open bounties on {@code target}. */
+    public int bountyOn(UUID target) throws SQLException {
+        try (PreparedStatement ps = conn.prepareStatement(
+                "SELECT COALESCE(SUM(hearts), 0) FROM bounties WHERE target = ? AND closed_at IS NULL")) {
+            ps.setString(1, target.toString());
+            try (ResultSet rs = ps.executeQuery()) {
+                rs.next();
+                return rs.getInt(1);
+            }
+        }
+    }
+
+    /** The biggest open bounties, one total per target. */
+    public List<BountyTotal> topBounties(int limit) throws SQLException {
+        try (PreparedStatement ps = conn.prepareStatement("""
+                SELECT b.target, p.name, SUM(b.hearts) AS total
+                FROM bounties b JOIN players p ON p.uuid = b.target
+                WHERE b.closed_at IS NULL
+                GROUP BY b.target, p.name
+                ORDER BY total DESC, p.name
+                LIMIT ?""")) {
+            ps.setInt(1, limit);
+            List<BountyTotal> totals = new ArrayList<>();
+            try (ResultSet rs = ps.executeQuery()) {
+                while (rs.next()) totals.add(new BountyTotal(UUID.fromString(rs.getString(1)), rs.getString(2), rs.getInt(3)));
+            }
+            return totals;
+        }
+    }
+
+    /** Open bounties on a target, oldest first, as {id, hearts}. */
+    private List<long[]> openBounties(UUID target) throws SQLException {
+        try (PreparedStatement ps = conn.prepareStatement(
+                "SELECT id, hearts FROM bounties WHERE target = ? AND closed_at IS NULL ORDER BY id")) {
+            ps.setString(1, target.toString());
+            List<long[]> rows = new ArrayList<>();
+            try (ResultSet rs = ps.executeQuery()) {
+                while (rs.next()) rows.add(new long[] {rs.getLong(1), rs.getInt(2)});
+            }
+            return rows;
+        }
+    }
+
+    private void closeBounty(long id, String closedBy, String reason, long now) throws SQLException {
+        try (PreparedStatement ps = conn.prepareStatement(
+                "UPDATE bounties SET closed_at = ?, closed_by = ?, closed_reason = ? WHERE id = ?")) {
+            ps.setLong(1, now);
+            setNullable(ps, 2, closedBy);
+            ps.setString(3, reason);
+            ps.setLong(4, id);
+            ps.executeUpdate();
+        }
+    }
 
     /**
      * Whether {@code killer} took a heart from {@code victim} after {@code sinceMillis}.

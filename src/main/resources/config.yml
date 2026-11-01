@@ -20,6 +20,17 @@ pvp:
   # Stops friends farming hearts off each other and spawn-camping a player who's down.
   # Only counts the same killer on the same victim; a revenge kill still pays. 0 turns it off.
   repeat-kill-cooldown-hours: 6
+  # When someone takes your heart, you mark them for this many minutes. Kill them back
+  # in that time and you take your heart back plus the bonus below, from them.
+  # A vengeance kill ends the feud: it doesn't mark anyone. 0 turns vengeance off.
+  vengeance-minutes: 30
+  vengeance-bonus-hearts: 1
+
+bounty:
+  # Players can stake their own hearts on someone with /bounty place. Whoever kills the
+  # target collects the lot. When true, the announcement doesn't say who placed it
+  # (admins can still see it in /lifesteal ledger).
+  anonymous: true
 
 purgatory:
   # Eliminated players go to Purgatory, a separate world where they can earn their way

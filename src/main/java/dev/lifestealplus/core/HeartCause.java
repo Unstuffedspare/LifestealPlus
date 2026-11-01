@@ -12,7 +12,10 @@ public enum HeartCause {
     ADMIN_SET(true),
     ADMIN_GIVE(true),
     ADMIN_TAKE(false),
-    REVIVE(true);
+    REVIVE(true),
+    BOUNTY_PLACE(false),
+    BOUNTY_CLAIM(false),
+    BOUNTY_REFUND(false);
 
     private final boolean canRevive;
 

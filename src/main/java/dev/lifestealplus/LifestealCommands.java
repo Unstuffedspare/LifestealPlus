@@ -6,19 +6,27 @@ import com.mojang.brigadier.arguments.StringArgumentType;
 import com.mojang.brigadier.context.CommandContext;
 import com.mojang.brigadier.suggestion.SuggestionProvider;
 import com.mojang.brigadier.tree.LiteralCommandNode;
+import dev.lifestealplus.core.BountyException;
+import dev.lifestealplus.core.BountyTotal;
 import dev.lifestealplus.core.HeartCause;
 import dev.lifestealplus.core.HeartChange;
 import dev.lifestealplus.core.HeartRequest;
 import dev.lifestealplus.core.HeartService;
 import dev.lifestealplus.core.LedgerEntry;
 import dev.lifestealplus.core.PlayerHearts;
+import dev.lifestealplus.core.VengeanceMark;
 import io.papermc.paper.command.brigadier.CommandSourceStack;
 import io.papermc.paper.command.brigadier.Commands;
+import java.time.Duration;
+import java.time.Instant;
 import java.time.ZoneId;
 import java.time.format.DateTimeFormatter;
 import java.util.List;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.CompletionException;
 import java.util.function.Consumer;
 import java.util.logging.Level;
+import net.kyori.adventure.text.minimessage.MiniMessage;
 import net.kyori.adventure.text.minimessage.tag.resolver.Placeholder;
 import net.kyori.adventure.text.minimessage.tag.resolver.TagResolver;
 import org.bukkit.command.CommandSender;
@@ -46,6 +54,129 @@ final class LifestealCommands {
     void register(Commands commands) {
         commands.register(heartsCommand(), "Show how many hearts you or another player have");
         commands.register(adminCommand(), "Lifesteal admin tools", List.of("lsp"));
+        commands.register(bountyCommand(), "Stake your hearts on another player's head");
+        commands.register(vengeanceCommand(), "See who you can take vengeance on, and who can on you");
+    }
+
+    private LiteralCommandNode<CommandSourceStack> bountyCommand() {
+        return Commands.literal("bounty")
+                .requires(src -> src.getSender().hasPermission("lifestealplus.bounty"))
+                .executes(ctx -> listBounties(ctx.getSource().getSender()))
+                .then(Commands.literal("list").executes(ctx -> listBounties(ctx.getSource().getSender())))
+                .then(Commands.literal("check")
+                        .then(Commands.argument("player", StringArgumentType.word())
+                                .suggests(ONLINE_NAMES)
+                                .executes(ctx -> {
+                                    CommandSender sender = ctx.getSource().getSender();
+                                    withPlayer(sender, StringArgumentType.getString(ctx, "player"), target ->
+                                            hearts.bountyOn(target.uuid()).whenCompleteAsync((total, error) -> {
+                                                if (error != null) fail(sender, error);
+                                                else sender.sendRichMessage(total == 0
+                                                                ? "<gray>There's no bounty on <player>."
+                                                                : "<gold>There's a <total>-heart bounty on <player>.",
+                                                        Placeholder.unparsed("player", target.name()),
+                                                        Placeholder.unparsed("total", String.valueOf(total)));
+                                            }, tracker.mainThread()));
+                                    return Command.SINGLE_SUCCESS;
+                                })))
+                .then(Commands.literal("place")
+                        .then(Commands.argument("player", StringArgumentType.word())
+                                .suggests(ONLINE_NAMES)
+                                .then(Commands.argument("hearts", IntegerArgumentType.integer(1))
+                                        .executes(ctx -> {
+                                            if (!(ctx.getSource().getSender() instanceof Player placer)) {
+                                                ctx.getSource().getSender().sendRichMessage("<red>Only players can place bounties.");
+                                                return 0;
+                                            }
+                                            int amount = IntegerArgumentType.getInteger(ctx, "hearts");
+                                            withPlayer(placer, StringArgumentType.getString(ctx, "player"),
+                                                    target -> placeBounty(placer, target, amount));
+                                            return Command.SINGLE_SUCCESS;
+                                        }))))
+                .build();
+    }
+
+    private void placeBounty(Player placer, PlayerHearts target, int amount) {
+        hearts.placeBounty(placer.getUniqueId(), target.uuid(), amount).whenCompleteAsync((placed, error) -> {
+            if (error != null) {
+                Throwable cause = error instanceof CompletionException ? error.getCause() : error;
+                if (cause instanceof BountyException rule) {
+                    placer.sendRichMessage("<red><reason>", Placeholder.unparsed("reason", rule.getMessage()));
+                } else {
+                    fail(placer, error);
+                }
+                return;
+            }
+            // Only successful placements reach the tracker, so a refused bounty isn't logged as a failure.
+            tracker.track(CompletableFuture.completedFuture(List.of(placed.placerChange())));
+            String who = plugin.settings().bountyAnonymous() ? "Someone" : placer.getName();
+            plugin.getServer().broadcast(MiniMessage.miniMessage().deserialize(
+                    "<gold>💰 <who> has put a <hearts>-heart bounty on <target></gold> <gray>(<total> hearts in total).",
+                    Placeholder.unparsed("who", who),
+                    Placeholder.unparsed("hearts", String.valueOf(amount)),
+                    Placeholder.unparsed("target", target.name()),
+                    Placeholder.unparsed("total", String.valueOf(placed.totalOnTarget()))));
+            placer.sendRichMessage("<gray>Your bounty is placed. You have <left> hearts left.",
+                    Placeholder.unparsed("left", String.valueOf(placed.placerChange().after())));
+        }, tracker.mainThread());
+    }
+
+    private int listBounties(CommandSender sender) {
+        hearts.topBounties(10).whenCompleteAsync((top, error) -> {
+            if (error != null) {
+                fail(sender, error);
+                return;
+            }
+            if (top.isEmpty()) {
+                sender.sendRichMessage("<gray>No bounties right now. Place one with /bounty place <player> <hearts>.");
+                return;
+            }
+            sender.sendRichMessage("<gold>Bounties");
+            for (BountyTotal b : top) {
+                sender.sendRichMessage(" <gold><hearts>❤</gold> <white><player>",
+                        Placeholder.unparsed("hearts", String.valueOf(b.hearts())),
+                        Placeholder.unparsed("player", b.targetName()));
+            }
+        }, tracker.mainThread());
+        return Command.SINGLE_SUCCESS;
+    }
+
+    private LiteralCommandNode<CommandSourceStack> vengeanceCommand() {
+        return Commands.literal("vengeance")
+                .requires(src -> src.getSender().hasPermission("lifestealplus.vengeance"))
+                .executes(ctx -> {
+                    if (!(ctx.getSource().getSender() instanceof Player player)) {
+                        ctx.getSource().getSender().sendRichMessage("<red>Only players have vengeance marks.");
+                        return 0;
+                    }
+                    hearts.marks(player.getUniqueId()).whenCompleteAsync((marks, error) -> {
+                        if (error != null) {
+                            fail(player, error);
+                            return;
+                        }
+                        if (marks.held().isEmpty() && marks.against().isEmpty()) {
+                            player.sendRichMessage("<gray>No vengeance marks either way.");
+                            return;
+                        }
+                        for (VengeanceMark m : marks.held()) {
+                            player.sendRichMessage("<red>You can take vengeance on <player></red> <gray>(<left> left)",
+                                    Placeholder.unparsed("player", m.markedName()),
+                                    Placeholder.unparsed("left", timeLeft(m.expires())));
+                        }
+                        for (VengeanceMark m : marks.against()) {
+                            player.sendRichMessage("<dark_red><player> can take vengeance on you</dark_red> <gray>(<left> left)",
+                                    Placeholder.unparsed("player", m.avengerName()),
+                                    Placeholder.unparsed("left", timeLeft(m.expires())));
+                        }
+                    }, tracker.mainThread());
+                    return Command.SINGLE_SUCCESS;
+                })
+                .build();
+    }
+
+    private static String timeLeft(Instant expires) {
+        long minutes = Math.max(1, (Duration.between(Instant.now(), expires).toSeconds() + 59) / 60);
+        return minutes == 1 ? "1 minute" : minutes + " minutes";
     }
 
     private LiteralCommandNode<CommandSourceStack> heartsCommand() {
@@ -87,6 +218,23 @@ final class LifestealCommands {
                                 .executes(ctx -> ledger(ctx, 1))
                                 .then(Commands.argument("page", IntegerArgumentType.integer(1))
                                         .executes(ctx -> ledger(ctx, IntegerArgumentType.getInteger(ctx, "page"))))))
+                .then(Commands.literal("bounty")
+                        .then(Commands.literal("clear")
+                                .then(Commands.argument("player", StringArgumentType.word())
+                                        .suggests(ONLINE_NAMES)
+                                        .executes(ctx -> {
+                                            CommandSender sender = ctx.getSource().getSender();
+                                            withPlayer(sender, StringArgumentType.getString(ctx, "player"), target ->
+                                                    tracker.track(hearts.clearBounties(target.uuid(), sender.getName()))
+                                                            .whenCompleteAsync((refunds, error) -> {
+                                                                if (error != null) fail(sender, error);
+                                                                else sender.sendRichMessage(
+                                                                        "<green>Cleared <count> bounties on <player> and refunded the placers.",
+                                                                        Placeholder.unparsed("count", String.valueOf(refunds.size())),
+                                                                        Placeholder.unparsed("player", target.name()));
+                                                            }, tracker.mainThread()));
+                                            return Command.SINGLE_SUCCESS;
+                                        }))))
                 .then(Commands.literal("reload")
                         .executes(ctx -> {
                             CommandSender sender = ctx.getSource().getSender();
