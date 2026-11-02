@@ -49,7 +49,8 @@ public record PluginSettings(HeartRules rules, int naturalDeathLoss, String data
      * @param shieldsEnabled when false, existing newbie shields are suspended as well as new ones skipped
      */
     public record Extras(boolean vengeanceTracker, int trackerRoundTo, boolean tabList, boolean pactsInTab,
-                         boolean publicSeasons, boolean altDetection, boolean shieldsEnabled) {
+                         boolean publicSeasons, boolean altDetection, boolean shieldsEnabled,
+                         boolean convertLifestealZItems) {
     }
 
     /** The settings, plus anything in the file that had to be replaced by a default. */
@@ -109,7 +110,8 @@ public record PluginSettings(HeartRules rules, int naturalDeathLoss, String data
                 in.flag("blood-pacts.show-in-tab", true),
                 in.flag("seasons.public-history", true),
                 in.flag("alt-detection.enabled", true),
-                shields);
+                shields,
+                in.flag("lifestealz-import.convert-items", true));
 
         PluginSettings settings = new PluginSettings(rules, naturalDeathLoss, in.text("database.file", "lifesteal.db"), purgatory,
                 in.flag("bounties.enabled", true), in.flag("bounties.anonymous", true), lastStand, mostWanted, combat,

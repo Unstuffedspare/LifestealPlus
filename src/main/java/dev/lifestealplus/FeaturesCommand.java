@@ -50,6 +50,7 @@ final class FeaturesCommand {
         features.put("alt-detection", s.extras().altDetection());
         features.put("tab-list", s.extras().tabList());
         features.put("seasons.public-history", s.extras().publicSeasons());
+        features.put("lifestealz-import.convert-items", s.extras().convertLifestealZItems());
 
         Msg.send(sender, "features.header");
         features.forEach((name, on) -> Msg.send(sender, on ? "features.switched-on" : "features.switched-off", Msg.t("name", name)));

@@ -7,6 +7,7 @@ import com.mojang.brigadier.context.CommandContext;
 import com.mojang.brigadier.suggestion.SuggestionProvider;
 import com.mojang.brigadier.tree.LiteralCommandNode;
 import dev.lifestealplus.admin.AdminCommands;
+import dev.lifestealplus.admin.ImportCommand;
 import dev.lifestealplus.combat.NewbieShield;
 import dev.lifestealplus.core.BountyTotal;
 import dev.lifestealplus.core.HeartCause;
@@ -50,9 +51,12 @@ final class LifestealCommands {
     private final EventCommands events;
     private final AdminCommands admin;
     private final FeaturesCommand features;
+    private final ImportCommand importer;
 
     LifestealCommands(LifestealPlugin plugin, HeartService hearts, HeartTracker tracker, MostWanted mostWanted,
-                      NewbieShield shield, EventCommands events, AdminCommands admin, FeaturesCommand features) {
+                      NewbieShield shield, EventCommands events, AdminCommands admin, FeaturesCommand features,
+                      ImportCommand importer) {
+        this.importer = importer;
         this.events = events;
         this.admin = admin;
         this.features = features;
@@ -274,6 +278,7 @@ final class LifestealCommands {
                                             return Command.SINGLE_SUCCESS;
                                         }))))
                 .then(features.node())
+                .then(importer.node())
                 .then(admin.altsNode())
                 .then(admin.flagsNode())
                 .then(admin.seasonNode())

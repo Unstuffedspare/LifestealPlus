@@ -21,7 +21,8 @@ public enum HeartCause {
     RIFT(false),
     REVIVAL_PLEDGE(false),
     REVIVAL_REFUND(false),
-    PACT_SHARE(false);
+    PACT_SHARE(false),
+    IMPORT(true);
 
     private final boolean canRevive;
 

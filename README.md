@@ -40,6 +40,24 @@ Paper won't run from a folder whose path contains `+` or `!`, so keep the server
 
 The plugin is the whole lifesteal system, so don't run another lifesteal plugin alongside it.
 
+### Coming from LifeStealZ
+
+Players keep their hearts when you switch.
+
+1. Stop the server, take the LifeStealZ jar out of `plugins` (leave its `plugins/LifeStealZ` folder where it is), add this plugin and start the server.
+2. Run `/lifesteal import lifestealz`. It reads LifeStealZ's `userData.db` and shows what it will do: how many players, who's eliminated, and anyone over your `hearts.max`. Nothing changes yet.
+   - If LifeStealZ stored its data in MySQL, run `/lifestealz data export lifestealz` on the old setup first, then `/lifesteal import lifestealz lifestealz` here to read that CSV instead.
+3. Run `/lifesteal import confirm` within 60 seconds. LifeStealZ bans eliminated players, so use `/lifesteal import confirm unban` if you want them to be able to join and reach Purgatory.
+
+How hearts carry over:
+
+- LifeStealZ counts half hearts; this plugin doesn't, so 7½ hearts becomes 7.
+- Anyone at or below LifeStealZ's `minHearts` arrives eliminated.
+- Anyone above your `hearts.max` arrives at the cap.
+- Players already on this server have their hearts replaced. Every change is in their `/lifesteal ledger`.
+
+LifeStealZ's heart items turn into this plugin's Hearts when a player joins or opens a chest holding one (`lifestealz-import.convert-items`). Its revive items have no equivalent here and are left alone.
+
 ## Configuring
 
 All settings are in `plugins/LifestealPlus/config.yml`, and every one is explained in the file itself.
@@ -108,6 +126,7 @@ Every player permission is allowed by default. Take one away with your permissio
 | `finale start <minutes> [final size]`, `finale stop` | Start or call off the season finale |
 | `item <player> heart\|fragment [amount]` | Hand out heart items |
 | `mostwanted` | Announce the Most Wanted now |
+| `import lifestealz [file]`, `import confirm [unban]` | Bring players' hearts over from LifeStealZ (see above) |
 
 A season reset doesn't touch the world or inventories, so start the new season on a fresh map if you want one.
 

@@ -94,6 +94,19 @@ public final class HeartService implements AutoCloseable {
         return submit(store::liveMarks);
     }
 
+    public CompletableFuture<ImportResult> importPlayers(List<LifestealZImport.Planned> players, String source) {
+        return submit(() -> store.importPlayers(players, source, rules()));
+    }
+
+    /** Players already known here, out of these; for an import preview. */
+    public CompletableFuture<Integer> countKnown(List<UUID> players) {
+        return submit(() -> {
+            int known = 0;
+            for (UUID id : players) if (store.find(id).isPresent()) known++;
+            return known;
+        });
+    }
+
     public CompletableFuture<List<PactPair>> allPacts() {
         return submit(store::allPacts);
     }

@@ -474,3 +474,30 @@ features:
   # <name>
   switched-off: " <red>○ off</red> <gray><name>"
   footer: "<gray>Change them in config.yml, then /lifesteal reload."
+
+# ---- Importing from LifeStealZ (admins) ------------------------------------
+import:
+  # /lifesteal import lifestealz. <file>
+  reading: "<gray>Reading <file>..."
+  # <file>
+  not-found: "<red>Can't find plugins/LifeStealZ/<file>. Leave the file out to use LifeStealZ's userData.db, or name a CSV from /lifestealz data export."
+  unreadable: "<red>That file couldn't be read as LifeStealZ data; the details are in the server log."
+  empty: "<gray>There are no players in that file."
+  # <total>, <alive>, <eliminated>, <known>
+  preview: "<gold>Ready to import <total> players from LifeStealZ:</gold> <gray><alive> with hearts, <eliminated> eliminated (they'll go to Purgatory), <known> already on this server (their hearts will be replaced)."
+  # <n>
+  skipped: "<yellow><n> line(s) couldn't be read and will be left out."
+  # <n>, <cap>, <names>
+  capped: "<yellow><n> player(s) had more than this server's cap and will arrive with <cap>: <names>"
+  # <n>
+  banned: "<yellow><n> eliminated player(s) are banned (LifeStealZ bans by default). Confirm with 'unban' so they can join and reach Purgatory."
+  lifestealz-running: "<red>LifeStealZ is still running. Remove its jar and restart before importing, or the two plugins will fight over hearts."
+  confirm-hint: "<yellow>Run <white>/lifesteal import confirm</white> (or <white>/lifesteal import confirm unban</white>) within 60 seconds to go ahead."
+  nothing-to-confirm: "<gray>Nothing to confirm. Start with /lifesteal import lifestealz."
+  failed: "<red>The import failed and nothing was changed; the details are in the server log."
+  # <total>, <created>, <updated>
+  done: "<green>Imported <total> players from LifeStealZ: <created> new here, <updated> updated."
+  # <n>
+  unbanned: "<green>Unbanned <n> eliminated player(s) so they can reach Purgatory."
+  # <n>
+  items-converted: "<gray>Your old LifeStealZ hearts became <red><n> Heart item(s)</red>."

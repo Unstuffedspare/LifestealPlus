@@ -2,6 +2,7 @@ package dev.lifestealplus;
 
 import dev.lifestealplus.admin.AdminCommands;
 import dev.lifestealplus.admin.AltTracker;
+import dev.lifestealplus.admin.ImportCommand;
 import dev.lifestealplus.admin.SeasonReset;
 import dev.lifestealplus.combat.CombatBodies;
 import dev.lifestealplus.combat.CombatTagger;
@@ -12,6 +13,7 @@ import dev.lifestealplus.events.Airdrops;
 import dev.lifestealplus.events.BloodMoon;
 import dev.lifestealplus.events.Finale;
 import dev.lifestealplus.items.HeartItems;
+import dev.lifestealplus.items.LifestealZItems;
 import dev.lifestealplus.purgatory.Purgatory;
 import dev.lifestealplus.purgatory.PurgatoryCommands;
 import dev.lifestealplus.purgatory.PurgatoryListener;
@@ -74,7 +76,7 @@ public final class LifestealPlugin extends JavaPlugin {
         bloodMoon = new BloodMoon(this, hearts, heartItems);
         airdrops = new Airdrops(this, hearts, heartItems);
         finale = new Finale(this, hearts);
-        for (var listener : List.of(heartItems, bloodMoon, airdrops, finale)) {
+        for (var listener : List.of(heartItems, bloodMoon, airdrops, finale, new LifestealZItems(this, heartItems))) {
             getServer().getPluginManager().registerEvents(listener, this);
         }
         mostWanted = new MostWanted(this, tracker);
@@ -89,7 +91,8 @@ public final class LifestealPlugin extends JavaPlugin {
         AdminCommands admin = new AdminCommands(this, hearts, tracker,
                 new SeasonReset(this, hearts, tracker, shield, bodies, finale, () -> capSchedule.seasonStarted()));
         LifestealCommands commands = new LifestealCommands(this, hearts, tracker, mostWanted, shield,
-                new EventCommands(this, heartItems, bloodMoon, airdrops, finale), admin, new FeaturesCommand(this));
+                new EventCommands(this, heartItems, bloodMoon, airdrops, finale), admin, new FeaturesCommand(this),
+                new ImportCommand(this, hearts, tracker));
         PurgatoryCommands purgatoryCommands = settings.purgatory().enabled() ? startPurgatory(tracker) : null;
         capSchedule = new CapSchedule(this, hearts);
         SocialCommands social = new SocialCommands(this, hearts, tracker, heartItems, finale, purgatory);

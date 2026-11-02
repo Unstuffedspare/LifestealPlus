@@ -482,6 +482,38 @@ public final class HeartStore implements AutoCloseable {
         });
     }
 
+    /**
+     * Brings players over from another plugin, all in one transaction (one event in the
+     * ledger). Players new here are created without a newbie shield, since they aren't new;
+     * players already here are set to the imported hearts. Running it again changes nothing.
+     */
+    public ImportResult importPlayers(List<LifestealZImport.Planned> players, String source, HeartRules rules) throws SQLException {
+        return inTransaction(() -> {
+            long eventId = nextEventId();
+            long now = clock.millis();
+            int created = 0, updated = 0;
+            for (LifestealZImport.Planned p : players) {
+                if (find(p.uuid()).isEmpty()) {
+                    try (PreparedStatement ps = conn.prepareStatement(
+                            "INSERT INTO players (uuid, name, hearts, first_seen, last_seen) VALUES (?, ?, 0, ?, ?)")) {
+                        ps.setString(1, p.uuid().toString());
+                        ps.setString(2, p.name());
+                        ps.setLong(3, now);
+                        ps.setLong(4, now);
+                        ps.executeUpdate();
+                    }
+                    created++;
+                } else {
+                    updated++;
+                }
+                applyOne(HeartRequest.set(p.uuid(), p.hearts(), HeartCause.IMPORT, source)
+                        .withNote(p.eliminated() ? "eliminated in " + source : p.capped() ? "brought down to the cap" : null),
+                        rules, eventId, now);
+            }
+            return new ImportResult(created, updated);
+        });
+    }
+
     /** Every pact on the server, for /pact list and the tab list. */
     public List<PactPair> allPacts() throws SQLException {
         try (Statement st = conn.createStatement(); ResultSet rs = st.executeQuery("""

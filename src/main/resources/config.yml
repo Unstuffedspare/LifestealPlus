@@ -186,6 +186,12 @@ seasons:
   # Let everyone see past seasons with /seasons and /leaderboard <season>.
   public-history: true
 
+lifestealz-import:
+  # Coming from LifeStealZ? /lifesteal import lifestealz brings everyone's hearts over
+  # (it shows what it will do first). This setting swaps LifeStealZ's heart items for
+  # this plugin's Hearts whenever a player has one or opens a container holding one.
+  convert-items: true
+
 database:
   # SQLite file inside the plugin folder. (restart)
   file: lifesteal.db
