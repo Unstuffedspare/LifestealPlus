@@ -52,11 +52,13 @@ final class LifestealCommands {
     private final AdminCommands admin;
     private final FeaturesCommand features;
     private final ImportCommand importer;
+    private final SettingsMenu settingsMenu;
 
     LifestealCommands(LifestealPlugin plugin, HeartService hearts, HeartTracker tracker, MostWanted mostWanted,
                       NewbieShield shield, EventCommands events, AdminCommands admin, FeaturesCommand features,
-                      ImportCommand importer) {
+                      ImportCommand importer, SettingsMenu settingsMenu) {
         this.importer = importer;
+        this.settingsMenu = settingsMenu;
         this.events = events;
         this.admin = admin;
         this.features = features;
@@ -278,6 +280,8 @@ final class LifestealCommands {
                                             return Command.SINGLE_SUCCESS;
                                         }))))
                 .then(features.node())
+                .then(settingsMenu.settingsNode())
+                .then(settingsMenu.configNode())
                 .then(importer.node())
                 .then(admin.altsNode())
                 .then(admin.flagsNode())

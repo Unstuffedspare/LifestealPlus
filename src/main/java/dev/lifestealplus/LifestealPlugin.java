@@ -20,6 +20,8 @@ import dev.lifestealplus.purgatory.PurgatoryListener;
 import dev.lifestealplus.purgatory.PurgatoryWorld;
 import dev.lifestealplus.purgatory.TrialManager;
 import io.papermc.paper.plugin.lifecycle.event.types.LifecycleEvents;
+import java.io.InputStreamReader;
+import java.nio.charset.StandardCharsets;
 import java.time.Clock;
 import java.util.ArrayList;
 import java.util.List;
@@ -27,6 +29,7 @@ import java.util.concurrent.CompletableFuture;
 import java.util.logging.Level;
 import org.bukkit.configuration.Configuration;
 import org.bukkit.configuration.file.FileConfiguration;
+import org.bukkit.configuration.file.YamlConfiguration;
 import org.bukkit.plugin.java.JavaPlugin;
 
 public final class LifestealPlugin extends JavaPlugin {
@@ -41,6 +44,7 @@ public final class LifestealPlugin extends JavaPlugin {
     private Finale finale;
     private Purgatory purgatory;
     private CapSchedule capSchedule;
+    private NewbieShield shield;
 
     @Override
     public void onEnable() {
@@ -69,7 +73,7 @@ public final class LifestealPlugin extends JavaPlugin {
         bodies = new CombatBodies(this, hearts, kills, tagger);
         getServer().getPluginManager().registerEvents(tagger, this);
         getServer().getPluginManager().registerEvents(bodies, this);
-        NewbieShield shield = new NewbieShield(this, hearts);
+        shield = new NewbieShield(this, hearts);
         getServer().getPluginManager().registerEvents(shield, this);
         getServer().getPluginManager().registerEvents(new PlayerListener(this, hearts, tracker, kills, bodies), this);
         HeartItems heartItems = new HeartItems(this, hearts, tracker);
@@ -90,9 +94,12 @@ public final class LifestealPlugin extends JavaPlugin {
         }
         AdminCommands admin = new AdminCommands(this, hearts, tracker,
                 new SeasonReset(this, hearts, tracker, shield, bodies, finale, () -> capSchedule.seasonStarted()));
+        SettingsMenu settingsMenu = new SettingsMenu(this, new SettingsCatalog(YamlConfiguration.loadConfiguration(
+                new InputStreamReader(getResource("config.yml"), StandardCharsets.UTF_8))));
+        getServer().getPluginManager().registerEvents(settingsMenu, this);
         LifestealCommands commands = new LifestealCommands(this, hearts, tracker, mostWanted, shield,
                 new EventCommands(this, heartItems, bloodMoon, airdrops, finale), admin, new FeaturesCommand(this),
-                new ImportCommand(this, hearts, tracker));
+                new ImportCommand(this, hearts, tracker), settingsMenu);
         PurgatoryCommands purgatoryCommands = settings.purgatory().enabled() ? startPurgatory(tracker) : null;
         capSchedule = new CapSchedule(this, hearts);
         SocialCommands social = new SocialCommands(this, hearts, tracker, heartItems, finale, purgatory);
@@ -142,7 +149,7 @@ public final class LifestealPlugin extends JavaPlugin {
 
     private void applyStoreSwitches() {
         PluginSettings s = settings;
-        hearts.setFeatures(s.extras().shieldsEnabled(), s.social().pactsEnabled(), s.extras().altDetection());
+        hearts.setFeatures(s.extras().shieldsEnabled(), s.extras().shieldExpiry(), s.social().pactsEnabled(), s.extras().altDetection());
     }
 
     private void logWarnings(List<String> warnings) {
@@ -184,7 +191,6 @@ public final class LifestealPlugin extends JavaPlugin {
         return settings;
     }
 
-    /** Re-reads config.yml. Throws (leaving the old settings in place) if the new values are invalid. */
     /**
      * Re-reads config.yml and messages.yml. Never fails: anything unusable falls back to its
      * default, and the returned warnings say which settings those were.
@@ -202,6 +208,23 @@ public final class LifestealPlugin extends JavaPlugin {
         capSchedule.refresh();
         if (wantedTimerChanged) mostWanted.schedule();
         applyStoreSwitches();
+        shield.refresh();
         return loaded.warnings();
+    }
+
+    /**
+     * Changes one setting in config.yml (comments kept) and applies it straight away. Re-reads
+     * the file first, so edits made there since the last reload aren't lost.
+     *
+     * @return why the value can't be used, or null once it's saved and applied
+     */
+    String changeSetting(String key, Object value) {
+        reloadConfig();
+        String problem = SettingsCatalog.problem(getConfig(), key, value);
+        if (problem != null) return problem;
+        getConfig().set(key, value);
+        saveConfig();
+        reloadSettings();
+        return null;
     }
 }

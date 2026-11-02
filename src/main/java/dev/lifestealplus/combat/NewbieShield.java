@@ -57,6 +57,30 @@ public final class NewbieShield implements Listener {
         else if (plugin.getServer().getPlayer(player) != null) left.put(player, now);
     }
 
+    /**
+     * After a settings change: re-reads every online player's shield, so switching shields
+     * off or on, or shortening the day limit, shows straight away rather than at the next tick.
+     */
+    public void refresh() {
+        for (Player player : plugin.getServer().getOnlinePlayers()) {
+            UUID id = player.getUniqueId();
+            hearts.shieldLeft(id).whenComplete((shield, error) -> {
+                if (error != null) {
+                    plugin.getLogger().log(Level.SEVERE, "Couldn't read the newbie shield for " + player.getName(), error);
+                    return;
+                }
+                plugin.getServer().getScheduler().runTask(plugin, () -> {
+                    if (!player.isOnline()) return;
+                    if (!shield.isZero()) {
+                        left.put(id, shield);
+                    } else if (left.remove(id) != null && plugin.settings().extras().shieldsEnabled()) {
+                        Msg.send(player, "shield.worn-off");
+                    }
+                });
+            });
+        }
+    }
+
     @EventHandler
     void onJoin(PlayerJoinEvent event) {
         Player player = event.getPlayer();

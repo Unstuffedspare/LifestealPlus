@@ -25,7 +25,7 @@ import org.sqlite.SQLiteDataSource;
  */
 public final class HeartStore implements AutoCloseable {
 
-    private static final int SCHEMA_VERSION = 8;
+    private static final int SCHEMA_VERSION = 9;
 
     private final Connection conn;
     private final Clock clock;
@@ -257,6 +257,16 @@ public final class HeartStore implements AutoCloseable {
                 return null;
             });
         }
+        if (version < 9) {
+            inTransaction(() -> {
+                try (Statement st = conn.createStatement()) {
+                    // When the shield's day limit starts counting; empty means from first join.
+                    st.execute("ALTER TABLE players ADD COLUMN shield_since INTEGER");
+                    st.execute("PRAGMA user_version = 9");
+                }
+                return null;
+            });
+        }
     }
 
     /**
@@ -267,11 +277,14 @@ public final class HeartStore implements AutoCloseable {
 
     /** Feature switches from config.yml. Off means the stored data is kept but has no effect. */
     private boolean shieldsOn = true;
+    private Duration shieldExpiry = Duration.ZERO;
     private boolean pactsOn = true;
     private boolean altFlagsOn = true;
 
-    public void setFeatures(boolean shields, boolean pacts, boolean altFlags) {
+    /** @param shieldExpiry a shield ends this long after it began, however little was played; zero for no limit */
+    public void setFeatures(boolean shields, Duration shieldExpiry, boolean pacts, boolean altFlags) {
         this.shieldsOn = shields;
+        this.shieldExpiry = shieldExpiry;
         this.pactsOn = pacts;
         this.altFlagsOn = altFlags;
     }
@@ -788,13 +801,19 @@ public final class HeartStore implements AutoCloseable {
         }
     }
 
-    /** Playtime left on the player's newbie shield; zero once it's worn off or been broken. */
+    /**
+     * Playtime left on the player's newbie shield; zero once it's worn off, been broken, or
+     * passed its day limit (counted from first join, or from when an admin last granted one).
+     */
     public Duration shieldLeft(UUID player) throws SQLException {
         if (!shieldsOn) return Duration.ZERO;
-        try (PreparedStatement ps = conn.prepareStatement("SELECT shield_ms FROM players WHERE uuid = ?")) {
+        try (PreparedStatement ps = conn.prepareStatement(
+                "SELECT shield_ms, COALESCE(shield_since, first_seen) FROM players WHERE uuid = ?")) {
             ps.setString(1, player.toString());
             try (ResultSet rs = ps.executeQuery()) {
-                return rs.next() ? Duration.ofMillis(rs.getLong(1)) : Duration.ZERO;
+                if (!rs.next()) return Duration.ZERO;
+                boolean expired = !shieldExpiry.isZero() && clock.millis() - rs.getLong(2) >= shieldExpiry.toMillis();
+                return expired ? Duration.ZERO : Duration.ofMillis(rs.getLong(1));
             }
         }
     }
@@ -819,11 +838,12 @@ public final class HeartStore implements AutoCloseable {
         }
     }
 
-    /** Admin tool: give or take away a shield. */
+    /** Admin tool: give or take away a shield. A granted shield gets a fresh day limit. */
     public void setShield(UUID player, Duration left) throws SQLException {
-        try (PreparedStatement ps = conn.prepareStatement("UPDATE players SET shield_ms = ? WHERE uuid = ?")) {
+        try (PreparedStatement ps = conn.prepareStatement("UPDATE players SET shield_ms = ?, shield_since = ? WHERE uuid = ?")) {
             ps.setLong(1, Math.max(0, left.toMillis()));
-            ps.setString(2, player.toString());
+            ps.setLong(2, clock.millis());
+            ps.setString(3, player.toString());
             ps.executeUpdate();
         }
     }

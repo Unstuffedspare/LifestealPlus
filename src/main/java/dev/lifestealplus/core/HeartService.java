@@ -83,9 +83,9 @@ public final class HeartService implements AutoCloseable {
     }
 
     /** Applies the feature switches that live in the store (shields, pacts, alt flags). */
-    public CompletableFuture<Void> setFeatures(boolean shields, boolean pacts, boolean altFlags) {
+    public CompletableFuture<Void> setFeatures(boolean shields, Duration shieldExpiry, boolean pacts, boolean altFlags) {
         return submit(() -> {
-            store.setFeatures(shields, pacts, altFlags);
+            store.setFeatures(shields, shieldExpiry, pacts, altFlags);
             return null;
         });
     }

@@ -12,7 +12,7 @@ Everything is switchable and every message is editable. A typo in the config nev
 | Repeat-kill protection | Killing the same player again soon after moves no hearts. Stops farming and spawn-camping. | `repeat-kills` |
 | Vengeance | Get killed, and you can take your heart back (plus a bonus) by killing your killer within the time limit. An optional tracker points the way. | `vengeance` |
 | Bounties | Stake your own hearts on someone's head. Whoever kills them collects. | `bounties` |
-| Newbie shield | New players can't be hurt by others, or lose hearts, for their first few hours of playtime. | `newbie-shield` |
+| Newbie shield | New players can't be hurt by others, or lose hearts, for their first few hours of playtime (and no more than a few days after joining). | `newbie-shield` |
 | Combat logging | Logging out mid-fight leaves your body behind to be killed. | `combat-log` |
 | Last Stand | Strength and Speed when you're down to your last heart. | `last-stand` |
 | Most Wanted | The player with the most hearts has their rough location announced now and then. | `most-wanted` |
@@ -60,10 +60,21 @@ LifeStealZ's heart items turn into this plugin's Hearts when a player joins or o
 
 ## Configuring
 
-All settings are in `plugins/LifestealPlus/config.yml`, and every one is explained in the file itself.
+**The easy way: `/lifesteal settings` in game.** It opens a menu with every feature.
+
+- **Shift-click a feature** to switch it on or off. **Click it** to see its settings.
+- **On/off settings:** click to flip them.
+- **Numbers:** left-click to go up, right-click to go down, or shift-click and type the exact value in chat.
+- **Lists and text:** click and type the value in chat.
+
+Each setting shows the explanation from `config.yml`. Changes are saved to `config.yml` and take effect straight away. A value the plugin can't use is refused, with the reason, so nothing breaks.
+
+From the console (or chat), `/lifesteal config <setting> <value>` does the same, for example `/lifesteal config newbie-shield.enabled off`. Press Tab to pick the setting's name, and leave the value out to see what it's set to now.
+
+**Or edit the file.** All settings are in `plugins/LifestealPlus/config.yml`, and every one is explained in the file itself.
 
 - **Every feature has an `enabled: true/false` switch** in its own section. Turn off anything you don't want.
-- **Apply changes with `/lifesteal reload`.** Only `purgatory.enabled`, `purgatory.world` and `database.file` need a restart, and they're marked `(restart)` in the file.
+- **Apply file changes with `/lifesteal reload`.** Only `purgatory.enabled`, `purgatory.world` and `database.file` need a restart, and they're marked `(restart)` in the file.
 - **Mistakes are safe.** If a value doesn't make sense (a word where a number goes, a number out of range), the plugin uses the default instead. It tells you exactly which setting it skipped, both in the server log and in the reply to `/lifesteal reload`.
 - **`/lifesteal features`** lists every feature as on or off, using the same names as `config.yml`.
 - **Updating keeps your settings.** New settings from a newer version are added to your existing files automatically, with their explanations, and anything you've changed is left alone.
@@ -72,6 +83,7 @@ Some things worth deciding before a season starts:
 
 - `hearts.starting`, `hearts.max` and `hearts.per-kill` set the basic economy.
 - `newbie-shield.hours`: on a fresh season every player is new, so everyone starts shielded for these hours. That works as an opening grace period. Turn it off if you want PvP straight away.
+- `newbie-shield.expires-after-days` (3): the shield also ends this many days after a player first joins, however little they've played, so nobody keeps it forever.
 - `hearts.max-by-week`, e.g. `[15, 20, 25]`, makes the cap rise through the season. Leave it empty for a fixed cap.
 - `ghosts.limit-chat` stops eliminated players talking freely to the living, so their hourly whisper matters. Turn it off for a more relaxed server.
 
@@ -110,13 +122,15 @@ Every player permission is allowed by default. Take one away with your permissio
 
 | Command | What it does |
 |---|---|
+| `settings` | Menu for changing any setting in game |
+| `config <setting> [value]` | See or change one setting (works from the console) |
 | `features` | Every feature, on or off |
 | `reload` | Re-read `config.yml` and `messages.yml`, and report any settings that couldn't be used |
 | `give / take / set <player> <hearts>` | Change hearts (works on offline players) |
 | `revive <player> [hearts]` | Bring an eliminated player back |
 | `ledger <player> [page]` | Every heart change for a player, newest first |
 | `bounty clear <player>` | Remove the bounties on someone and refund whoever placed them |
-| `shield <player> <minutes>` | Give a newbie shield, or remove it with `0` |
+| `shield <player> <minutes>` | Give a newbie shield, or remove it with `0`. A given shield gets a fresh day limit |
 | `alts <player>` | Accounts that share an address with this one |
 | `flags` | Recent kills between accounts that share an address |
 | `season`, `season reset <next name>`, `season confirm` | See the season; end it (archives standings, then wipes hearts) |

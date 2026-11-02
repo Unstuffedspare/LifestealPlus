@@ -113,6 +113,26 @@ class NewbieShieldTest {
     }
 
     @Test
+    void theShieldEndsAfterItsDayLimitEvenUnplayed() throws SQLException {
+        store.setFeatures(true, Duration.ofDays(3), true, true);
+        clock.advance(Duration.ofDays(2));
+        assertEquals(THREE_HOURS, store.shieldLeft(NEWBIE));
+        clock.advance(Duration.ofDays(1));
+        assertEquals(Duration.ZERO, store.shieldLeft(NEWBIE));
+        assertFalse(store.kill(NEWBIE, ALICE, RULES).shielded());
+    }
+
+    @Test
+    void anAdminGrantedShieldGetsAFreshDayLimit() throws SQLException {
+        store.setFeatures(true, Duration.ofDays(3), true, true);
+        clock.advance(Duration.ofDays(10));
+        store.setShield(ALICE, Duration.ofMinutes(30));
+        assertEquals(Duration.ofMinutes(30), store.shieldLeft(ALICE));
+        clock.advance(Duration.ofDays(3));
+        assertEquals(Duration.ZERO, store.shieldLeft(ALICE));
+    }
+
+    @Test
     void adminsCanGrantAndChangeHeartsRegardless() throws SQLException {
         store.setShield(ALICE, Duration.ofMinutes(30));
         assertEquals(Duration.ofMinutes(30), store.shieldLeft(ALICE));

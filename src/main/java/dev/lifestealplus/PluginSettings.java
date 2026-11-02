@@ -47,9 +47,10 @@ public record PluginSettings(HeartRules rules, int naturalDeathLoss, String data
      *
      * @param trackerRoundTo the vengeance tracker rounds distances to this many blocks
      * @param shieldsEnabled when false, existing newbie shields are suspended as well as new ones skipped
+     * @param shieldExpiry a newbie shield ends this long after first join however little was played; zero for never
      */
     public record Extras(boolean vengeanceTracker, int trackerRoundTo, boolean tabList, boolean pactsInTab,
-                         boolean publicSeasons, boolean altDetection, boolean shieldsEnabled,
+                         boolean publicSeasons, boolean altDetection, boolean shieldsEnabled, Duration shieldExpiry,
                          boolean convertLifestealZItems) {
     }
 
@@ -111,6 +112,7 @@ public record PluginSettings(HeartRules rules, int naturalDeathLoss, String data
                 in.flag("seasons.public-history", true),
                 in.flag("alt-detection.enabled", true),
                 shields,
+                hours(24 * in.number("newbie-shield.expires-after-days", 3, 0, 365)),
                 in.flag("lifestealz-import.convert-items", true));
 
         PluginSettings settings = new PluginSettings(rules, naturalDeathLoss, in.text("database.file", "lifesteal.db"), purgatory,

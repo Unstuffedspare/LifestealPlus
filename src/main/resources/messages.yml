@@ -475,6 +475,47 @@ features:
   switched-off: " <red>○ off</red> <gray><name>"
   footer: "<gray>Change them in config.yml, then /lifesteal reload."
 
+# ---- /lifesteal settings menu and /lifesteal config ------------------------
+settings:
+  # Title of the /lifesteal settings menu.
+  menu-title: "LifestealPlus settings"
+  # <name>
+  section-title: "Settings: <name>"
+  # A feature without an on/off switch. <name>
+  section: "<white><name>"
+  # <name>
+  section-on: "<green><name> <dark_gray>- <green>on"
+  # <name>
+  section-off: "<gray><name> <dark_gray>- <red>off"
+  # <name>, <value>
+  setting: "<white><name>: <yellow><value>"
+  hint-open: "<dark_gray>Click to see its settings"
+  hint-switch-section: "<dark_gray>Shift-click to switch it on or off"
+  hint-switch: "<dark_gray>Click to switch on or off"
+  # <step>
+  hint-number: "<dark_gray>Left-click +<step>, right-click -<step>"
+  hint-type-shift: "<dark_gray>Shift-click to type a value"
+  hint-type: "<dark_gray>Click to type a value"
+  restart-note: "<gold>Takes effect after a restart"
+  back: "<white>Back"
+  close: "<white>Close"
+  # <setting>, <value>
+  type-prompt: "<yellow>Type a new value for <white><setting></white> in chat (it's <white><value></white> now), or <white>cancel</white>."
+  type-cancelled: "<gray>Nothing changed."
+  # <setting>, <value>
+  changed: "<green><setting> is now <white><value></white>."
+  # <setting>, <value>
+  changed-restart: "<green><setting> is now <white><value></white>. <gold>Restart the server for it to take effect."
+  # <reason>
+  refused: "<red>Not changed: <reason>"
+  # <setting>, <expected>
+  bad-value: "<red><setting> needs <expected>."
+  # <setting>
+  unknown: "<red>There's no setting called <setting>. Try /lifesteal settings, or press Tab to pick one."
+  # /lifesteal config <setting>. <setting>, <value>
+  current: "<gold><setting></gold> <gray>is</gray> <white><value></white>"
+  console: "<gray>The settings menu needs a player. From here, use /lifesteal config <setting> <value>."
+
 # ---- Importing from LifeStealZ (admins) ------------------------------------
 import:
   # /lifesteal import lifestealz. <file>

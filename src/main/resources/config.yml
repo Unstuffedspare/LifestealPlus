@@ -2,7 +2,10 @@
 #  LifestealPlus settings
 # =============================================================================
 #  - Every feature has its own section with an `enabled` switch.
-#  - Change anything here, then run /lifesteal reload. The few settings marked
+#  - Easiest: /lifesteal settings in game opens a menu where you click to change
+#    anything, and /lifesteal config <setting> <value> works from the console.
+#    Both save to this file and take effect straight away.
+#  - Or change anything here, then run /lifesteal reload. The few settings marked
 #    (restart) only take effect when the server restarts.
 #  - A value that doesn't make sense won't break anything: the plugin uses the
 #    default instead and tells you which setting it skipped, in the server log
@@ -60,6 +63,9 @@ newbie-shield:
   # Turning this off suspends existing shields too.
   enabled: true
   hours: 3
+  # The shield also ends this many days after a player first joins, however little
+  # they've played, so nobody keeps it forever. 0 = no limit.
+  expires-after-days: 3
 
 combat-log:
   # Hitting or being hit by another player puts you both in combat for a while.
