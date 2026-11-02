@@ -1,5 +1,6 @@
 package dev.lifestealplus.admin;
 
+import dev.lifestealplus.LifestealPlugin;
 import dev.lifestealplus.core.HeartService;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
@@ -23,13 +24,15 @@ public final class AltTracker implements Listener {
 
     private static final String SALT = "alts.salt";
 
+    private final LifestealPlugin plugin;
     private final HeartService hearts;
     private final Logger log;
     private final String salt;
 
-    public AltTracker(HeartService hearts, Logger log) throws Exception {
+    public AltTracker(LifestealPlugin plugin, HeartService hearts) throws Exception {
+        this.plugin = plugin;
         this.hearts = hearts;
-        this.log = log;
+        this.log = plugin.getLogger();
         // Startup only: waiting a moment here is fine, and logins need the salt from the first one.
         String saved = hearts.state(SALT).get(10, TimeUnit.SECONDS).orElse(null);
         if (saved == null) {
@@ -44,6 +47,7 @@ public final class AltTracker implements Listener {
     @EventHandler(priority = EventPriority.MONITOR)
     void onPreLogin(AsyncPlayerPreLoginEvent event) {
         if (event.getLoginResult() != AsyncPlayerPreLoginEvent.Result.ALLOWED) return;
+        if (!plugin.settings().extras().altDetection()) return;
         hearts.recordLogin(event.getUniqueId(), hash(event.getAddress().getHostAddress())).exceptionally(error -> {
             log.log(Level.WARNING, "Couldn't record a login for " + event.getName(), error);
             return null;

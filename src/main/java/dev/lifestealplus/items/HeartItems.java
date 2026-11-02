@@ -1,7 +1,9 @@
 package dev.lifestealplus.items;
 
+import com.destroystokyo.paper.event.inventory.PrepareResultEvent;
 import dev.lifestealplus.HeartTracker;
 import dev.lifestealplus.LifestealPlugin;
+import dev.lifestealplus.Msg;
 import dev.lifestealplus.core.HeartCause;
 import dev.lifestealplus.core.HeartRequest;
 import dev.lifestealplus.core.HeartService;
@@ -13,9 +15,7 @@ import java.time.ZoneId;
 import java.time.format.DateTimeFormatter;
 import java.util.List;
 import net.kyori.adventure.text.Component;
-import net.kyori.adventure.text.format.NamedTextColor;
 import net.kyori.adventure.text.format.TextDecoration;
-import net.kyori.adventure.text.minimessage.tag.resolver.Placeholder;
 import org.bukkit.Material;
 import org.bukkit.NamespacedKey;
 import org.bukkit.Sound;
@@ -26,7 +26,6 @@ import org.bukkit.event.EventPriority;
 import org.bukkit.event.Listener;
 import org.bukkit.event.block.Action;
 import org.bukkit.event.block.CrafterCraftEvent;
-import com.destroystokyo.paper.event.inventory.PrepareResultEvent;
 import org.bukkit.event.inventory.PrepareItemCraftEvent;
 import org.bukkit.event.player.PlayerInteractEntityEvent;
 import org.bukkit.event.player.PlayerInteractEvent;
@@ -61,23 +60,24 @@ public final class HeartItems implements Listener {
 
     /** A fresh Heart: its fading (if any) counts from now, and its tooltip says when. */
     public ItemStack heart(int amount) {
-        ItemStack item = make(Kind.HEART, Material.RED_DYE, amount, Component.text("Heart", NamedTextColor.RED),
-                "Right-click the air (or sneak-click a block) to gain a heart.");
+        ItemStack item = make(Kind.HEART, Material.RED_DYE, amount, Msg.get("items.heart-name"), Msg.get("items.heart-hint"));
         long now = System.currentTimeMillis();
         item.editPersistentDataContainer(data -> data.set(mintedKey, PersistentDataType.LONG, now));
         int decayDays = plugin.settings().social().decayDays();
         if (decayDays > 0) {
             Instant minted = Instant.ofEpochMilli(now);
             item.setData(DataComponentTypes.LORE, ItemLore.lore(List.of(
-                    loreLine("Right-click the air (or sneak-click a block) to gain a heart.", NamedTextColor.GRAY),
-                    loreLine("Starts fading " + DATE.format(minted.plus(Duration.ofDays(1)))
-                            + ", gone by " + DATE.format(minted.plus(Duration.ofDays(decayDays))) + ".", NamedTextColor.DARK_GRAY))));
+                    loreLine(Msg.get("items.heart-hint")),
+                    loreLine(Msg.get("items.heart-fading",
+                            Msg.t("starts", DATE.format(minted.plus(Duration.ofDays(1)))),
+                            Msg.t("gone", DATE.format(minted.plus(Duration.ofDays(decayDays)))))))));
         }
         return item;
     }
 
-    private static Component loreLine(String text, NamedTextColor color) {
-        return Component.text(text, color).decoration(TextDecoration.ITALIC, false);
+    /** Lore is italic unless told otherwise; ours isn't. */
+    private static Component loreLine(Component line) {
+        return line.decorationIfAbsent(TextDecoration.ITALIC, TextDecoration.State.FALSE);
     }
 
     /**
@@ -94,15 +94,14 @@ public final class HeartItems implements Listener {
 
     public ItemStack fragment(int amount) {
         int needed = plugin.settings().events().fragmentsPerHeart();
-        return make(Kind.FRAGMENT, Material.PINK_DYE, amount, Component.text("Heart Fragment", NamedTextColor.LIGHT_PURPLE),
-                "Right-click the air with " + needed + " to make a Heart.");
+        return make(Kind.FRAGMENT, Material.PINK_DYE, amount, Msg.get("items.fragment-name"),
+                Msg.get("items.fragment-hint", Msg.t("needed", needed)));
     }
 
-    private ItemStack make(Kind kind, Material material, int amount, Component name, String hint) {
+    private ItemStack make(Kind kind, Material material, int amount, Component name, Component hint) {
         ItemStack item = new ItemStack(material, amount);
         item.setData(DataComponentTypes.ITEM_NAME, name);
-        item.setData(DataComponentTypes.LORE, ItemLore.lore(List.of(
-                Component.text(hint, NamedTextColor.GRAY).decoration(TextDecoration.ITALIC, false))));
+        item.setData(DataComponentTypes.LORE, ItemLore.lore(List.of(loreLine(hint))));
         item.setData(DataComponentTypes.ENCHANTMENT_GLINT_OVERRIDE, true);
         item.editPersistentDataContainer(data -> data.set(kindKey, PersistentDataType.STRING, kind.name()));
         return item;
@@ -139,7 +138,7 @@ public final class HeartItems implements Listener {
 
     private void useHeart(Player player, EquipmentSlot hand) {
         if (tracker.isEliminated(player)) {
-            player.sendRichMessage("<gray>You can't use a Heart while eliminated.");
+            Msg.send(player, "items.cant-use-eliminated");
             return;
         }
         ItemStack held = player.getInventory().getItem(hand);
@@ -159,14 +158,11 @@ public final class HeartItems implements Listener {
                         // The very same item, so its fade date doesn't reset.
                         player.getInventory().addItem(original).values()
                                 .forEach(leftOver -> player.getWorld().dropItem(player.getLocation(), leftOver));
-                        player.sendRichMessage(error != null
-                                ? "<red>That didn't work; the error is in the server log."
-                                : "<gray>You're already at the most hearts you can have.");
+                        Msg.send(player, error != null ? "common.error" : "items.at-cap");
                         return;
                     }
                     player.playSound(player, Sound.ENTITY_PLAYER_LEVELUP, 0.8f, 1.4f);
-                    player.sendRichMessage("<red>❤</red> <green>+1 heart.</green> <gray>You have <hearts> now.",
-                            Placeholder.unparsed("hearts", String.valueOf(changes.getFirst().after())));
+                    Msg.send(player, "items.heart-used", Msg.t("hearts", changes.getFirst().after()));
                 }, tracker.mainThread());
     }
 
@@ -175,29 +171,26 @@ public final class HeartItems implements Listener {
         int fragments = plugin.settings().events().fragmentsPerHeart() * daysLeft / decayDays;
         if (fragments <= 0) {
             player.playSound(player, Sound.BLOCK_SAND_BREAK, 1f, 0.8f);
-            player.sendRichMessage("<gray>That Heart was too old: it crumbles to dust in your hand.");
+            Msg.send(player, "items.heart-crumbled");
             return;
         }
         player.getInventory().addItem(fragment(fragments)).values()
                 .forEach(left -> player.getWorld().dropItem(player.getLocation(), left));
         player.playSound(player, Sound.BLOCK_AMETHYST_BLOCK_BREAK, 1f, 0.9f);
-        player.sendRichMessage("<gray>That Heart had faded. It breaks into <light_purple><n> Heart Fragments</light_purple>.",
-                Placeholder.unparsed("n", String.valueOf(fragments)));
+        Msg.send(player, "items.heart-faded", Msg.t("n", fragments));
     }
 
     private void combineFragments(Player player, EquipmentSlot hand) {
         int needed = plugin.settings().events().fragmentsPerHeart();
         ItemStack held = player.getInventory().getItem(hand);
         if (held.getAmount() < needed) {
-            player.sendRichMessage("<gray>Hold <needed> Heart Fragments together to make a Heart (you have <have>).",
-                    Placeholder.unparsed("needed", String.valueOf(needed)),
-                    Placeholder.unparsed("have", String.valueOf(held.getAmount())));
+            Msg.send(player, "items.need-more-fragments", Msg.t("needed", needed), Msg.t("have", held.getAmount()));
             return;
         }
         held.subtract(needed);
         player.getInventory().addItem(heart(1)).values().forEach(left -> player.getWorld().dropItem(player.getLocation(), left));
         player.playSound(player, Sound.BLOCK_AMETHYST_BLOCK_RESONATE, 1f, 1.2f);
-        player.sendRichMessage("<light_purple>The fragments fuse into a Heart.");
+        Msg.send(player, "items.fragments-fused");
     }
 
     @EventHandler(ignoreCancelled = true)

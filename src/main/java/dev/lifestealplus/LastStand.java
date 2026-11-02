@@ -40,8 +40,7 @@ final class LastStand {
             }
             if (!tagged) {
                 data.set(tag, PersistentDataType.BOOLEAN, true);
-                player.sendRichMessage("<gold><bold>Last Stand.</bold></gold> <yellow>You're down to your last hearts: "
-                        + "Strength and Speed until you climb back.");
+                Msg.send(player, "last-stand.started");
                 player.playSound(player, Sound.ENTITY_ELDER_GUARDIAN_CURSE, 0.6f, 1.4f);
             }
         } else if (tagged) {

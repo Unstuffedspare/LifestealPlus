@@ -2,6 +2,7 @@ package dev.lifestealplus.events;
 
 import dev.lifestealplus.EventSettings;
 import dev.lifestealplus.LifestealPlugin;
+import dev.lifestealplus.Msg;
 import dev.lifestealplus.core.HeartService;
 import dev.lifestealplus.items.HeartItems;
 import java.time.Duration;
@@ -11,10 +12,6 @@ import java.util.Collections;
 import java.util.List;
 import java.util.concurrent.ThreadLocalRandom;
 import java.util.logging.Level;
-import net.kyori.adventure.text.Component;
-import net.kyori.adventure.text.format.NamedTextColor;
-import net.kyori.adventure.text.minimessage.MiniMessage;
-import net.kyori.adventure.text.minimessage.tag.resolver.Placeholder;
 import org.bukkit.HeightMap;
 import org.bukkit.Location;
 import org.bukkit.Material;
@@ -27,8 +24,8 @@ import org.bukkit.entity.Player;
 import org.bukkit.event.EventHandler;
 import org.bukkit.event.Listener;
 import org.bukkit.event.block.BlockBreakEvent;
-import org.bukkit.event.entity.EntityExplodeEvent;
 import org.bukkit.event.block.BlockExplodeEvent;
+import org.bukkit.event.entity.EntityExplodeEvent;
 import org.bukkit.event.inventory.InventoryCloseEvent;
 import org.bukkit.event.inventory.InventoryOpenEvent;
 import org.bukkit.inventory.Inventory;
@@ -106,12 +103,7 @@ public final class Airdrops implements Listener {
         target = where;
         next = null;
         hearts.clearState(NEXT);
-        long minutes = warning.toMinutes();
-        String when = warning.toSeconds() < 60 ? "in a few seconds" : "in " + minutes + (minutes == 1 ? " minute" : " minutes");
-        broadcast("<gold>📦 A heart crate will land at <white>x <x>, z <z></white> <when>.",
-                Placeholder.unparsed("x", String.valueOf(where.getBlockX())),
-                Placeholder.unparsed("z", String.valueOf(where.getBlockZ())),
-                Placeholder.unparsed("when", when));
+        broadcast("airdrops.incoming", Msg.t("x", where.getBlockX()), Msg.t("z", where.getBlockZ()), Msg.t("time", Msg.duration(warning)));
         plugin.getServer().getOnlinePlayers().forEach(p -> p.playSound(p, Sound.BLOCK_NOTE_BLOCK_BELL, 1f, 0.7f));
         pending.add(plugin.getServer().getScheduler().runTaskLater(plugin, this::land, Math.max(1, warning.toSeconds() * 20)));
         return true;
@@ -133,7 +125,7 @@ public final class Airdrops implements Listener {
         crate = ground.getRelative(0, 1, 0);
         crate.setType(Material.CHEST);
         if (crate.getState() instanceof Chest chest) {
-            chest.customName(Component.text("Heart Crate", NamedTextColor.GOLD));
+            chest.customName(Msg.get("airdrops.crate-name"));
             chest.update();
             fill(chest.getBlockInventory());
         }
@@ -142,16 +134,13 @@ public final class Airdrops implements Listener {
         world.strikeLightningEffect(at);
         world.spawnParticle(Particle.FIREWORK, at, 60, 0.6, 1.5, 0.6, 0.05);
         hearts.putState(CRATE, world.getName() + "," + crate.getX() + "," + crate.getY() + "," + crate.getZ());
-        broadcast("<gold>📦 The heart crate has landed at <white>x <x>, y <y>, z <z></white>.",
-                Placeholder.unparsed("x", String.valueOf(crate.getX())),
-                Placeholder.unparsed("y", String.valueOf(crate.getY())),
-                Placeholder.unparsed("z", String.valueOf(crate.getZ())));
+        broadcast("airdrops.landed", Msg.t("x", crate.getX()), Msg.t("y", crate.getY()), Msg.t("z", crate.getZ()));
         // Only ever this crate: if it was emptied and a newer one has landed since, leave that one alone.
         Block thisCrate = crate;
         pending.add(plugin.getServer().getScheduler().runTaskLater(plugin, () -> {
             if (crate != null && crate.equals(thisCrate)) {
                 removeCrate();
-                broadcast("<gray>The heart crate crumbles away.");
+                broadcast("airdrops.crumbled");
             }
         }, settings().despawn().toSeconds() * 20));
     }
@@ -179,7 +168,7 @@ public final class Airdrops implements Listener {
         if (!(event.getInventory().getHolder() instanceof Chest chest) || !isCrate(chest.getBlock())) return;
         if (opened) return;
         opened = true;
-        broadcast("<gold>📦 <player> has opened the heart crate!", Placeholder.unparsed("player", event.getPlayer().getName()));
+        broadcast("airdrops.opened", Msg.t("player", event.getPlayer().getName()));
     }
 
     /** Once it's been emptied it has done its job. */
@@ -197,7 +186,7 @@ public final class Airdrops implements Listener {
     void onBreak(BlockBreakEvent event) {
         if (!isCrate(event.getBlock())) return;
         event.setCancelled(true);
-        event.getPlayer().sendRichMessage("<gold>Open the crate instead.");
+        Msg.send(event.getPlayer(), "airdrops.dont-break");
     }
 
     @EventHandler(ignoreCancelled = true)
@@ -248,8 +237,8 @@ public final class Airdrops implements Listener {
         return next;
     }
 
-    private void broadcast(String message, net.kyori.adventure.text.minimessage.tag.resolver.TagResolver... tags) {
-        plugin.getServer().broadcast(MiniMessage.miniMessage().deserialize(message, tags));
+    private void broadcast(String key, net.kyori.adventure.text.minimessage.tag.resolver.TagResolver... tags) {
+        Msg.broadcast(key, tags);
         for (Player p : plugin.getServer().getOnlinePlayers()) p.playSound(p, Sound.BLOCK_NOTE_BLOCK_CHIME, 0.5f, 1.2f);
     }
 }

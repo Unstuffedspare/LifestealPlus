@@ -265,6 +265,22 @@ public final class HeartStore implements AutoCloseable {
      */
     private final List<HeartChange> sideEffects = new ArrayList<>();
 
+    /** Feature switches from config.yml. Off means the stored data is kept but has no effect. */
+    private boolean shieldsOn = true;
+    private boolean pactsOn = true;
+    private boolean altFlagsOn = true;
+
+    public void setFeatures(boolean shields, boolean pacts, boolean altFlags) {
+        this.shieldsOn = shields;
+        this.pactsOn = pacts;
+        this.altFlagsOn = altFlags;
+    }
+
+    /** Every unexpired vengeance mark, soonest to expire first: what the trackers point at. */
+    public List<VengeanceMark> liveMarks() throws SQLException {
+        return marks("1 = ?", null);
+    }
+
     public List<HeartChange> drainSideEffects() {
         List<HeartChange> drained = List.copyOf(sideEffects);
         sideEffects.clear();
@@ -466,6 +482,20 @@ public final class HeartStore implements AutoCloseable {
         });
     }
 
+    /** Every pact on the server, for /pact list and the tab list. */
+    public List<PactPair> allPacts() throws SQLException {
+        try (Statement st = conn.createStatement(); ResultSet rs = st.executeQuery("""
+                SELECT k.a, pa.name, k.b, pb.name FROM pacts k
+                JOIN players pa ON pa.uuid = k.a JOIN players pb ON pb.uuid = k.b
+                ORDER BY k.since""")) {
+            List<PactPair> pacts = new ArrayList<>();
+            while (rs.next()) {
+                pacts.add(new PactPair(UUID.fromString(rs.getString(1)), rs.getString(2), UUID.fromString(rs.getString(3)), rs.getString(4)));
+            }
+            return pacts;
+        }
+    }
+
     public Optional<PlayerHearts> pactPartner(UUID player) throws SQLException {
         try (PreparedStatement ps = conn.prepareStatement(
                 "SELECT CASE WHEN a = ? THEN b ELSE a END FROM pacts WHERE a = ? OR b = ?")) {
@@ -493,7 +523,7 @@ public final class HeartStore implements AutoCloseable {
      */
     private void sharePact(HeartRequest request, HeartChange change, HeartRules rules, long eventId, long now)
             throws SQLException {
-        if (change.delta() == 0 || request.cause() == HeartCause.PACT_SHARE) return;
+        if (!pactsOn || change.delta() == 0 || request.cause() == HeartCause.PACT_SHARE) return;
         int share = switch (request.cause()) {
             case PVP_KILL, BOUNTY_CLAIM -> Math.max(0, change.delta());
             case PVP_DEATH, DEATH -> change.delta() < 0 ? -1 : 0;
@@ -728,6 +758,7 @@ public final class HeartStore implements AutoCloseable {
 
     /** Playtime left on the player's newbie shield; zero once it's worn off or been broken. */
     public Duration shieldLeft(UUID player) throws SQLException {
+        if (!shieldsOn) return Duration.ZERO;
         try (PreparedStatement ps = conn.prepareStatement("SELECT shield_ms FROM players WHERE uuid = ?")) {
             ps.setString(1, player.toString());
             try (ResultSet rs = ps.executeQuery()) {
@@ -848,7 +879,7 @@ public final class HeartStore implements AutoCloseable {
             long now = clock.millis();
             String victimName = require(victim).name();
             String killerName = require(killer).name();
-            boolean linked = areLinked(victim, killer);
+            boolean linked = altFlagsOn && areLinked(victim, killer);
             if (linked) {
                 try (PreparedStatement ps = conn.prepareStatement("""
                         INSERT INTO alt_flags (event_id, at, killer, killer_name, victim, victim_name)
@@ -961,7 +992,8 @@ public final class HeartStore implements AutoCloseable {
                 JOIN players pa ON pa.uuid = m.avenger
                 WHERE %s AND m.expires_at > ?
                 ORDER BY m.expires_at""".formatted(where))) {
-            ps.setString(1, who.toString());
+            if (who == null) ps.setInt(1, 1);
+            else ps.setString(1, who.toString());
             ps.setLong(2, clock.millis());
             List<VengeanceMark> marks = new ArrayList<>();
             try (ResultSet rs = ps.executeQuery()) {

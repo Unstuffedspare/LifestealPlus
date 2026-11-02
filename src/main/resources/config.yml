@@ -1,64 +1,83 @@
-# LifestealPlus configuration. Apply changes with /lifesteal reload.
+# =============================================================================
+#  LifestealPlus settings
+# =============================================================================
+#  - Every feature has its own section with an `enabled` switch.
+#  - Change anything here, then run /lifesteal reload. The few settings marked
+#    (restart) only take effect when the server restarts.
+#  - A value that doesn't make sense won't break anything: the plugin uses the
+#    default instead and tells you which setting it skipped, in the server log
+#    and in the reply to /lifesteal reload.
+#  - /lifesteal features shows what's switched on right now.
+#  - Every message players see is in messages.yml.
+# =============================================================================
 
 hearts:
   # Hearts a brand-new player starts with.
   starting: 10
-  # Most hearts anyone can have. Kills past this still cost the victim a heart, but the
-  # killer gains nothing (the ledger records it as "capped"). Lowering this never takes
-  # hearts away from players already above it.
+  # Most hearts anyone can have. A killer at the cap still takes the victim's heart
+  # but doesn't gain it. Lowering this never takes hearts from players above it.
   max: 20
-  # Hearts a player comes back with from /lifesteal revive.
+  # Optional: a cap that rises through the season, one value per week from the
+  # season's start, e.g. [15, 20, 25]. After the last week the last value holds.
+  # Leave it empty to always use max above.
+  max-by-week: []
+  # Hearts a player comes back with when revived (by an admin, Purgatory, a rift or a vote).
   revive: 3
   # Hearts that move from victim to killer on a PvP kill.
   per-kill: 1
-  # Hearts lost dying to anything other than a player (mobs, fall, lava). 0 turns it off.
+  # Hearts lost dying to anything other than a player (mobs, falling, lava). 0 = none.
   natural-death-loss: 1
-  # Optional: a cap that rises through the season, one value per week from the season's
-  # start (or last /lifesteal season reset), e.g. [15, 20, 25]. After the last week the
-  # last value holds. Leave it empty to always use max above.
-  max-by-week: []
 
-pvp:
-  # After a killer takes a heart from someone, killing that same person again within
-  # this many hours moves no hearts: the killer gains nothing and the victim keeps theirs.
-  # Stops friends farming hearts off each other and spawn-camping a player who's down.
-  # Only counts the same killer on the same victim; a revenge kill still pays. 0 turns it off.
-  repeat-kill-cooldown-hours: 6
-  # When someone takes your heart, you mark them for this many minutes. Kill them back
-  # in that time and you take your heart back plus the bonus below, from them.
-  # A vengeance kill ends the feud: it doesn't mark anyone. 0 turns vengeance off.
-  vengeance-minutes: 30
-  vengeance-bonus-hearts: 1
+repeat-kills:
+  # Killing the same player again within the cooldown moves no hearts: the killer
+  # gains nothing and the victim keeps theirs. Stops friends farming each other and
+  # spawn-camping. A revenge kill the other way still counts.
+  enabled: true
+  cooldown-hours: 6
 
-newbie-shield:
-  # Players joining for the first time get this many hours of playtime during which other
-  # players can't hurt them and they can't lose or gain hearts. Attacking another player
-  # ends it early. Players who joined before this setting existed don't get one. 0 turns it off.
-  hours: 3
+vengeance:
+  # When someone takes your heart, you mark them. Kill them back within the time
+  # limit and you take your heart back plus a bonus, from them.
+  enabled: true
+  minutes: 30
+  bonus-hearts: 1
+  tracker:
+    # While you hold a mark, the bar above your hotbar points toward your target.
+    enabled: true
+    # Distances are rounded to this many blocks, so the tracker can't be used to aim.
+    round-to-blocks: 10
 
-combat:
-  # Hitting another player, or being hit by one, puts you both in combat for this many
-  # seconds (shown above the hotbar). 0 turns combat tagging off.
-  tag-seconds: 15
-  # Logging out in combat leaves your body behind for this many seconds. If anyone kills
-  # it, that's your death: they get your heart and your items drop. 0 turns bodies off.
-  body-seconds: 30
-
-bounty:
-  # Players can stake their own hearts on someone with /bounty place. Whoever kills the
-  # target collects the lot. When true, the announcement doesn't say who placed it
-  # (admins can still see it in /lifesteal ledger).
+bounties:
+  # /bounty place <player> <hearts>: stake your own hearts on someone's head.
+  # Whoever kills them collects the lot.
+  enabled: true
+  # Announce new bounties without naming who placed them (admins can still check the ledger).
   anonymous: true
 
+newbie-shield:
+  # First-time players can't be hurt by other players, and can't lose or gain hearts,
+  # for this many hours of playtime. Attacking anyone ends it early.
+  # Turning this off suspends existing shields too.
+  enabled: true
+  hours: 3
+
+combat-log:
+  # Hitting or being hit by another player puts you both in combat for a while.
+  # Logging out in combat leaves your body behind: if someone kills it, you die
+  # (they get your heart and your items drop).
+  enabled: true
+  tag-seconds: 15
+  body-seconds: 30
+
 last-stand:
-  # Players down to this many hearts (but not eliminated) get Strength I and Speed I
-  # until they climb back above it. Makes comebacks possible and finishing someone off
-  # risky. 0 turns it off.
+  # Players down to this many hearts get Strength I and Speed I until they recover.
+  enabled: true
   hearts: 1
 
 most-wanted:
-  # Every this many minutes, the online player with the most hearts has their rough
-  # location announced to everyone. 0 turns it off.
+  # Every so often, the online player with the most hearts has their rough location
+  # announced to everyone.
+  enabled: true
   interval-minutes: 120
   # Coordinates are rounded to the nearest this many blocks.
   precision-blocks: 100
@@ -66,82 +85,107 @@ most-wanted:
   min-players-online: 3
 
 purgatory:
-  # Eliminated players go to Purgatory, a separate world where they can earn their way
-  # back by winning trials. Set to false to have them spectate instead. Needs a restart.
+  # Eliminated players go to Purgatory, a separate world where they can win their way
+  # back. When off, eliminated players spectate instead. (restart)
   enabled: true
-  # Name of the Purgatory world folder. Created and built automatically. Needs a restart.
+  # Folder name for the Purgatory world. It's created and built automatically. (restart)
   world: lifesteal_purgatory
-  # Trials a player has to win to come back (with hearts.revive hearts).
+  # Trials a player has to win to come back.
   fragments-needed: 3
-  # After winning a trial, how long before that player can earn another fragment.
-  # They can still join trials in the meantime to help others.
+  # After a win, how long before that player can earn another fragment. They can still
+  # join trials meanwhile to help others.
   trial-cooldown-minutes: 20
-  # Scales how many enemies each trial sends. 1.0 is normal; 0.5 is gentler, 1.5 harsher.
+  # How hard trials are. 1.0 is normal; 0.5 is gentler, 1.5 harsher.
   difficulty: 1.0
-  # /rift <player>: one living player pays this many of their own hearts to bring an
-  # eliminated player back (with hearts.revive). Closed during the finale.
-  rift-cost: 6
 
-revival-vote:
-  # /pledge <player> <hearts>: living players chip in hearts to bring someone back. They
-  # return once the pledges add up to this many hearts from at least this many players.
-  # Pledges are refunded if the player comes back another way. Closed during the finale.
+rifts:
+  # /rift <player>: one living player pays hearts to bring an eliminated player back.
+  enabled: true
+  cost: 6
+
+revival-votes:
+  # /pledge <player> <hearts>: living players chip in hearts to bring someone back.
+  # They return once the pledges reach hearts-needed from at least min-players players.
+  # Pledges are refunded if the player comes back another way.
+  enabled: true
   hearts-needed: 6
   min-players: 3
 
-blood-pact:
-  # /pact <player>: two players share hearts won from kills and bounties, and when either
-  # dies the other loses a heart too. Breaking a pact means waiting this long for a new one.
+blood-pacts:
+  # /pact <player>: two players share the hearts they win from kills and bounties,
+  # and when either dies the other loses a heart too. Turning this off ends all pacts.
+  enabled: true
+  # How long someone who breaks a pact waits before making another.
   break-cooldown-hours: 24
+  # Show pacts in the tab list (needs tab-list enabled).
+  show-in-tab: true
 
 ghosts:
-  # Eliminated players can /ghost to roam the overworld as spectators, and /whisper one
-  # message to a living player this often.
-  whisper-minutes: 60
-  # When true, eliminated players' chat only reaches other eliminated players and admins,
-  # and they can't /msg the living: /whisper is their only way through.
+  # /ghost: eliminated players can roam the overworld as spectators.
+  enabled: true
+  whispers:
+    # /whisper <player> <message>: an eliminated player's one way to reach the living.
+    enabled: true
+    every-minutes: 60
+  # Eliminated players' chat (and /msg) only reaches other eliminated players and admins.
   limit-chat: true
 
 heart-items:
-  # Heart items come from airdrops and Blood Moons. Right-click a Heart to gain a heart;
-  # right-click with this many Heart Fragments to turn them into a Heart.
+  # Hearts and Heart Fragments come from airdrops, Blood Moons and /withdraw.
+  # Holding this many fragments and right-clicking turns them into a Heart.
   fragments-per-heart: 4
-  # Heart items fade so nobody can hoard them: each loses an equal share of its value per
-  # day and is gone after this many days. A faded Heart turns into the fragments it's still
-  # worth when used. Its tooltip shows the dates. 0 means they never fade. Players can make
-  # Heart items from their own hearts with /withdraw.
-  decay-days: 4
+  withdraw:
+    # /withdraw [hearts]: turn your own hearts into Heart items.
+    enabled: true
+  decay:
+    # Heart items fade so nobody can hoard them: each loses an equal share of its value
+    # per day and is gone after this many days. Old Hearts break into fragments when used.
+    enabled: true
+    days: 4
 
 blood-moon:
-  # Roughly how often a Blood Moon rises, in real days (the exact time is random).
-  # 0 turns them off.
+  # Now and then the overworld falls into a long night: kills take extra hearts and
+  # monsters can drop Heart Fragments.
+  enabled: true
+  # Roughly how often, in real days. The exact time is random.
   every-days: 7
-  # How long one lasts. The overworld stays at night until it sets.
   minutes: 20
-  # PvP kills move this many times the usual hearts during a Blood Moon.
   kill-multiplier: 2
-  # Chance (0 to 1) that a hostile mob killed by a player drops a Heart Fragment.
+  # Chance (0 to 1) that a monster killed by a player drops a Heart Fragment.
   fragment-chance: 0.02
-  # A Blood Moon waits until at least this many players are online.
   min-players-online: 3
 
 airdrops:
-  # Roughly how often a heart crate falls, in minutes. 0 turns airdrops off.
+  # Heart crates fall at announced coordinates.
+  enabled: true
   every-minutes: 90
   # Crates land within this many blocks of the overworld spawn.
   radius: 1500
-  # The exact landing spot is announced this many minutes ahead.
+  # The landing spot is announced this many minutes ahead.
   warning-minutes: 5
-  # A crate disappears this many minutes after landing, opened or not.
+  # A crate disappears this long after landing, opened or not.
   despawn-minutes: 20
-  # Drops wait until at least this many players are online.
   min-players-online: 3
 
 finale:
-  # Started by an admin with /lifesteal finale start <minutes> [final size]. While it runs,
-  # Purgatory can't revive anyone. This is how much the border hurts per block outside it.
+  # Started by an admin with /lifesteal finale start <minutes> [final size]. The border
+  # closes, portals shut, and nobody comes back from Purgatory.
+  # How much the border hurts per block outside it, per second.
   damage-per-block: 1.0
 
+alt-detection:
+  # Notice accounts logging in from the same address (stored only as a scrambled hash)
+  # and alert admins when they kill each other.
+  enabled: true
+
+tab-list:
+  # Show hearts (and pacts) next to names in the tab list. The look is set in messages.yml.
+  enabled: true
+
+seasons:
+  # Let everyone see past seasons with /seasons and /leaderboard <season>.
+  public-history: true
+
 database:
-  # SQLite file inside the plugin folder. Changing this needs a restart.
+  # SQLite file inside the plugin folder. (restart)
   file: lifesteal.db

@@ -13,7 +13,6 @@ import io.papermc.paper.command.brigadier.CommandSourceStack;
 import io.papermc.paper.command.brigadier.Commands;
 import java.time.Duration;
 import java.time.Instant;
-import net.kyori.adventure.text.minimessage.tag.resolver.Placeholder;
 import org.bukkit.command.CommandSender;
 import org.bukkit.entity.Player;
 import org.bukkit.inventory.ItemStack;
@@ -46,23 +45,23 @@ final class EventCommands {
                                         .executes(ctx -> startBloodMoon(ctx,
                                                 Duration.ofMinutes(IntegerArgumentType.getInteger(ctx, "minutes"))))))
                         .then(Commands.literal("stop").executes(ctx -> {
-                            if (!bloodMoon.end()) ctx.getSource().getSender().sendRichMessage("<gray>No Blood Moon is up.");
+                            if (!bloodMoon.end()) Msg.send(ctx.getSource().getSender(), "admin.no-blood-moon");
                             return Command.SINGLE_SUCCESS;
                         })))
                 .then(Commands.literal("airdrop")
                         .executes(ctx -> {
                             if (!airdrops.announce(randomDrop(), plugin.settings().events().airdrops().warning())) {
-                                ctx.getSource().getSender().sendRichMessage("<gray>A crate is already on its way or waiting.");
+                                Msg.send(ctx.getSource().getSender(), "admin.airdrop-busy");
                             }
                             return Command.SINGLE_SUCCESS;
                         })
                         .then(Commands.literal("here").executes(ctx -> {
                             if (!(ctx.getSource().getSender() instanceof Player player)) {
-                                ctx.getSource().getSender().sendRichMessage("<red>Only a player can call a drop on themselves.");
+                                Msg.send(ctx.getSource().getSender(), "common.players-only");
                                 return 0;
                             }
                             if (!airdrops.announce(player.getLocation().add(3, 0, 0), Duration.ofSeconds(10))) {
-                                player.sendRichMessage("<gray>A crate is already on its way or waiting.");
+                                Msg.send(player, "admin.airdrop-busy");
                             }
                             return Command.SINGLE_SUCCESS;
                         })));
@@ -77,7 +76,7 @@ final class EventCommands {
                                 .then(Commands.argument("size", IntegerArgumentType.integer(5))
                                         .executes(ctx -> startFinale(ctx, IntegerArgumentType.getInteger(ctx, "size"))))))
                 .then(Commands.literal("stop").executes(ctx -> {
-                    if (!finale.stop()) ctx.getSource().getSender().sendRichMessage("<gray>No finale is running.");
+                    if (!finale.stop()) Msg.send(ctx.getSource().getSender(), "admin.no-finale");
                     return Command.SINGLE_SUCCESS;
                 }));
     }
@@ -101,41 +100,36 @@ final class EventCommands {
         CommandSender sender = ctx.getSource().getSender();
         Player target = plugin.getServer().getPlayerExact(StringArgumentType.getString(ctx, "player"));
         if (target == null) {
-            sender.sendRichMessage("<red>That player isn't online.");
+            Msg.send(sender, "common.not-online");
             return 0;
         }
         ItemStack item = kind.equals("heart") ? items.heart(amount) : items.fragment(amount);
         target.getInventory().addItem(item).values().forEach(left -> target.getWorld().dropItem(target.getLocation(), left));
-        sender.sendRichMessage("<green>Gave <player> <amount> <kind> item(s).",
-                Placeholder.unparsed("player", target.getName()),
-                Placeholder.unparsed("amount", String.valueOf(amount)),
-                Placeholder.unparsed("kind", kind));
+        Msg.send(sender, "admin.items-given", Msg.t("player", target.getName()), Msg.t("amount", amount), Msg.t("kind", kind));
         return Command.SINGLE_SUCCESS;
     }
 
     private int startBloodMoon(CommandContext<CommandSourceStack> ctx, Duration length) {
-        if (!bloodMoon.start(length)) ctx.getSource().getSender().sendRichMessage("<gray>A Blood Moon is already up.");
+        if (!bloodMoon.start(length)) Msg.send(ctx.getSource().getSender(), "admin.blood-moon-already");
         return Command.SINGLE_SUCCESS;
     }
 
     private int startFinale(CommandContext<CommandSourceStack> ctx, int size) {
         Duration over = Duration.ofMinutes(IntegerArgumentType.getInteger(ctx, "minutes"));
-        if (!finale.start(over, size)) ctx.getSource().getSender().sendRichMessage("<gray>The finale is already running.");
+        if (!finale.start(over, size)) Msg.send(ctx.getSource().getSender(), "admin.finale-already");
         return Command.SINGLE_SUCCESS;
     }
 
     private int status(CommandSender sender) {
-        sender.sendRichMessage("<gold>Blood Moon:</gold> <state>",
-                Placeholder.unparsed("state", bloodMoon.isActive() ? "up now" : describe(bloodMoon.nextRising())));
-        sender.sendRichMessage("<gold>Next airdrop:</gold> <state>", Placeholder.unparsed("state", describe(airdrops.nextDrop())));
-        sender.sendRichMessage("<gold>Finale:</gold> <state>", Placeholder.unparsed("state", finale.isActive() ? "running" : "not running"));
+        Msg.send(sender, "admin.status-blood-moon", Msg.c("state", bloodMoon.isActive() ? Msg.get("admin.state-now") : describe(bloodMoon.nextRising())));
+        Msg.send(sender, "admin.status-airdrop", Msg.c("state", describe(airdrops.nextDrop())));
+        Msg.send(sender, "admin.status-finale", Msg.c("state", Msg.get(finale.isActive() ? "admin.state-running" : "admin.state-not-running")));
         return Command.SINGLE_SUCCESS;
     }
 
-    private static String describe(Instant when) {
-        if (when == null) return "off, or a drop is in progress";
-        long minutes = Math.max(0, Duration.between(Instant.now(), when).toMinutes());
-        return minutes < 120 ? "in " + minutes + " minutes" : "in about " + (minutes / 60) + " hours";
+    private static net.kyori.adventure.text.Component describe(Instant when) {
+        if (when == null) return Msg.get("admin.state-not-scheduled");
+        return Msg.get("admin.state-in", Msg.t("time", Msg.duration(Duration.between(Instant.now(), when))));
     }
 
     /** Same spread as the scheduled drops. */

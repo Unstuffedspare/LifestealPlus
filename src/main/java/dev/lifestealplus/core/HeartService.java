@@ -82,6 +82,22 @@ public final class HeartService implements AutoCloseable {
         return submit(() -> store.breakPact(player, cooldown));
     }
 
+    /** Applies the feature switches that live in the store (shields, pacts, alt flags). */
+    public CompletableFuture<Void> setFeatures(boolean shields, boolean pacts, boolean altFlags) {
+        return submit(() -> {
+            store.setFeatures(shields, pacts, altFlags);
+            return null;
+        });
+    }
+
+    public CompletableFuture<List<VengeanceMark>> liveMarks() {
+        return submit(store::liveMarks);
+    }
+
+    public CompletableFuture<List<PactPair>> allPacts() {
+        return submit(store::allPacts);
+    }
+
     public CompletableFuture<Optional<PlayerHearts>> pactPartner(UUID player) {
         return submit(() -> store.pactPartner(player));
     }

@@ -2,6 +2,7 @@ package dev.lifestealplus.events;
 
 import dev.lifestealplus.EventSettings;
 import dev.lifestealplus.LifestealPlugin;
+import dev.lifestealplus.Msg;
 import dev.lifestealplus.core.HeartService;
 import dev.lifestealplus.items.HeartItems;
 import java.time.Duration;
@@ -9,8 +10,6 @@ import java.time.Instant;
 import java.util.concurrent.ThreadLocalRandom;
 import java.util.logging.Level;
 import net.kyori.adventure.bossbar.BossBar;
-import net.kyori.adventure.text.Component;
-import net.kyori.adventure.text.format.NamedTextColor;
 import net.kyori.adventure.title.Title;
 import org.bukkit.GameRules;
 import org.bukkit.Sound;
@@ -124,16 +123,14 @@ public final class BloodMoon implements Listener {
         World world = overworld();
         world.setGameRule(GameRules.ADVANCE_TIME, false);
         world.setTime(MIDNIGHT);
-        bar = BossBar.bossBar(Component.text("Blood Moon", NamedTextColor.DARK_RED), 1f, BossBar.Color.RED, BossBar.Overlay.PROGRESS);
+        bar = BossBar.bossBar(Msg.get("blood-moon.bar"), 1f, BossBar.Color.RED, BossBar.Overlay.PROGRESS);
         int multiplier = settings().killMultiplier();
         for (Player p : plugin.getServer().getOnlinePlayers()) {
             p.showBossBar(bar);
-            p.showTitle(Title.title(Component.text("Blood Moon", NamedTextColor.DARK_RED),
-                    Component.text("Kills take " + multiplier + "× hearts", NamedTextColor.RED)));
+            p.showTitle(Title.title(Msg.get("blood-moon.title"), Msg.get("blood-moon.subtitle", Msg.t("multiplier", multiplier))));
             p.playSound(p, Sound.ENTITY_WITHER_AMBIENT, 0.7f, 0.5f);
         }
-        plugin.getServer().broadcast(Component.text("🩸 A Blood Moon rises. For the next " + lasting.toMinutes()
-                + " minutes, kills take " + multiplier + "× hearts and monsters may drop Heart Fragments.", NamedTextColor.RED));
+        Msg.broadcast("blood-moon.rises", Msg.t("time", Msg.duration(lasting)), Msg.t("multiplier", multiplier));
         return true;
     }
 
@@ -148,7 +145,7 @@ public final class BloodMoon implements Listener {
         world.setTime(DAWN);
         if (bar != null) plugin.getServer().getOnlinePlayers().forEach(p -> p.hideBossBar(bar));
         bar = null;
-        plugin.getServer().broadcast(Component.text("The Blood Moon sets.", NamedTextColor.GRAY));
+        Msg.broadcast("blood-moon.sets");
         scheduleNext();
         return true;
     }

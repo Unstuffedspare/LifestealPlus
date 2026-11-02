@@ -6,8 +6,6 @@ import java.time.Duration;
 import java.time.Instant;
 import java.util.List;
 import java.util.logging.Level;
-import net.kyori.adventure.text.minimessage.MiniMessage;
-import net.kyori.adventure.text.minimessage.tag.resolver.Placeholder;
 import org.bukkit.Sound;
 
 /**
@@ -49,10 +47,7 @@ public final class CapSchedule {
             int cap = HeartRules.capForWeek(schedule, plugin.settings().rules().maxHearts(), week);
             hearts.setCapOverride(cap);
             if (announced != null && cap > announced) {
-                plugin.getServer().broadcast(MiniMessage.miniMessage().deserialize(
-                        "<red>❤ The heart cap has risen to <cap> for week <week>.",
-                        Placeholder.unparsed("cap", String.valueOf(cap)),
-                        Placeholder.unparsed("week", String.valueOf(week + 1))));
+                Msg.broadcast("hearts.cap-risen", Msg.t("cap", cap), Msg.t("week", week + 1));
                 plugin.getServer().getOnlinePlayers().forEach(p -> p.playSound(p, Sound.BLOCK_BEACON_POWER_SELECT, 0.8f, 1.2f));
             }
             announced = cap;

@@ -1,14 +1,11 @@
 package dev.lifestealplus.events;
 
 import dev.lifestealplus.LifestealPlugin;
+import dev.lifestealplus.Msg;
 import dev.lifestealplus.core.HeartService;
 import dev.lifestealplus.event.PlayerEliminatedEvent;
 import java.time.Duration;
 import java.util.logging.Level;
-import net.kyori.adventure.text.Component;
-import net.kyori.adventure.text.format.NamedTextColor;
-import net.kyori.adventure.text.minimessage.MiniMessage;
-import net.kyori.adventure.text.minimessage.tag.resolver.Placeholder;
 import net.kyori.adventure.title.Title;
 import org.bukkit.Location;
 import org.bukkit.Sound;
@@ -69,14 +66,10 @@ public final class Finale implements Listener {
         border.changeSize(finalSize, Math.max(1, over.toSeconds() * 20));
 
         for (Player p : plugin.getServer().getOnlinePlayers()) {
-            p.showTitle(Title.title(Component.text("The Finale", NamedTextColor.DARK_RED),
-                    Component.text("The border is closing. Last one standing wins.", NamedTextColor.RED)));
+            p.showTitle(Title.title(Msg.get("finale.title"), Msg.get("finale.subtitle")));
             p.playSound(p, Sound.ENTITY_ENDER_DRAGON_GROWL, 0.8f, 0.8f);
         }
-        broadcast("<dark_red><bold>The Finale has begun.</bold></dark_red> <red>Over the next <minutes> minutes the border "
-                        + "closes to <size> blocks around spawn. Purgatory is sealed: nobody comes back now.",
-                Placeholder.unparsed("minutes", String.valueOf(over.toMinutes())),
-                Placeholder.unparsed("size", String.valueOf((int) finalSize)));
+        Msg.broadcast("finale.started", Msg.t("time", Msg.duration(over)), Msg.t("size", (int) finalSize));
         evacuateOtherDimensions();
         return true;
     }
@@ -88,7 +81,7 @@ public final class Finale implements Listener {
         border.setSize(previousSize);
         previousSize = null;
         hearts.clearState(ACTIVE);
-        broadcast("<gray>The finale has been called off. The border is back and Purgatory is open again.");
+        Msg.broadcast("finale.stopped");
         return true;
     }
 
@@ -97,7 +90,7 @@ public final class Finale implements Listener {
         String purgatory = plugin.settings().purgatory().world();
         for (Player p : plugin.getServer().getOnlinePlayers()) {
             if (outside(p, purgatory)) {
-                p.sendRichMessage("<red>The finale is in the overworld. You have 60 seconds to come back before you're pulled to spawn.");
+                Msg.send(p, "finale.come-back", Msg.t("time", Msg.duration(EVACUATION_WARNING)));
             }
         }
         plugin.getServer().getScheduler().runTaskLater(plugin, () -> {
@@ -105,7 +98,7 @@ public final class Finale implements Listener {
             for (Player p : plugin.getServer().getOnlinePlayers()) {
                 if (outside(p, purgatory)) {
                     p.teleport(overworld().getSpawnLocation());
-                    p.sendRichMessage("<red>You've been brought back for the finale.");
+                    Msg.send(p, "finale.brought-back");
                 }
             }
         }, EVACUATION_WARNING.toSeconds() * 20);
@@ -120,7 +113,7 @@ public final class Finale implements Listener {
     void onPortal(PlayerPortalEvent event) {
         if (!isActive() || event.getTo().getWorld() == null || event.getTo().getWorld().equals(overworld())) return;
         event.setCancelled(true);
-        event.getPlayer().sendRichMessage("<red>The portals are closed for the finale.");
+        Msg.send(event.getPlayer(), "finale.portals-closed");
     }
 
     /** Every elimination might be the last one. */
@@ -136,13 +129,12 @@ public final class Finale implements Listener {
             crowned = true;
             String name = last.get().name();
             for (Player p : plugin.getServer().getOnlinePlayers()) {
-                p.showTitle(Title.title(Component.text(name, NamedTextColor.GOLD),
-                        Component.text("wins the season", NamedTextColor.YELLOW),
+                p.showTitle(Title.title(Msg.get("finale.winner-title", Msg.t("player", name)),
+                        Msg.get("finale.winner-subtitle", Msg.t("player", name)),
                         Title.Times.times(Duration.ofSeconds(1), Duration.ofSeconds(8), Duration.ofSeconds(2))));
                 p.playSound(p, Sound.UI_TOAST_CHALLENGE_COMPLETE, 1f, 1f);
             }
-            broadcast("<gold><bold>👑 <player> is the last one standing and wins the season!",
-                    Placeholder.unparsed("player", name));
+            Msg.broadcast("finale.winner", Msg.t("player", name));
         }));
     }
 
@@ -158,7 +150,4 @@ public final class Finale implements Listener {
         return plugin.getServer().getWorlds().getFirst();
     }
 
-    private void broadcast(String message, net.kyori.adventure.text.minimessage.tag.resolver.TagResolver... tags) {
-        plugin.getServer().broadcast(MiniMessage.miniMessage().deserialize(message, tags));
-    }
 }

@@ -6,6 +6,7 @@ import com.mojang.brigadier.builder.LiteralArgumentBuilder;
 import com.mojang.brigadier.tree.LiteralCommandNode;
 import dev.lifestealplus.HeartTracker;
 import dev.lifestealplus.LifestealPlugin;
+import dev.lifestealplus.Msg;
 import dev.lifestealplus.core.AltFlag;
 import dev.lifestealplus.core.HeartService;
 import dev.lifestealplus.core.PlayerHearts;
@@ -16,7 +17,6 @@ import java.time.ZoneId;
 import java.time.format.DateTimeFormatter;
 import java.util.List;
 import java.util.logging.Level;
-import net.kyori.adventure.text.minimessage.tag.resolver.Placeholder;
 import org.bukkit.command.CommandSender;
 
 /** /lifesteal alts, flags and season (admins), and /leaderboard (everyone). */
@@ -50,17 +50,13 @@ public final class AdminCommands {
                                         if (error != null) {
                                             fail(sender, error);
                                         } else if (lookup == null) {
-                                            sender.sendRichMessage("<red>No player named <name> has joined.", Placeholder.unparsed("name", name));
+                                            Msg.send(sender, "common.no-such-player", Msg.t("name", name));
                                         } else if (lookup.linked().isEmpty()) {
-                                            sender.sendRichMessage("<gray><player> shares no address with any other account.",
-                                                    Placeholder.unparsed("player", lookup.player().name()));
+                                            Msg.send(sender, "alts.none", Msg.t("player", lookup.player().name()));
                                         } else {
-                                            sender.sendRichMessage("<gold><player> shares an address with:",
-                                                    Placeholder.unparsed("player", lookup.player().name()));
+                                            Msg.send(sender, "alts.header", Msg.t("player", lookup.player().name()));
                                             for (PlayerHearts other : lookup.linked()) {
-                                                sender.sendRichMessage(" <white><name></white> <gray>(<hearts> hearts)",
-                                                        Placeholder.unparsed("name", other.name()),
-                                                        Placeholder.unparsed("hearts", String.valueOf(other.hearts())));
+                                                Msg.send(sender, "alts.line", Msg.t("name", other.name()), Msg.t("hearts", other.hearts()));
                                             }
                                         }
                                     }, tracker.mainThread());
@@ -80,15 +76,13 @@ public final class AdminCommands {
                     return;
                 }
                 if (flags.isEmpty()) {
-                    sender.sendRichMessage("<gray>No kills between linked accounts so far.");
+                    Msg.send(sender, "alts.flags-none");
                     return;
                 }
-                sender.sendRichMessage("<gold>Kills between accounts sharing an address <gray>(newest first)");
+                Msg.send(sender, "alts.flags-header");
                 for (AltFlag f : flags) {
-                    sender.sendRichMessage(" <gray><time></gray> <white><killer></white> killed <white><victim></white>",
-                            Placeholder.unparsed("time", TIME.format(f.at())),
-                            Placeholder.unparsed("killer", f.killerName()),
-                            Placeholder.unparsed("victim", f.victimName()));
+                    Msg.send(sender, "alts.flags-line", Msg.t("time", TIME.format(f.at())), Msg.t("killer", f.killerName()),
+                            Msg.t("victim", f.victimName()));
                 }
             }, tracker.mainThread());
             return Command.SINGLE_SUCCESS;
@@ -100,9 +94,9 @@ public final class AdminCommands {
                 .executes(ctx -> {
                     CommandSender sender = ctx.getSource().getSender();
                     seasons.currentName().thenCombine(hearts.seasons(), (current, archived) -> {
-                        sender.sendRichMessage("<gold>Current season:</gold> <white><name>", Placeholder.unparsed("name", current));
-                        sender.sendRichMessage("<gold>Archived:</gold> <gray><list>",
-                                Placeholder.unparsed("list", archived.isEmpty() ? "none yet" : String.join(", ", archived)));
+                        Msg.send(sender, "season.current", Msg.t("name", current));
+                        Msg.send(sender, "season.archived", Msg.c("list", archived.isEmpty()
+                                ? Msg.get("season.none-archived") : net.kyori.adventure.text.Component.text(String.join(", ", archived))));
                         return null;
                     }).exceptionally(error -> {
                         fail(sender, error);
@@ -125,6 +119,7 @@ public final class AdminCommands {
     /** Everyone: the live top ten, or an archived season's final standings. */
     public LiteralCommandNode<CommandSourceStack> leaderboardCommand() {
         return Commands.literal("leaderboard")
+                .requires(src -> src.getSender().hasPermission("lifestealplus.leaderboard"))
                 .executes(ctx -> {
                     CommandSender sender = ctx.getSource().getSender();
                     seasons.currentName().thenCombine(hearts.topHearts(10), Live::new).whenCompleteAsync((live, error) -> {
@@ -132,15 +127,12 @@ public final class AdminCommands {
                             fail(sender, error);
                             return;
                         }
-                        sender.sendRichMessage("<gold><season>: most hearts", Placeholder.unparsed("season", live.season()));
+                        Msg.send(sender, "leaderboard.live-header", Msg.t("season", live.season()));
                         int rank = 0;
                         for (PlayerHearts p : live.top()) {
-                            sender.sendRichMessage(" <gray>#<rank></gray> <white><name></white> <red><hearts>❤",
-                                    Placeholder.unparsed("rank", String.valueOf(++rank)),
-                                    Placeholder.unparsed("name", p.name()),
-                                    Placeholder.unparsed("hearts", String.valueOf(p.hearts())));
+                            Msg.send(sender, "leaderboard.live-line", Msg.t("rank", ++rank), Msg.t("name", p.name()), Msg.t("hearts", p.hearts()));
                         }
-                        if (live.top().isEmpty()) sender.sendRichMessage("<gray>Nobody yet.");
+                        if (live.top().isEmpty()) Msg.send(sender, "leaderboard.empty");
                     }, tracker.mainThread());
                     return Command.SINGLE_SUCCESS;
                 })
@@ -148,25 +140,24 @@ public final class AdminCommands {
                         .executes(ctx -> {
                             CommandSender sender = ctx.getSource().getSender();
                             String season = StringArgumentType.getString(ctx, "season").trim();
+                            if (!historyVisibleTo(sender)) {
+                                Msg.send(sender, "common.feature-off");
+                                return Command.SINGLE_SUCCESS;
+                            }
                             hearts.seasonStandings(season).whenCompleteAsync((standings, error) -> {
                                 if (error != null) {
                                     fail(sender, error);
                                     return;
                                 }
                                 if (standings.isEmpty()) {
-                                    sender.sendRichMessage("<gray>No archived season called <season>.", Placeholder.unparsed("season", season));
+                                    Msg.send(sender, "leaderboard.no-such-season", Msg.t("season", season));
                                     return;
                                 }
-                                sender.sendRichMessage("<gold><season>: final standings", Placeholder.unparsed("season", season));
+                                Msg.send(sender, "leaderboard.final-header", Msg.t("season", season));
                                 for (SeasonStanding s : standings.subList(0, Math.min(10, standings.size()))) {
-                                    sender.sendRichMessage(" <gray>#<rank></gray> <white><name></white> <red><hearts>❤</red> "
-                                                    + "<gray><kills> kills, <deaths> deaths, eliminated <elims>×",
-                                            Placeholder.unparsed("rank", String.valueOf(s.rank())),
-                                            Placeholder.unparsed("name", s.name()),
-                                            Placeholder.unparsed("hearts", String.valueOf(s.hearts())),
-                                            Placeholder.unparsed("kills", String.valueOf(s.kills())),
-                                            Placeholder.unparsed("deaths", String.valueOf(s.deaths())),
-                                            Placeholder.unparsed("elims", String.valueOf(s.eliminations())));
+                                    Msg.send(sender, "leaderboard.final-line", Msg.t("rank", s.rank()), Msg.t("name", s.name()),
+                                            Msg.t("hearts", s.hearts()), Msg.t("kills", s.kills()), Msg.t("deaths", s.deaths()),
+                                            Msg.t("elims", s.eliminations()));
                                 }
                             }, tracker.mainThread());
                             return Command.SINGLE_SUCCESS;
@@ -177,8 +168,46 @@ public final class AdminCommands {
     private record Live(String season, List<PlayerHearts> top) {
     }
 
+    private boolean historyVisibleTo(CommandSender sender) {
+        return plugin.settings().extras().publicSeasons() || sender.hasPermission("lifestealplus.admin");
+    }
+
+    /** Everyone (unless seasons.public-history is off): past seasons and who finished on top. */
+    public LiteralCommandNode<CommandSourceStack> seasonsCommand() {
+        return Commands.literal("seasons")
+                .requires(src -> src.getSender().hasPermission("lifestealplus.leaderboard")).executes(ctx -> {
+            CommandSender sender = ctx.getSource().getSender();
+            if (!historyVisibleTo(sender)) {
+                Msg.send(sender, "common.feature-off");
+                return Command.SINGLE_SUCCESS;
+            }
+            seasons.currentName().thenCombine(hearts.seasons(), Seasons::new).whenCompleteAsync((all, error) -> {
+                if (error != null) {
+                    fail(sender, error);
+                    return;
+                }
+                Msg.send(sender, "season.current", Msg.t("name", all.current()));
+                if (all.archived().isEmpty()) {
+                    Msg.send(sender, "season.archived", Msg.c("list", Msg.get("season.none-archived")));
+                    return;
+                }
+                for (String past : all.archived()) {
+                    hearts.seasonStandings(past).whenCompleteAsync((standings, err) -> {
+                        if (err != null || standings.isEmpty()) return;
+                        Msg.send(sender, "season.past-line", Msg.t("season", past), Msg.t("winner", standings.getFirst().name()),
+                                Msg.t("hearts", standings.getFirst().hearts()));
+                    }, tracker.mainThread());
+                }
+            }, tracker.mainThread());
+            return Command.SINGLE_SUCCESS;
+        }).build();
+    }
+
+    private record Seasons(String current, List<String> archived) {
+    }
+
     private void fail(CommandSender sender, Throwable error) {
         plugin.getLogger().log(Level.SEVERE, "Admin command failed", error);
-        sender.sendRichMessage("<red>That didn't work; the error is in the server log.");
+        Msg.send(sender, "common.error");
     }
 }

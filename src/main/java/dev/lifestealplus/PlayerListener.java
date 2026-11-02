@@ -6,7 +6,6 @@ import dev.lifestealplus.core.PlayerHearts;
 import java.util.Optional;
 import java.util.concurrent.TimeUnit;
 import java.util.logging.Level;
-import net.kyori.adventure.text.Component;
 import org.bukkit.entity.Player;
 import org.bukkit.event.EventHandler;
 import org.bukkit.event.EventPriority;
@@ -45,7 +44,7 @@ final class PlayerListener implements Listener {
         } catch (Exception e) {
             plugin.getLogger().log(Level.SEVERE, "Couldn't load hearts for " + event.getName(), e);
             event.disallow(AsyncPlayerPreLoginEvent.Result.KICK_OTHER,
-                    Component.text("Lifesteal data is unavailable right now. Try again in a minute."));
+                    Msg.get("login.data-unavailable"));
         }
     }
 

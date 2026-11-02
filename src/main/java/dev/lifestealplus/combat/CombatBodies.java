@@ -3,6 +3,7 @@ package dev.lifestealplus.combat;
 import dev.lifestealplus.EliminationHandler;
 import dev.lifestealplus.KillHandler;
 import dev.lifestealplus.LifestealPlugin;
+import dev.lifestealplus.Msg;
 import dev.lifestealplus.core.HeartService;
 import io.papermc.paper.datacomponent.item.ResolvableProfile;
 import java.time.Duration;
@@ -12,10 +13,6 @@ import java.util.Map;
 import java.util.UUID;
 import java.util.logging.Level;
 import net.kyori.adventure.text.Component;
-import net.kyori.adventure.text.format.NamedTextColor;
-import net.kyori.adventure.text.minimessage.MiniMessage;
-import net.kyori.adventure.text.minimessage.tag.resolver.Placeholder;
-import net.kyori.adventure.text.minimessage.tag.resolver.TagResolver;
 import org.bukkit.NamespacedKey;
 import org.bukkit.attribute.Attribute;
 import org.bukkit.entity.Entity;
@@ -78,7 +75,7 @@ public final class CombatBodies implements Listener {
             m.setProfile(ResolvableProfile.resolvableProfile(player.getPlayerProfile()));
             m.customName(Component.text(player.getName()));
             m.setCustomNameVisible(true);
-            m.setDescription(Component.text("Logged out in combat", NamedTextColor.RED));
+            m.setDescription(Msg.get("combat-log.body-label"));
             // For show only: when the body dies, onBodyDeath replaces its drops with the owner's real inventory.
             for (EquipmentSlot slot : new EquipmentSlot[] {EquipmentSlot.HEAD, EquipmentSlot.CHEST, EquipmentSlot.LEGS,
                     EquipmentSlot.FEET, EquipmentSlot.HAND, EquipmentSlot.OFF_HAND}) {
@@ -104,13 +101,11 @@ public final class CombatBodies implements Listener {
             if (left == null) return;
             Entity e = plugin.getServer().getEntity(left.entity());
             if (e != null) e.remove();
-            broadcast("<gray><player>'s body fades away.", Placeholder.unparsed("player", name));
+            Msg.broadcast("combat-log.body-faded", Msg.t("player", name));
         }, life.toSeconds() * 20);
         byOwner.put(owner, new Body(body.getUniqueId(), items, exp, expiry));
 
-        broadcast("<red>☠ <player> logged out in combat.</red> <gray>Their body stays for <seconds> seconds.",
-                Placeholder.unparsed("player", name),
-                Placeholder.unparsed("seconds", String.valueOf(life.toSeconds())));
+        Msg.broadcast("combat-log.logged-out", Msg.t("player", name), Msg.t("seconds", life.toSeconds()));
     }
 
     @EventHandler
@@ -137,11 +132,10 @@ public final class CombatBodies implements Listener {
         Player killer = mannequin.getKiller();
         if (killer != null && !killer.getUniqueId().equals(owner)) {
             kills.pvpKill(owner, killer.getUniqueId());
-            broadcast("<red>☠ <killer> killed <player>'s body.",
-                    Placeholder.unparsed("killer", killer.getName()), Placeholder.unparsed("player", String.valueOf(name)));
+            Msg.broadcast("combat-log.body-killed", Msg.t("killer", killer.getName()), Msg.t("player", name));
         } else {
             kills.naturalDeath(owner, "body");
-            broadcast("<red>☠ <player>'s body was destroyed.", Placeholder.unparsed("player", String.valueOf(name)));
+            Msg.broadcast("combat-log.body-destroyed", Msg.t("player", name));
         }
     }
 
@@ -154,7 +148,7 @@ public final class CombatBodies implements Listener {
             player.teleport(mannequin.getLocation());
             player.setHealth(Math.min(mannequin.getHealth(), player.getAttribute(Attribute.MAX_HEALTH).getValue()));
             mannequin.remove();
-            player.sendRichMessage("<gray>You're back in your body.");
+            Msg.send(player, "combat-log.back-in-body");
         }
     }
 
@@ -167,7 +161,7 @@ public final class CombatBodies implements Listener {
         player.setFoodLevel(20);
         player.setHealth(player.getAttribute(Attribute.MAX_HEALTH).getValue());
         player.teleport(EliminationHandler.home(player));
-        player.sendRichMessage("<red>You logged out in combat and your body was killed.</red> <gray>Your items dropped where it fell.");
+        Msg.send(player, "combat-log.body-died-while-away");
     }
 
     /** On disable: bodies vanish without anyone dying. */
@@ -180,7 +174,4 @@ public final class CombatBodies implements Listener {
         byOwner.clear();
     }
 
-    private void broadcast(String message, TagResolver... tags) {
-        plugin.getServer().broadcast(MiniMessage.miniMessage().deserialize(message, tags));
-    }
 }

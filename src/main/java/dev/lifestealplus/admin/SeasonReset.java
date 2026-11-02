@@ -2,6 +2,7 @@ package dev.lifestealplus.admin;
 
 import dev.lifestealplus.HeartTracker;
 import dev.lifestealplus.LifestealPlugin;
+import dev.lifestealplus.Msg;
 import dev.lifestealplus.combat.CombatBodies;
 import dev.lifestealplus.combat.NewbieShield;
 import dev.lifestealplus.core.HeartService;
@@ -16,9 +17,6 @@ import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.logging.Level;
 import net.kyori.adventure.text.Component;
-import net.kyori.adventure.text.format.NamedTextColor;
-import net.kyori.adventure.text.minimessage.MiniMessage;
-import net.kyori.adventure.text.minimessage.tag.resolver.Placeholder;
 import net.kyori.adventure.title.Title;
 import org.bukkit.command.CommandSender;
 import org.bukkit.entity.Player;
@@ -68,17 +66,11 @@ public final class SeasonReset {
                 return;
             }
             if (current.equalsIgnoreCase(nextName)) {
-                sender.sendRichMessage("<red>The new season needs a different name from the current one (<current>).",
-                        Placeholder.unparsed("current", current));
+                Msg.send(sender, "season.same-name", Msg.t("current", current));
                 return;
             }
             pending.put(sender.getName(), new Pending(nextName, Instant.now().plus(CONFIRM_WINDOW)));
-            sender.sendRichMessage("""
-                    <red><bold>This ends <current> for everyone.</bold></red> <gray>Its standings and ledger are archived, \
-                    then every player's hearts, bounties, marks and Purgatory progress are wiped and <next> begins.</gray>
-                    <yellow>Run <white>/lifesteal season confirm</white> within 30 seconds to go ahead.""",
-                    Placeholder.unparsed("current", current),
-                    Placeholder.unparsed("next", nextName));
+            Msg.send(sender, "season.confirm", Msg.t("current", current), Msg.t("next", nextName));
         }, tracker.mainThread());
     }
 
@@ -86,7 +78,7 @@ public final class SeasonReset {
     public void confirm(CommandSender sender) {
         Pending request = pending.remove(sender.getName());
         if (request == null || Instant.now().isAfter(request.expires())) {
-            sender.sendRichMessage("<gray>Nothing to confirm. Start with /lifesteal season reset <next season name>.");
+            Msg.send(sender, "season.nothing-to-confirm");
             return;
         }
         if (finale.isActive()) finale.stop();
@@ -114,15 +106,10 @@ public final class SeasonReset {
     private void announce(Archived archived, String next) {
         String winner = archived.standings().isEmpty() ? null : archived.standings().getFirst().name();
         for (Player p : plugin.getServer().getOnlinePlayers()) {
-            p.showTitle(Title.title(Component.text(next, NamedTextColor.GOLD),
-                    Component.text(archived.season() + " is over", NamedTextColor.GRAY)));
+            p.showTitle(Title.title(Msg.get("season.title", Msg.t("new", next)), Msg.get("season.subtitle", Msg.t("old", archived.season()))));
         }
-        plugin.getServer().broadcast(MiniMessage.miniMessage().deserialize(
-                "<gold><bold><old> is over.</bold></gold> <yellow><winner></yellow> <gold>Welcome to <new>: everyone starts fresh.</gold> "
-                        + "<gray>See the final standings with /leaderboard <old>",
-                Placeholder.unparsed("old", archived.season()),
-                Placeholder.unparsed("new", next),
-                Placeholder.unparsed("winner", winner == null ? "" : winner + " finished on top.")));
+        Msg.broadcast("season.ended", Msg.t("old", archived.season()), Msg.t("new", next),
+                Msg.c("winner", winner == null ? Component.empty() : Msg.get("season.winner", Msg.t("player", winner))));
     }
 
     /** Gives an online player their fresh start now, rather than at their next login. */
@@ -146,10 +133,10 @@ public final class SeasonReset {
     private void fail(CommandSender sender, Throwable error) {
         Throwable cause = error.getCause() != null ? error.getCause() : error;
         if (cause instanceof IllegalArgumentException rule) {
-            sender.sendRichMessage("<red><reason>", Placeholder.unparsed("reason", rule.getMessage()));
+            Msg.send(sender, "common.not-allowed", Msg.t("reason", rule.getMessage()));
             return;
         }
         plugin.getLogger().log(Level.SEVERE, "Season reset failed", error);
-        sender.sendRichMessage("<red>The season reset failed; the error is in the server log.");
+        Msg.send(sender, "season.failed");
     }
 }

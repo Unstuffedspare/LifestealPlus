@@ -1,13 +1,13 @@
 package dev.lifestealplus.combat;
 
 import dev.lifestealplus.LifestealPlugin;
+import dev.lifestealplus.Msg;
 import dev.lifestealplus.core.HeartService;
 import java.time.Duration;
 import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.logging.Level;
-import net.kyori.adventure.text.minimessage.tag.resolver.Placeholder;
 import org.bukkit.entity.Entity;
 import org.bukkit.entity.Player;
 import org.bukkit.entity.Projectile;
@@ -42,8 +42,9 @@ public final class NewbieShield implements Listener {
         plugin.getServer().getScheduler().runTaskTimer(plugin, this::wearDown, ticks, ticks);
     }
 
+    /** False for everyone while newbie-shield is switched off; their remaining time is kept for later. */
     public boolean isShielded(Player player) {
-        return left.containsKey(player.getUniqueId());
+        return plugin.settings().extras().shieldsEnabled() && left.containsKey(player.getUniqueId());
     }
 
     public Duration left(Player player) {
@@ -64,13 +65,11 @@ public final class NewbieShield implements Listener {
                 plugin.getLogger().log(Level.SEVERE, "Couldn't read the newbie shield for " + player.getName(), error);
                 return;
             }
-            if (shield.isZero()) return;
+            if (shield.isZero() || !plugin.settings().extras().shieldsEnabled()) return;
             plugin.getServer().getScheduler().runTask(plugin, () -> {
                 if (!player.isOnline()) return;
                 left.put(player.getUniqueId(), shield);
-                player.sendRichMessage("<aqua>🛡 You have a new-player shield for another <time> of playtime.</aqua> "
-                                + "<gray>Other players can't hurt you and you can't lose hearts. Attacking anyone ends it.",
-                        Placeholder.unparsed("time", describe(shield)));
+                Msg.send(player, "shield.on-join", Msg.t("time", describe(shield)));
             });
         });
     }
@@ -94,9 +93,7 @@ public final class NewbieShield implements Listener {
             Long last = lastWarned.get(attacker.getUniqueId());
             if (last == null || now - last > 3000) {
                 lastWarned.put(attacker.getUniqueId(), now);
-                attacker.sendRichMessage("<aqua>🛡 <victim> is a new player, protected for another <time>.",
-                        Placeholder.unparsed("victim", victim.getName()),
-                        Placeholder.unparsed("time", describe(left(victim))));
+                Msg.send(attacker, "shield.target-protected", Msg.t("victim", victim.getName()), Msg.t("time", describe(left(victim))));
             }
             return;
         }
@@ -106,12 +103,12 @@ public final class NewbieShield implements Listener {
                 plugin.getLogger().log(Level.SEVERE, "Couldn't break the newbie shield for " + attacker.getName(), error);
                 return false;
             });
-            attacker.sendRichMessage("<yellow>You attacked <victim>, so your new-player shield is gone.",
-                    Placeholder.unparsed("victim", victim.getName()));
+            Msg.send(attacker, "shield.broken", Msg.t("victim", victim.getName()));
         }
     }
 
     private void wearDown() {
+        if (!plugin.settings().extras().shieldsEnabled()) return;
         for (UUID id : left.keySet()) {
             Player player = plugin.getServer().getPlayer(id);
             if (player == null) {
@@ -127,7 +124,7 @@ public final class NewbieShield implements Listener {
                     // A break or an admin change may have landed in the meantime; only an existing entry gets updated.
                     if (remaining.isZero()) {
                         if (left.remove(id) != null && player.isOnline()) {
-                            player.sendRichMessage("<yellow>Your new-player shield has worn off. You can lose hearts now.");
+                            Msg.send(player, "shield.worn-off");
                         }
                     } else {
                         left.computeIfPresent(id, (k, v) -> remaining);
@@ -144,9 +141,6 @@ public final class NewbieShield implements Listener {
     }
 
     public static String describe(Duration d) {
-        long minutes = Math.max(1, (d.toSeconds() + 59) / 60);
-        if (minutes < 60) return minutes + (minutes == 1 ? " minute" : " minutes");
-        long h = minutes / 60, m = minutes % 60;
-        return h + "h" + (m > 0 ? " " + m + "m" : "");
+        return Msg.duration(d);
     }
 }

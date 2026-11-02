@@ -2,11 +2,10 @@ package dev.lifestealplus.combat;
 
 import dev.lifestealplus.HeartTracker;
 import dev.lifestealplus.LifestealPlugin;
+import dev.lifestealplus.Msg;
 import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
-import net.kyori.adventure.text.Component;
-import net.kyori.adventure.text.format.NamedTextColor;
 import org.bukkit.GameMode;
 import org.bukkit.entity.Entity;
 import org.bukkit.entity.Player;
@@ -83,11 +82,10 @@ public final class CombatTagger implements Listener {
             }
             long seconds = (until - now + 999) / 1000;
             if (seconds > 0) {
-                player.sendActionBar(Component.text("⚔ In combat: " + seconds + "s. Logging out leaves your body behind.",
-                        NamedTextColor.RED));
+                Msg.actionBar(player, "combat.countdown", Msg.t("seconds", seconds));
             } else {
                 taggedUntil.remove(id);
-                player.sendActionBar(Component.text("You're out of combat.", NamedTextColor.GRAY));
+                Msg.actionBar(player, "combat.over");
             }
         });
     }

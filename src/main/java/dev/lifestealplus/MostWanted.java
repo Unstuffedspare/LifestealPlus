@@ -4,8 +4,6 @@ import dev.lifestealplus.PluginSettings.MostWantedSettings;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.ThreadLocalRandom;
-import net.kyori.adventure.text.minimessage.MiniMessage;
-import net.kyori.adventure.text.minimessage.tag.resolver.Placeholder;
 import org.bukkit.Location;
 import org.bukkit.Sound;
 import org.bukkit.entity.Player;
@@ -54,16 +52,14 @@ final class MostWanted {
         Player wanted = leaders.get(ThreadLocalRandom.current().nextInt(leaders.size()));
 
         Location at = wanted.getLocation();
-        plugin.getServer().broadcast(MiniMessage.miniMessage().deserialize(
-                "<dark_red>🎯 Most Wanted:</dark_red> <red><player></red> <gray>(<hearts> hearts) was last seen around "
-                        + "<white>x <x>, z <z></white> in <dimension>.",
-                Placeholder.unparsed("player", wanted.getName()),
-                Placeholder.unparsed("hearts", String.valueOf(best)),
-                Placeholder.unparsed("x", String.valueOf(round(at.getX(), settings.precision()))),
-                Placeholder.unparsed("z", String.valueOf(round(at.getZ(), settings.precision()))),
-                Placeholder.unparsed("dimension", dimension(at))));
+        Msg.broadcast("most-wanted.announcement",
+                Msg.t("player", wanted.getName()),
+                Msg.t("hearts", best),
+                Msg.t("x", round(at.getX(), settings.precision())),
+                Msg.t("z", round(at.getZ(), settings.precision())),
+                Msg.c("dimension", Msg.get(dimension(at))));
         plugin.getServer().getOnlinePlayers().forEach(p -> p.playSound(p, Sound.EVENT_RAID_HORN, 0.4f, 1.2f));
-        wanted.sendRichMessage("<red>You're the Most Wanted. Everyone knows roughly where you are now.");
+        Msg.send(wanted, "most-wanted.you");
         return wanted.getName();
     }
 
@@ -73,9 +69,9 @@ final class MostWanted {
 
     private static String dimension(Location at) {
         return switch (at.getWorld().getEnvironment()) {
-            case NETHER -> "the Nether";
-            case THE_END -> "the End";
-            default -> "the Overworld";
+            case NETHER -> "dimension.nether";
+            case THE_END -> "dimension.end";
+            default -> "dimension.overworld";
         };
     }
 }

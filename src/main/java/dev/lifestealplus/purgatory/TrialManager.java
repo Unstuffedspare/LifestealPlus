@@ -2,6 +2,7 @@ package dev.lifestealplus.purgatory;
 
 import dev.lifestealplus.HeartTracker;
 import dev.lifestealplus.LifestealPlugin;
+import dev.lifestealplus.Msg;
 import dev.lifestealplus.PluginSettings.PurgatorySettings;
 import dev.lifestealplus.core.HeartService;
 import dev.lifestealplus.core.PurgatoryProgress;
@@ -21,8 +22,6 @@ import java.util.logging.Level;
 import net.kyori.adventure.bossbar.BossBar;
 import net.kyori.adventure.text.Component;
 import net.kyori.adventure.text.format.NamedTextColor;
-import net.kyori.adventure.text.minimessage.MiniMessage;
-import net.kyori.adventure.text.minimessage.tag.resolver.Placeholder;
 import net.kyori.adventure.title.Title;
 import org.bukkit.NamespacedKey;
 import org.bukkit.Sound;
@@ -93,31 +92,25 @@ public final class TrialManager {
     public void call(Player player) {
         if (!canTakePart(player)) return;
         if (sealed.getAsBoolean()) {
-            player.sendRichMessage("<dark_red>Purgatory is sealed for the finale. Nobody returns now.");
+            Msg.send(player, "finale.purgatory-sealed");
             return;
         }
         switch (phase) {
             case IDLE -> {
                 phase = Phase.GATHERING;
                 seconds = GATHER_SECONDS;
-                announce(MiniMessage.miniMessage().deserialize(
-                        "<dark_aqua><player> is calling a trial. <click:run_command:'/purgatory join'><aqua><u>[Join]</u></aqua></click>"
-                                + " <gray>(starts in <seconds>s)",
-                        Placeholder.unparsed("player", player.getName()),
-                        Placeholder.unparsed("seconds", String.valueOf(GATHER_SECONDS))));
+                announce(Msg.get("trial.called", Msg.t("player", player.getName()), Msg.t("seconds", GATHER_SECONDS)));
                 join(player);
             }
             case GATHERING -> join(player);
-            default -> player.sendRichMessage("<gray>A trial is already underway. Wait for it to finish.");
+            default -> Msg.send(player, "trial.already-underway");
         }
     }
 
     public void join(Player player) {
         if (!canTakePart(player)) return;
         if (phase != Phase.GATHERING) {
-            player.sendRichMessage(phase == Phase.IDLE
-                    ? "<gray>No trial is gathering. Right-click the lodestone or use /purgatory start to call one."
-                    : "<gray>A trial is already underway. Wait for it to finish.");
+            Msg.send(player, phase == Phase.IDLE ? "trial.none-gathering" : "trial.already-underway");
             return;
         }
         if (participants.containsKey(player.getUniqueId())) return;
@@ -125,17 +118,16 @@ public final class TrialManager {
         hearts.progress(id).whenCompleteAsync((progress, error) -> {
             if (error != null) {
                 plugin.getLogger().log(Level.SEVERE, "Couldn't read Purgatory progress for " + player.getName(), error);
-                player.sendRichMessage("<red>Couldn't join the trial; the error is in the server log.");
+                Msg.send(player, "common.error");
                 return;
             }
             if (phase != Phase.GATHERING || !player.isOnline() || participants.containsKey(id)) return;
             Duration wait = cooldownLeft(progress);
             participants.put(id, wait.isZero());
             if (wait.isZero()) {
-                player.sendRichMessage("<aqua>You've joined the trial. Survive every wave to earn a fragment.");
+                Msg.send(player, "trial.joined");
             } else {
-                player.sendRichMessage("<aqua>You've joined the trial to help.</aqua> <gray>You won one recently, so this one "
-                        + "won't earn you a fragment (next in <wait>).", Placeholder.unparsed("wait", describe(wait)));
+                Msg.send(player, "trial.joined-to-help", Msg.t("wait", describe(wait)));
             }
         }, tracker.mainThread());
     }
@@ -149,13 +141,13 @@ public final class TrialManager {
         if (participants.remove(player.getUniqueId()) == null) return;
         if (bossBar != null) player.hideBossBar(bossBar);
         if ((phase == Phase.INTRO || phase == Phase.FIGHTING) && participants.isEmpty()) {
-            fail("<red>The trial has claimed everyone who entered.");
+            fail("trial.everyone-fell");
         }
     }
 
     public void died(Player player) {
         if (!isParticipant(player)) return;
-        player.sendRichMessage("<gray>You fell in the trial. You'll have to try again.");
+        Msg.send(player, "trial.fell");
         leave(player);
     }
 
@@ -167,7 +159,7 @@ public final class TrialManager {
                 seconds--;
                 if (seconds > 0 && seconds <= 5) {
                     forEachParticipant(p -> {
-                        p.showTitle(Title.title(Component.text(seconds, NamedTextColor.AQUA), Component.empty(),
+                        p.showTitle(Title.title(Msg.get("trial.countdown", Msg.t("seconds", seconds)), Component.empty(),
                                 Title.Times.times(Duration.ZERO, Duration.ofMillis(900), Duration.ofMillis(100))));
                         p.playSound(p, Sound.BLOCK_NOTE_BLOCK_PLING, 1f, 0.6f);
                     });
@@ -206,10 +198,10 @@ public final class TrialManager {
         phase = Phase.INTRO;
         seconds = INTRO_SECONDS;
         Component title = Waves.isFinal(wave)
-                ? Component.text("Final wave", NamedTextColor.DARK_RED)
-                : Component.text("Wave " + wave, NamedTextColor.AQUA);
+                ? Msg.get("trial.final-wave-title")
+                : Msg.get("trial.wave-title", Msg.t("wave", wave));
         forEachParticipant(p -> {
-            p.showTitle(Title.title(title, Component.text(wave + " of " + Waves.COUNT, NamedTextColor.GRAY)));
+            p.showTitle(Title.title(title, Msg.get("trial.wave-subtitle", Msg.t("wave", wave), Msg.t("total", Waves.COUNT))));
             p.playSound(p, Waves.isFinal(wave) ? Sound.ENTITY_WITHER_SPAWN : Sound.BLOCK_BELL_USE, 0.8f, 0.8f);
         });
     }
@@ -280,7 +272,7 @@ public final class TrialManager {
                 nextWave();
             }
         } else if (seconds >= WAVE_TIME_LIMIT_SECONDS) {
-            fail("<red>The trial's time ran out.");
+            fail("trial.time-ran-out");
         }
     }
 
@@ -289,46 +281,43 @@ public final class TrialManager {
         reset();
         int needed = settings().fragmentsNeeded();
         if (sealed.getAsBoolean()) {
-            announce(MiniMessage.miniMessage().deserialize(
-                    "<dark_red>The trial is won, but the finale has sealed Purgatory: no fragments now."));
+            announce(Msg.get("finale.trial-won-but-sealed"));
             survivors.keySet().forEach(id -> {
                 Player p = plugin.getServer().getPlayer(id);
                 if (p != null) p.teleport(world.hub());
             });
             return;
         }
-        announce(MiniMessage.miniMessage().deserialize("<aqua>The trial is won."));
+        announce(Msg.get("trial.won"));
         survivors.forEach((id, earns) -> {
             Player p = plugin.getServer().getPlayer(id);
             if (p == null) return;
             p.teleport(world.hub());
             purgatory.kit().give(p);
-            p.showTitle(Title.title(Component.text("Trial won", NamedTextColor.AQUA), Component.empty()));
+            p.showTitle(Title.title(Msg.get("trial.won-title"), Component.empty()));
             p.playSound(p, Sound.UI_TOAST_CHALLENGE_COMPLETE, 1f, 1f);
             if (!earns) {
-                p.sendRichMessage("<gray>You helped win this one. Your next fragment can be earned once your cooldown ends.");
+                Msg.send(p, "trial.helped");
                 return;
             }
             hearts.awardFragment(id, needed).whenCompleteAsync((reward, error) -> {
                 if (error != null) {
                     plugin.getLogger().log(Level.SEVERE, "Couldn't award a fragment to " + p.getName(), error);
-                    p.sendRichMessage("<red>Your fragment couldn't be recorded; the error is in the server log.");
+                    Msg.send(p, "common.error");
                 } else if (reward.revive() != null) {
                     tracker.track(CompletableFuture.completedFuture(List.of(reward.revive())));
                 } else if (reward.fragments() > 0) {
-                    p.sendRichMessage("<aqua>Fragment earned: <white><have>/<needed></white>.</aqua> <gray>You can earn the next one in <wait>.",
-                            Placeholder.unparsed("have", String.valueOf(reward.fragments())),
-                            Placeholder.unparsed("needed", String.valueOf(reward.needed())),
-                            Placeholder.unparsed("wait", describe(settings().trialCooldown())));
+                    Msg.send(p, "trial.fragment-earned", Msg.t("have", reward.fragments()), Msg.t("needed", reward.needed()),
+                            Msg.t("wait", describe(settings().trialCooldown())));
                 }
             }, tracker.mainThread());
         });
     }
 
-    private void fail(String message) {
+    private void fail(String messageKey) {
         List<Player> standing = onlineParticipants();
         reset();
-        announce(MiniMessage.miniMessage().deserialize(message));
+        announce(Msg.get(messageKey));
         standing.forEach(p -> {
             p.teleport(world.hub());
             purgatory.kit().give(p);
@@ -357,12 +346,12 @@ public final class TrialManager {
         standing.forEach(p -> p.teleport(world.hub()));
     }
 
-    public String status() {
+    public Component status() {
         return switch (phase) {
-            case IDLE -> "No trial is running.";
-            case GATHERING -> "A trial is gathering (" + seconds + "s left to join).";
-            case INTRO, FIGHTING -> "A trial is underway (wave " + wave + " of " + Waves.COUNT + ", "
-                    + participants.size() + " still standing).";
+            case IDLE -> Msg.get("trial.status-idle");
+            case GATHERING -> Msg.get("trial.status-gathering", Msg.t("seconds", seconds));
+            case INTRO, FIGHTING -> Msg.get("trial.status-running", Msg.t("wave", wave), Msg.t("total", Waves.COUNT),
+                    Msg.t("standing", participants.size()));
         };
     }
 
@@ -373,13 +362,12 @@ public final class TrialManager {
     }
 
     static String describe(Duration d) {
-        long minutes = (d.toSeconds() + 59) / 60;
-        return minutes <= 1 ? "a minute" : minutes + " minutes";
+        return Msg.duration(d);
     }
 
     private boolean canTakePart(Player player) {
         if (!tracker.isEliminated(player) || !world.contains(player.getLocation())) {
-            player.sendRichMessage("<gray>Only players in Purgatory can take part in trials.");
+            Msg.send(player, "trial.not-in-purgatory");
             return false;
         }
         return true;

@@ -6,6 +6,7 @@ import com.mojang.brigadier.arguments.StringArgumentType;
 import com.mojang.brigadier.tree.LiteralCommandNode;
 import dev.lifestealplus.core.HeartChange;
 import dev.lifestealplus.core.HeartService;
+import dev.lifestealplus.core.PactPair;
 import dev.lifestealplus.core.PlayerHearts;
 import dev.lifestealplus.core.PledgeTotal;
 import dev.lifestealplus.core.RuleException;
@@ -22,11 +23,9 @@ import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionException;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.function.BooleanSupplier;
 import java.util.function.Consumer;
 import java.util.logging.Level;
-import net.kyori.adventure.text.minimessage.MiniMessage;
-import net.kyori.adventure.text.minimessage.tag.resolver.Placeholder;
-import net.kyori.adventure.text.minimessage.tag.resolver.TagResolver;
 import org.bukkit.Sound;
 import org.bukkit.command.CommandSender;
 import org.bukkit.entity.Player;
@@ -78,9 +77,11 @@ final class SocialCommands {
 
     private LiteralCommandNode<CommandSourceStack> withdrawCommand() {
         return Commands.literal("withdraw")
-                .executes(ctx -> asPlayer(ctx.getSource(), p -> withdraw(p, 1)))
+                .requires(src -> src.getSender().hasPermission("lifestealplus.withdraw"))
+                .executes(ctx -> asPlayer(ctx.getSource(), () -> settings().withdrawEnabled(), p -> withdraw(p, 1)))
                 .then(Commands.argument("hearts", IntegerArgumentType.integer(1, 64))
-                        .executes(ctx -> asPlayer(ctx.getSource(), p -> withdraw(p, IntegerArgumentType.getInteger(ctx, "hearts")))))
+                        .executes(ctx -> asPlayer(ctx.getSource(), () -> settings().withdrawEnabled(),
+                                p -> withdraw(p, IntegerArgumentType.getInteger(ctx, "hearts")))))
                 .build();
     }
 
@@ -93,20 +94,19 @@ final class SocialCommands {
             tracker.track(CompletableFuture.completedFuture(List.of(change)));
             player.getInventory().addItem(items.heart(amount)).values()
                     .forEach(left -> player.getWorld().dropItem(player.getLocation(), left));
-            player.sendRichMessage("<red>❤</red> <gray>You drew <n> heart(s) out into Heart items. You have <left> left. "
-                            + "Held Hearts fade over time, so don't sit on them.",
-                    Placeholder.unparsed("n", String.valueOf(amount)),
-                    Placeholder.unparsed("left", String.valueOf(change.after())));
+            Msg.send(player, "withdraw.done", Msg.t("n", amount), Msg.t("left", change.after()));
         }, tracker.mainThread());
     }
 
     // ---- /rift ----
 
     private LiteralCommandNode<CommandSourceStack> riftCommand() {
+        BooleanSupplier on = () -> settings().riftsEnabled();
         return Commands.literal("rift")
-                .then(Commands.literal("confirm").executes(ctx -> asPlayer(ctx.getSource(), this::confirmRift)))
+                .requires(src -> src.getSender().hasPermission("lifestealplus.rift"))
+                .then(Commands.literal("confirm").executes(ctx -> asPlayer(ctx.getSource(), on, this::confirmRift)))
                 .then(Commands.argument("player", StringArgumentType.word())
-                        .executes(ctx -> asPlayer(ctx.getSource(), p -> requestRift(p, StringArgumentType.getString(ctx, "player")))))
+                        .executes(ctx -> asPlayer(ctx.getSource(), on, p -> requestRift(p, StringArgumentType.getString(ctx, "player")))))
                 .build();
     }
 
@@ -114,22 +114,19 @@ final class SocialCommands {
         if (sealed(rescuer)) return;
         withPlayer(rescuer, name, target -> {
             if (!target.eliminated()) {
-                rescuer.sendRichMessage("<gray><player> isn't eliminated.", Placeholder.unparsed("player", target.name()));
+                Msg.send(rescuer, "rift.not-eliminated", Msg.t("player", target.name()));
                 return;
             }
             riftRequests.put(rescuer.getUniqueId(), new Pending(target.uuid(), target.name(), Instant.now().plus(CONFIRM_WINDOW)));
-            rescuer.sendRichMessage("<dark_purple>Opening a rift for <player> costs <cost> of your hearts</dark_purple> <gray>"
-                            + "(they come back with <revive>). Run <white>/rift confirm</white> within 30 seconds.",
-                    Placeholder.unparsed("player", target.name()),
-                    Placeholder.unparsed("cost", String.valueOf(settings().riftCost())),
-                    Placeholder.unparsed("revive", String.valueOf(hearts.rules().reviveHearts())));
+            Msg.send(rescuer, "rift.confirm", Msg.t("player", target.name()), Msg.t("cost", settings().riftCost()),
+                    Msg.t("revive", hearts.rules().reviveHearts()));
         });
     }
 
     private void confirmRift(Player rescuer) {
         Pending request = riftRequests.remove(rescuer.getUniqueId());
         if (request == null || Instant.now().isAfter(request.expires())) {
-            rescuer.sendRichMessage("<gray>Nothing to confirm. Start with /rift <player>.");
+            Msg.send(rescuer, "rift.nothing-to-confirm");
             return;
         }
         if (sealed(rescuer)) return;
@@ -140,24 +137,25 @@ final class SocialCommands {
             }
             tracker.track(CompletableFuture.completedFuture(changes));
             rescuer.getWorld().strikeLightningEffect(rescuer.getLocation());
-            broadcast("<dark_purple>⚡ <rescuer> tore open a rift and pulled <target> out of Purgatory.",
-                    Placeholder.unparsed("rescuer", rescuer.getName()),
-                    Placeholder.unparsed("target", request.targetName()));
+            Msg.broadcast("rift.opened", Msg.t("rescuer", rescuer.getName()), Msg.t("target", request.targetName()));
         }, tracker.mainThread());
     }
 
     // ---- /pledge ----
 
     private LiteralCommandNode<CommandSourceStack> pledgeCommand() {
+        BooleanSupplier on = () -> settings().pledgesEnabled();
         return Commands.literal("pledge")
+                .requires(src -> src.getSender().hasPermission("lifestealplus.pledge"))
                 .executes(ctx -> listPledges(ctx.getSource().getSender()))
                 .then(Commands.literal("list").executes(ctx -> listPledges(ctx.getSource().getSender())))
                 .then(Commands.literal("cancel")
                         .then(Commands.argument("player", StringArgumentType.word())
-                                .executes(ctx -> asPlayer(ctx.getSource(), p -> cancelPledge(p, StringArgumentType.getString(ctx, "player"))))))
+                                .executes(ctx -> asPlayer(ctx.getSource(), () -> true,
+                                        p -> cancelPledge(p, StringArgumentType.getString(ctx, "player"))))))
                 .then(Commands.argument("player", StringArgumentType.word())
                         .then(Commands.argument("hearts", IntegerArgumentType.integer(1))
-                                .executes(ctx -> asPlayer(ctx.getSource(), p -> pledge(p, StringArgumentType.getString(ctx, "player"),
+                                .executes(ctx -> asPlayer(ctx.getSource(), on, p -> pledge(p, StringArgumentType.getString(ctx, "player"),
                                         IntegerArgumentType.getInteger(ctx, "hearts"))))))
                 .build();
     }
@@ -174,24 +172,18 @@ final class SocialCommands {
                     ? List.of(outcome.paid()) : List.of(outcome.paid(), outcome.revive())));
             PledgeTotal total = outcome.total();
             if (outcome.revive() != null) {
-                broadcast("<green>🗳 <voters> players pledged <hearts> hearts and voted <target> back to life.",
-                        Placeholder.unparsed("voters", String.valueOf(total.voters())),
-                        Placeholder.unparsed("hearts", String.valueOf(total.hearts())),
-                        Placeholder.unparsed("target", target.name()));
+                Msg.broadcast("pledge.voted-back", Msg.t("voters", total.voters()), Msg.t("hearts", total.hearts()),
+                        Msg.t("target", target.name()));
             } else {
-                broadcast("<yellow>🗳 <pledger> pledged <n> heart(s) to bring <target> back</yellow> <gray>(<hearts>/<needed> hearts, "
-                                + "<voters>/<min> players). /pledge <target> <amount> to chip in.",
-                        Placeholder.unparsed("pledger", pledger.getName()),
-                        Placeholder.unparsed("n", String.valueOf(amount)),
-                        Placeholder.unparsed("target", target.name()),
-                        Placeholder.unparsed("hearts", String.valueOf(total.hearts())),
-                        Placeholder.unparsed("needed", String.valueOf(settings().pledgeHeartsNeeded())),
-                        Placeholder.unparsed("voters", String.valueOf(total.voters())),
-                        Placeholder.unparsed("min", String.valueOf(settings().pledgeMinVoters())));
+                Msg.broadcast("pledge.progress", Msg.t("pledger", pledger.getName()), Msg.t("n", amount),
+                        Msg.t("target", target.name()), Msg.t("hearts", total.hearts()),
+                        Msg.t("needed", settings().pledgeHeartsNeeded()), Msg.t("voters", total.voters()),
+                        Msg.t("min", settings().pledgeMinVoters()));
             }
         }, tracker.mainThread()));
     }
 
+    /** Always allowed, even with votes switched off, so nobody's hearts get stuck in a pledge. */
     private void cancelPledge(Player pledger, String name) {
         withPlayer(pledger, name, target -> hearts.cancelPledge(pledger.getUniqueId(), target.uuid()).whenCompleteAsync((refund, error) -> {
             if (error != null) {
@@ -199,9 +191,7 @@ final class SocialCommands {
                 return;
             }
             tracker.track(CompletableFuture.completedFuture(List.of(refund)));
-            pledger.sendRichMessage("<gray>You took back your pledge for <target> (<n> hearts).",
-                    Placeholder.unparsed("target", target.name()),
-                    Placeholder.unparsed("n", String.valueOf(refund.delta())));
+            Msg.send(pledger, "pledge.cancelled", Msg.t("target", target.name()), Msg.t("n", refund.delta()));
         }, tracker.mainThread()));
     }
 
@@ -212,17 +202,14 @@ final class SocialCommands {
                 return;
             }
             if (totals.isEmpty()) {
-                sender.sendRichMessage("<gray>Nobody has pledged for anyone yet. /pledge <player> <hearts> to start.");
+                Msg.send(sender, "pledge.list-empty");
                 return;
             }
-            sender.sendRichMessage("<yellow>Revival pledges <gray>(<needed> hearts from <min> players brings someone back)",
-                    Placeholder.unparsed("needed", String.valueOf(settings().pledgeHeartsNeeded())),
-                    Placeholder.unparsed("min", String.valueOf(settings().pledgeMinVoters())));
+            Msg.send(sender, "pledge.list-header", Msg.t("needed", settings().pledgeHeartsNeeded()),
+                    Msg.t("min", settings().pledgeMinVoters()));
             for (PledgeTotal t : totals) {
-                sender.sendRichMessage(" <white><target></white> <gray><hearts> hearts from <voters> player(s)",
-                        Placeholder.unparsed("target", t.targetName()),
-                        Placeholder.unparsed("hearts", String.valueOf(t.hearts())),
-                        Placeholder.unparsed("voters", String.valueOf(t.voters())));
+                Msg.send(sender, "pledge.list-line", Msg.t("target", t.targetName()), Msg.t("hearts", t.hearts()),
+                        Msg.t("voters", t.voters()));
             }
         }, tracker.mainThread());
         return Command.SINGLE_SUCCESS;
@@ -231,49 +218,63 @@ final class SocialCommands {
     // ---- /pact ----
 
     private LiteralCommandNode<CommandSourceStack> pactCommand() {
+        BooleanSupplier on = () -> settings().pactsEnabled();
         return Commands.literal("pact")
-                .executes(ctx -> asPlayer(ctx.getSource(), this::pactStatus))
+                .requires(src -> src.getSender().hasPermission("lifestealplus.pact"))
+                .executes(ctx -> asPlayer(ctx.getSource(), on, this::pactStatus))
+                .then(Commands.literal("list").executes(ctx -> listPacts(ctx.getSource().getSender())))
                 .then(Commands.literal("accept")
                         .then(Commands.argument("player", StringArgumentType.word())
-                                .executes(ctx -> asPlayer(ctx.getSource(), p -> acceptPact(p, StringArgumentType.getString(ctx, "player"))))))
-                .then(Commands.literal("break").executes(ctx -> asPlayer(ctx.getSource(), this::breakPact)))
+                                .executes(ctx -> asPlayer(ctx.getSource(), on, p -> acceptPact(p, StringArgumentType.getString(ctx, "player"))))))
+                .then(Commands.literal("break").executes(ctx -> asPlayer(ctx.getSource(), on, this::breakPact)))
                 .then(Commands.argument("player", StringArgumentType.word())
-                        .executes(ctx -> asPlayer(ctx.getSource(), p -> offerPact(p, StringArgumentType.getString(ctx, "player")))))
+                        .executes(ctx -> asPlayer(ctx.getSource(), on, p -> offerPact(p, StringArgumentType.getString(ctx, "player")))))
                 .build();
     }
 
     private void pactStatus(Player player) {
         hearts.pactPartner(player.getUniqueId()).whenCompleteAsync((partner, error) -> {
-            if (error != null) {
-                refuse(player, error);
-            } else if (partner.isPresent()) {
-                player.sendRichMessage("<dark_red>🩸 You're in a Blood Pact with <partner>.</dark_red> <gray>Their gains are yours; "
-                        + "their deaths cost you a heart. /pact break ends it.", Placeholder.unparsed("partner", partner.get().name()));
-            } else {
-                player.sendRichMessage("<gray>You're not in a Blood Pact. /pact <player> offers one.");
-            }
+            if (error != null) refuse(player, error);
+            else if (partner.isPresent()) Msg.send(player, "pact.status", Msg.t("partner", partner.get().name()));
+            else Msg.send(player, "pact.none");
         }, tracker.mainThread());
+    }
+
+    private int listPacts(CommandSender sender) {
+        if (!settings().pactsEnabled()) {
+            Msg.send(sender, "common.feature-off");
+            return Command.SINGLE_SUCCESS;
+        }
+        hearts.allPacts().whenCompleteAsync((pacts, error) -> {
+            if (error != null) {
+                refuse(sender, error);
+                return;
+            }
+            if (pacts.isEmpty()) {
+                Msg.send(sender, "pact.list-empty");
+                return;
+            }
+            Msg.send(sender, "pact.list-header");
+            for (PactPair pact : pacts) Msg.send(sender, "pact.list-line", Msg.t("a", pact.firstName()), Msg.t("b", pact.secondName()));
+        }, tracker.mainThread());
+        return Command.SINGLE_SUCCESS;
     }
 
     private void offerPact(Player from, String name) {
         Player to = plugin.getServer().getPlayerExact(name);
         if (to == null || to.equals(from)) {
-            from.sendRichMessage("<gray>Offer a pact to someone else who's online.");
+            Msg.send(from, "pact.offer-someone-online");
             return;
         }
         pactOffers.put(to.getUniqueId(), new Pending(from.getUniqueId(), from.getName(), Instant.now().plus(PACT_OFFER_WINDOW)));
-        from.sendRichMessage("<dark_red>🩸 You offered <player> a Blood Pact.</dark_red> <gray>They have a minute to accept.",
-                Placeholder.unparsed("player", to.getName()));
-        to.sendRichMessage("<dark_red>🩸 <player> offers you a Blood Pact:</dark_red> <gray>you'd share the hearts each of you wins "
-                        + "from kills and bounties, and when either of you dies the other loses a heart too.</gray> "
-                        + "<click:run_command:'/pact accept <player>'><red><u>[Accept]</u></red></click>",
-                Placeholder.unparsed("player", from.getName()));
+        Msg.send(from, "pact.offered", Msg.t("player", to.getName()));
+        Msg.send(to, "pact.offer", Msg.t("player", from.getName()));
     }
 
     private void acceptPact(Player accepter, String name) {
         Pending offer = pactOffers.get(accepter.getUniqueId());
         if (offer == null || !offer.targetName().equalsIgnoreCase(name) || Instant.now().isAfter(offer.expires())) {
-            accepter.sendRichMessage("<gray>No pact offer from <player> to accept.", Placeholder.unparsed("player", name));
+            Msg.send(accepter, "pact.no-offer", Msg.t("player", name));
             return;
         }
         pactOffers.remove(accepter.getUniqueId());
@@ -282,8 +283,7 @@ final class SocialCommands {
                 refuse(accepter, error);
                 return;
             }
-            broadcast("<dark_red>🩸 <a> and <b> have sealed a Blood Pact.",
-                    Placeholder.unparsed("a", offer.targetName()), Placeholder.unparsed("b", accepter.getName()));
+            Msg.broadcast("pact.sealed", Msg.t("a", offer.targetName()), Msg.t("b", accepter.getName()));
             for (Player p : plugin.getServer().getOnlinePlayers()) p.playSound(p, Sound.ENTITY_WARDEN_HEARTBEAT, 0.7f, 0.8f);
         }, tracker.mainThread());
     }
@@ -294,19 +294,19 @@ final class SocialCommands {
                 refuse(player, error);
                 return;
             }
-            broadcast("<gray>🩸 <a> has broken their Blood Pact with <b>.",
-                    Placeholder.unparsed("a", player.getName()), Placeholder.unparsed("b", partner.name()));
+            Msg.broadcast("pact.broken", Msg.t("a", player.getName()), Msg.t("b", partner.name()));
         }, tracker.mainThread());
     }
 
     // ---- /ghost and /whisper ----
 
     private LiteralCommandNode<CommandSourceStack> ghostCommand() {
-        return Commands.literal("ghost").executes(ctx -> asPlayer(ctx.getSource(), player -> {
+        return Commands.literal("ghost")
+                .requires(src -> src.getSender().hasPermission("lifestealplus.ghost")).executes(ctx -> asPlayer(ctx.getSource(), () -> settings().ghostsEnabled(), player -> {
             if (!tracker.isEliminated(player)) {
-                player.sendRichMessage("<gray>Only the eliminated can walk as ghosts.");
+                Msg.send(player, "ghosts.only-eliminated");
             } else if (purgatory == null) {
-                player.sendRichMessage("<gray>You're already spectating; /whisper still works.");
+                Msg.send(player, "ghosts.already-spectating");
             } else {
                 purgatory.toggleGhost(player);
             }
@@ -315,21 +315,22 @@ final class SocialCommands {
 
     private LiteralCommandNode<CommandSourceStack> whisperCommand() {
         return Commands.literal("whisper")
+                .requires(src -> src.getSender().hasPermission("lifestealplus.whisper"))
                 .then(Commands.argument("player", StringArgumentType.word())
                         .then(Commands.argument("message", StringArgumentType.greedyString())
-                                .executes(ctx -> asPlayer(ctx.getSource(), ghost -> whisper(ghost,
+                                .executes(ctx -> asPlayer(ctx.getSource(), () -> settings().whispersEnabled(), ghost -> whisper(ghost,
                                         StringArgumentType.getString(ctx, "player"), StringArgumentType.getString(ctx, "message"))))))
                 .build();
     }
 
     private void whisper(Player ghost, String name, String message) {
         if (!tracker.isEliminated(ghost)) {
-            ghost.sendRichMessage("<gray>Only the eliminated whisper. You can just talk.");
+            Msg.send(ghost, "ghosts.whisper-only-eliminated");
             return;
         }
         Player living = plugin.getServer().getPlayerExact(name);
         if (living == null || tracker.isEliminated(living)) {
-            ghost.sendRichMessage("<gray>Whispers only reach living players who are online.");
+            Msg.send(ghost, "ghosts.whisper-no-target");
             return;
         }
         String key = "whisper." + ghost.getUniqueId();
@@ -340,16 +341,13 @@ final class SocialCommands {
             }
             Instant ready = last.map(v -> Instant.ofEpochMilli(Long.parseLong(v)).plus(settings().whisperCooldown())).orElse(Instant.MIN);
             if (Instant.now().isBefore(ready)) {
-                long minutes = Math.max(1, Duration.between(Instant.now(), ready).toMinutes());
-                ghost.sendRichMessage("<gray>Your voice is spent. You can whisper again in <m> minute(s).",
-                        Placeholder.unparsed("m", String.valueOf(minutes)));
+                Msg.send(ghost, "ghosts.voice-spent", Msg.t("time", Msg.duration(Duration.between(Instant.now(), ready))));
                 return;
             }
             hearts.putState(key, String.valueOf(Instant.now().toEpochMilli()));
-            living.sendRichMessage("<gray><italic>👻 <ghost>'s ghost whispers to you: <message>",
-                    Placeholder.unparsed("ghost", ghost.getName()), Placeholder.unparsed("message", message));
+            Msg.send(living, "ghosts.whisper-received", Msg.t("ghost", ghost.getName()), Msg.t("message", message));
             living.playSound(living, Sound.AMBIENT_SOUL_SAND_VALLEY_ADDITIONS, 1f, 1.4f);
-            ghost.sendRichMessage("<gray>👻 Your whisper reaches <player>.", Placeholder.unparsed("player", living.getName()));
+            Msg.send(ghost, "ghosts.whisper-sent", Msg.t("player", living.getName()));
         }, tracker.mainThread());
     }
 
@@ -358,21 +356,23 @@ final class SocialCommands {
     /** Rifts and pledges bring people back; the finale says nobody comes back. */
     private boolean sealed(Player player) {
         if (!finale.isActive()) return false;
-        player.sendRichMessage("<dark_red>Purgatory is sealed for the finale. Nobody returns now.");
+        Msg.send(player, "finale.purgatory-sealed");
         return true;
     }
 
     private void withPlayer(CommandSender sender, String name, Consumer<PlayerHearts> then) {
         hearts.findByName(name).whenCompleteAsync((found, error) -> {
             if (error != null) refuse(sender, error);
-            else if (found.isEmpty()) sender.sendRichMessage("<red>No player named <name> has joined.", Placeholder.unparsed("name", name));
+            else if (found.isEmpty()) Msg.send(sender, "common.no-such-player", Msg.t("name", name));
             else then.accept(found.get());
         }, tracker.mainThread());
     }
 
-    private int asPlayer(CommandSourceStack source, Consumer<Player> action) {
-        if (source.getSender() instanceof Player player) action.accept(player);
-        else source.getSender().sendRichMessage("<red>Only players can use this.");
+    /** Runs a player-only command, unless its feature has been switched off in config.yml. */
+    private int asPlayer(CommandSourceStack source, BooleanSupplier enabled, Consumer<Player> action) {
+        if (!(source.getSender() instanceof Player player)) Msg.send(source.getSender(), "common.players-only");
+        else if (!enabled.getAsBoolean()) Msg.send(player, "common.feature-off");
+        else action.accept(player);
         return Command.SINGLE_SUCCESS;
     }
 
@@ -380,29 +380,22 @@ final class SocialCommands {
     private void refuse(CommandSender sender, Throwable error) {
         Throwable cause = error instanceof CompletionException && error.getCause() != null ? error.getCause() : error;
         if (cause instanceof RuleException rule) {
-            sender.sendRichMessage("<red><reason>", Placeholder.unparsed("reason", rule.getMessage()));
+            Msg.send(sender, "common.not-allowed", Msg.t("reason", rule.getMessage()));
             return;
         }
         plugin.getLogger().log(Level.SEVERE, "Command failed", error);
-        sender.sendRichMessage("<red>That didn't work; the error is in the server log.");
-    }
-
-    private void broadcast(String message, TagResolver... tags) {
-        plugin.getServer().broadcast(MiniMessage.miniMessage().deserialize(message, tags));
+        Msg.send(sender, "common.error");
     }
 
     /** What a player hears when someone else's change moved their hearts: a pact share or a refunded pledge. */
     void explainFollowOn(HeartChange change) {
         Player player = plugin.getServer().getPlayer(change.player());
         if (player == null || change.delta() == 0) return;
-        String other = change.otherName() == null ? "someone" : change.otherName();
+        String other = change.otherName() == null ? "?" : change.otherName();
         switch (change.cause()) {
-            case PACT_SHARE -> player.sendRichMessage(change.delta() > 0
-                            ? "<dark_red>🩸 Blood Pact:</dark_red> <green><other> won hearts, so you gain <n> too."
-                            : "<dark_red>🩸 Blood Pact:</dark_red> <red><other> died, and it costs you a heart.",
-                    Placeholder.unparsed("other", other), Placeholder.unparsed("n", String.valueOf(change.delta())));
-            case REVIVAL_REFUND -> player.sendRichMessage("<gray><other> came back another way, so your pledge of <n> heart(s) is returned.",
-                    Placeholder.unparsed("other", other), Placeholder.unparsed("n", String.valueOf(change.delta())));
+            case PACT_SHARE -> Msg.send(player, change.delta() > 0 ? "pact.shared-gain" : "pact.shared-death",
+                    Msg.t("other", other), Msg.t("n", Math.abs(change.delta())));
+            case REVIVAL_REFUND -> Msg.send(player, "pledge.refunded", Msg.t("other", other), Msg.t("n", change.delta()));
             default -> { }
         }
     }

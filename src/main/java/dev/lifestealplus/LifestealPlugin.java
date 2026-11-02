@@ -44,11 +44,16 @@ public final class LifestealPlugin extends JavaPlugin {
     public void onEnable() {
         saveDefaultConfig();
         addMissingSettings();
+        List<String> newMessages = Msg.load(this);
+        if (!newMessages.isEmpty()) getLogger().info("Added new messages to messages.yml: " + String.join(", ", newMessages));
+        PluginSettings.Loaded loaded = PluginSettings.load(getConfig());
+        settings = loaded.settings();
+        logWarnings(loaded.warnings());
         try {
-            settings = PluginSettings.from(getConfig());
             getDataFolder().mkdirs();
             HeartStore store = new HeartStore(getDataFolder().toPath().resolve(settings.databaseFile()), Clock.systemUTC());
             hearts = new HeartService(store, settings.rules());
+            applyStoreSwitches();
         } catch (Exception e) {
             // Running without the ledger would let hearts change unrecorded, so don't run at all.
             getLogger().log(Level.SEVERE, "LifestealPlus couldn't start; disabling", e);
@@ -74,15 +79,17 @@ public final class LifestealPlugin extends JavaPlugin {
         }
         mostWanted = new MostWanted(this, tracker);
         mostWanted.schedule();
+        new TabList(this, hearts, tracker);
+        new VengeanceTracker(this, hearts, tagger);
         try {
-            getServer().getPluginManager().registerEvents(new AltTracker(hearts, getLogger()), this);
+            getServer().getPluginManager().registerEvents(new AltTracker(this, hearts), this);
         } catch (Exception e) {
             getLogger().log(Level.SEVERE, "Couldn't start alt-account tracking; logins won't be recorded", e);
         }
         AdminCommands admin = new AdminCommands(this, hearts, tracker,
                 new SeasonReset(this, hearts, tracker, shield, bodies, finale, () -> capSchedule.seasonStarted()));
         LifestealCommands commands = new LifestealCommands(this, hearts, tracker, mostWanted, shield,
-                new EventCommands(this, heartItems, bloodMoon, airdrops, finale), admin);
+                new EventCommands(this, heartItems, bloodMoon, airdrops, finale), admin, new FeaturesCommand(this));
         PurgatoryCommands purgatoryCommands = settings.purgatory().enabled() ? startPurgatory(tracker) : null;
         capSchedule = new CapSchedule(this, hearts);
         SocialCommands social = new SocialCommands(this, hearts, tracker, heartItems, finale, purgatory);
@@ -95,6 +102,7 @@ public final class LifestealPlugin extends JavaPlugin {
         getLifecycleManager().registerEventHandler(LifecycleEvents.COMMANDS, event -> {
             commands.register(event.registrar());
             social.register(event.registrar());
+            event.registrar().register(admin.seasonsCommand(), "Past seasons and who won them");
             if (purgatoryCommands != null) purgatoryCommands.register(event.registrar());
         });
 
@@ -127,6 +135,15 @@ public final class LifestealPlugin extends JavaPlugin {
         if (added.isEmpty()) return;
         saveConfig();
         getLogger().info("Added new settings to config.yml: " + String.join(", ", added));
+    }
+
+    private void applyStoreSwitches() {
+        PluginSettings s = settings;
+        hearts.setFeatures(s.extras().shieldsEnabled(), s.social().pactsEnabled(), s.extras().altDetection());
+    }
+
+    private void logWarnings(List<String> warnings) {
+        for (String warning : warnings) getLogger().warning("config.yml: " + warning);
     }
 
     /** Falls back to spectating (and says so) rather than failing the whole plugin if the world can't be made. */
@@ -165,13 +182,23 @@ public final class LifestealPlugin extends JavaPlugin {
     }
 
     /** Re-reads config.yml. Throws (leaving the old settings in place) if the new values are invalid. */
-    void reloadSettings() {
+    /**
+     * Re-reads config.yml and messages.yml. Never fails: anything unusable falls back to its
+     * default, and the returned warnings say which settings those were.
+     */
+    List<String> reloadSettings() {
         reloadConfig();
-        PluginSettings fresh = PluginSettings.from(getConfig());
+        addMissingSettings();
+        Msg.load(this);
+        PluginSettings.Loaded loaded = PluginSettings.load(getConfig());
+        logWarnings(loaded.warnings());
+        PluginSettings fresh = loaded.settings();
         boolean wantedTimerChanged = !fresh.mostWanted().interval().equals(settings.mostWanted().interval());
         settings = fresh;
         hearts.setRules(fresh.rules());
         capSchedule.refresh();
         if (wantedTimerChanged) mostWanted.schedule();
+        applyStoreSwitches();
+        return loaded.warnings();
     }
 }

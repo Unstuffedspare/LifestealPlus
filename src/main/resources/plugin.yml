@@ -19,9 +19,33 @@ permissions:
   lifestealplus.vengeance:
     description: See your vengeance marks with /vengeance.
     default: true
+  lifestealplus.shield:
+    description: See your new-player shield with /shield.
+    default: true
+  lifestealplus.leaderboard:
+    description: See the leaderboard and past seasons with /leaderboard and /seasons.
+    default: true
+  lifestealplus.withdraw:
+    description: Turn your own hearts into Heart items with /withdraw.
+    default: true
+  lifestealplus.rift:
+    description: Pay hearts to bring an eliminated player back with /rift.
+    default: true
+  lifestealplus.pledge:
+    description: Pledge hearts toward reviving someone with /pledge.
+    default: true
+  lifestealplus.pact:
+    description: Make and break Blood Pacts with /pact.
+    default: true
+  lifestealplus.ghost:
+    description: Roam as a ghost while eliminated with /ghost.
+    default: true
+  lifestealplus.whisper:
+    description: Whisper to a living player while eliminated with /whisper.
+    default: true
   lifestealplus.purgatory:
     description: Use /purgatory to see your progress and call or join trials while eliminated.
     default: true
   lifestealplus.admin:
-    description: Use /lifesteal to give, take, set and revive hearts, read the ledger, and reload config.
+    description: Everything under /lifesteal (hearts, ledger, events, finale, seasons, alts, features, reload), and alt-account alerts.
     default: op

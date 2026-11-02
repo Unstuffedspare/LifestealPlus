@@ -43,7 +43,6 @@ final class GhostChat implements Listener {
         if (root.contains(":")) root = root.substring(root.indexOf(':') + 1);
         if (!DIRECT.contains(root)) return;
         event.setCancelled(true);
-        event.getPlayer().sendRichMessage("<gray>👻 The living can't hear you. /whisper <player> <message> reaches one of them "
-                + "once an hour; your chat reaches the other eliminated players.");
+        Msg.send(event.getPlayer(), "ghosts.living-cant-hear");
     }
 }

@@ -11,9 +11,6 @@ import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.Executor;
 import java.util.logging.Level;
-import net.kyori.adventure.text.minimessage.MiniMessage;
-import net.kyori.adventure.text.minimessage.tag.resolver.Placeholder;
-
 import org.bukkit.Location;
 import org.bukkit.NamespacedKey;
 import org.bukkit.attribute.Attribute;
@@ -79,16 +76,11 @@ public final class HeartTracker {
         }
         if (change.eliminatedNow()) {
             plugin.getServer().getPluginManager().callEvent(new PlayerEliminatedEvent(change));
-            plugin.getServer().broadcast(MiniMessage.miniMessage().deserialize(
-                    "<dark_red><bold><player></bold> has lost their last heart and is eliminated.",
-                    Placeholder.unparsed("player", change.name())));
+            Msg.broadcast("elimination.eliminated", Msg.t("player", change.name()));
         }
         if (change.revivedNow()) {
             plugin.getServer().getPluginManager().callEvent(new PlayerRevivedEvent(change));
-            plugin.getServer().broadcast(MiniMessage.miniMessage().deserialize(
-                    "<green><bold><player></bold> has been revived with <hearts> hearts.",
-                    Placeholder.unparsed("player", change.name()),
-                    Placeholder.unparsed("hearts", String.valueOf(change.after()))));
+            Msg.broadcast("elimination.revived", Msg.t("player", change.name()), Msg.t("hearts", change.after()));
         }
     }
 

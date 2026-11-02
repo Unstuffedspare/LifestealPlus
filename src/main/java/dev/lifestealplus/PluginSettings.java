@@ -2,32 +2,22 @@ package dev.lifestealplus;
 
 import dev.lifestealplus.core.HeartRules;
 import java.time.Duration;
+import java.util.List;
 import org.bukkit.configuration.file.FileConfiguration;
 
 /**
- * Everything read from config.yml, validated in one place.
+ * Everything read from config.yml. A feature that's switched off shows up here as its
+ * "nothing happens" value (a zero duration, a zero threshold, a false flag), so the code
+ * using it never has to know about the switch.
  *
+ * @param bountiesEnabled whether new bounties can be placed (existing ones still pay out)
  * @param bountyAnonymous announce new bounties without naming who placed them
- * @param lastStandHearts players at this many hearts or fewer (but not eliminated) get Last Stand; 0 turns it off
+ * @param lastStandHearts players at this many hearts or fewer (but not eliminated) get Last Stand; 0 means off
  */
 public record PluginSettings(HeartRules rules, int naturalDeathLoss, String databaseFile, PurgatorySettings purgatory,
-                             boolean bountyAnonymous, int lastStandHearts, MostWantedSettings mostWanted,
-                             CombatSettings combat, EventSettings events, SocialSettings social) {
-
-    /**
-     * @param tag how long a PvP hit keeps both players in combat
-     * @param body how long a combat-logger's body stays to be killed; zero means no bodies
-     */
-    public record CombatSettings(Duration tag, Duration body) {
-    }
-
-    /**
-     * @param interval how often the leader's rough location is broadcast; zero turns it off
-     * @param precision coordinates are rounded to the nearest this many blocks
-     * @param minPlayers don't single anyone out unless at least this many players are online
-     */
-    public record MostWantedSettings(Duration interval, int precision, int minPlayers) {
-    }
+                             boolean bountiesEnabled, boolean bountyAnonymous, int lastStandHearts,
+                             MostWantedSettings mostWanted, CombatSettings combat, EventSettings events,
+                             SocialSettings social, Extras extras) {
 
     /**
      * @param enabled read once at startup: turning Purgatory on or off needs a restart
@@ -37,56 +27,101 @@ public record PluginSettings(HeartRules rules, int naturalDeathLoss, String data
     public record PurgatorySettings(boolean enabled, String world, int fragmentsNeeded, Duration trialCooldown, double difficulty) {
     }
 
-    public static PluginSettings from(FileConfiguration config) {
-        double repeatHours = config.getDouble("pvp.repeat-kill-cooldown-hours", 6);
-        if (repeatHours < 0) throw new IllegalArgumentException("pvp.repeat-kill-cooldown-hours can't be negative");
-        double vengeanceMinutes = config.getDouble("pvp.vengeance-minutes", 30);
-        if (vengeanceMinutes < 0) throw new IllegalArgumentException("pvp.vengeance-minutes can't be negative");
-        double shieldHours = config.getDouble("newbie-shield.hours", 3);
-        if (shieldHours < 0) throw new IllegalArgumentException("newbie-shield.hours can't be negative");
-        HeartRules rules = new HeartRules(
-                config.getInt("hearts.starting", 10),
-                config.getInt("hearts.max", 20),
-                config.getInt("hearts.revive", 3),
-                config.getInt("hearts.per-kill", 1),
-                Duration.ofMinutes(Math.round(repeatHours * 60)),
-                Duration.ofSeconds(Math.round(vengeanceMinutes * 60)),
-                config.getInt("pvp.vengeance-bonus-hearts", 1),
-                Duration.ofMinutes(Math.round(shieldHours * 60)));
-        int naturalDeathLoss = config.getInt("hearts.natural-death-loss", 1);
-        if (naturalDeathLoss < 0) throw new IllegalArgumentException("hearts.natural-death-loss can't be negative");
+    /**
+     * @param interval how often the leader's rough location is broadcast; zero means off
+     * @param precision coordinates are rounded to the nearest this many blocks
+     * @param minPlayers don't single anyone out unless at least this many players are online
+     */
+    public record MostWantedSettings(Duration interval, int precision, int minPlayers) {
+    }
 
-        int fragments = config.getInt("purgatory.fragments-needed", 3);
-        if (fragments < 1) throw new IllegalArgumentException("purgatory.fragments-needed must be at least 1");
-        double cooldownMinutes = config.getDouble("purgatory.trial-cooldown-minutes", 20);
-        if (cooldownMinutes < 0) throw new IllegalArgumentException("purgatory.trial-cooldown-minutes can't be negative");
-        double difficulty = config.getDouble("purgatory.difficulty", 1.0);
-        if (difficulty <= 0) throw new IllegalArgumentException("purgatory.difficulty must be above 0");
+    /**
+     * @param tag how long a PvP hit keeps both players in combat; zero means no tagging (and so no bodies)
+     * @param body how long a combat-logger's body stays to be killed; zero means no bodies
+     */
+    public record CombatSettings(Duration tag, Duration body) {
+    }
+
+    /**
+     * Smaller switches.
+     *
+     * @param trackerRoundTo the vengeance tracker rounds distances to this many blocks
+     * @param shieldsEnabled when false, existing newbie shields are suspended as well as new ones skipped
+     */
+    public record Extras(boolean vengeanceTracker, int trackerRoundTo, boolean tabList, boolean pactsInTab,
+                         boolean publicSeasons, boolean altDetection, boolean shieldsEnabled) {
+    }
+
+    /** The settings, plus anything in the file that had to be replaced by a default. */
+    public record Loaded(PluginSettings settings, List<String> warnings) {
+    }
+
+    public static Loaded load(FileConfiguration config) {
+        ConfigReader in = new ConfigReader(config);
+
+        int max = in.whole("hearts.max", 20, 1, 1000);
+        int starting = in.whole("hearts.starting", 10, 1, 1000);
+        if (starting > max) {
+            in.warn("hearts.starting (" + starting + ") is above hearts.max (" + max + "); starting at " + max + " instead.");
+            starting = max;
+        }
+        int revive = in.whole("hearts.revive", 3, 1, 1000);
+        if (revive > max) {
+            in.warn("hearts.revive (" + revive + ") is above hearts.max (" + max + "); reviving with " + max + " instead.");
+            revive = max;
+        }
+        int perKill = in.whole("hearts.per-kill", 1, 1, 1000);
+
+        Duration repeat = in.flag("repeat-kills.enabled", true)
+                ? hours(in.number("repeat-kills.cooldown-hours", 6, 0, 24 * 365)) : Duration.ZERO;
+        boolean vengeance = in.flag("vengeance.enabled", true);
+        Duration vengeanceWindow = vengeance ? minutes(in.number("vengeance.minutes", 30, 0, 60 * 24 * 7)) : Duration.ZERO;
+        int vengeanceBonus = vengeance ? in.whole("vengeance.bonus-hearts", 1, 0, 1000) : 0;
+        boolean shields = in.flag("newbie-shield.enabled", true);
+        Duration shield = shields ? hours(in.number("newbie-shield.hours", 3, 0, 24 * 30)) : Duration.ZERO;
+        HeartRules rules = new HeartRules(starting, max, revive, perKill, repeat, vengeanceWindow, vengeanceBonus, shield);
+        int naturalDeathLoss = in.whole("hearts.natural-death-loss", 1, 0, 1000);
+
         PurgatorySettings purgatory = new PurgatorySettings(
-                config.getBoolean("purgatory.enabled", true),
-                config.getString("purgatory.world", "lifesteal_purgatory"),
-                fragments,
-                Duration.ofSeconds(Math.round(cooldownMinutes * 60)),
-                difficulty);
+                in.flag("purgatory.enabled", true),
+                in.text("purgatory.world", "lifesteal_purgatory"),
+                in.whole("purgatory.fragments-needed", 3, 1, 100),
+                minutes(in.number("purgatory.trial-cooldown-minutes", 20, 0, 60 * 24 * 30)),
+                in.number("purgatory.difficulty", 1.0, 0.1, 10));
 
-        int lastStand = config.getInt("last-stand.hearts", 1);
-        if (lastStand < 0) throw new IllegalArgumentException("last-stand.hearts can't be negative");
+        int lastStand = in.flag("last-stand.enabled", true) ? in.whole("last-stand.hearts", 1, 0, 1000) : 0;
 
-        double wantedMinutes = config.getDouble("most-wanted.interval-minutes", 120);
-        if (wantedMinutes < 0) throw new IllegalArgumentException("most-wanted.interval-minutes can't be negative");
-        int precision = config.getInt("most-wanted.precision-blocks", 100);
-        if (precision < 1) throw new IllegalArgumentException("most-wanted.precision-blocks must be at least 1");
+        boolean wanted = in.flag("most-wanted.enabled", true);
         MostWantedSettings mostWanted = new MostWantedSettings(
-                Duration.ofSeconds(Math.round(wantedMinutes * 60)), precision,
-                Math.max(1, config.getInt("most-wanted.min-players-online", 3)));
+                wanted ? minutes(in.number("most-wanted.interval-minutes", 120, 1, 60 * 24 * 30)) : Duration.ZERO,
+                in.whole("most-wanted.precision-blocks", 100, 1, 100_000),
+                in.whole("most-wanted.min-players-online", 3, 1, 1000));
 
-        int tagSeconds = config.getInt("combat.tag-seconds", 15);
-        int bodySeconds = config.getInt("combat.body-seconds", 30);
-        if (tagSeconds < 0 || bodySeconds < 0) throw new IllegalArgumentException("combat times can't be negative");
-        CombatSettings combat = new CombatSettings(Duration.ofSeconds(tagSeconds), Duration.ofSeconds(bodySeconds));
+        boolean combatLog = in.flag("combat-log.enabled", true);
+        CombatSettings combat = new CombatSettings(
+                combatLog ? Duration.ofSeconds(in.whole("combat-log.tag-seconds", 15, 1, 600)) : Duration.ZERO,
+                combatLog ? Duration.ofSeconds(in.whole("combat-log.body-seconds", 30, 0, 600)) : Duration.ZERO);
 
-        return new PluginSettings(rules, naturalDeathLoss, config.getString("database.file", "lifesteal.db"), purgatory,
-                config.getBoolean("bounty.anonymous", true), lastStand, mostWanted, combat,
-                EventSettings.from(config), SocialSettings.from(config, rules.startingHearts(), rules.reviveHearts()));
+        Extras extras = new Extras(
+                vengeance && in.flag("vengeance.tracker.enabled", true),
+                in.whole("vengeance.tracker.round-to-blocks", 10, 1, 1000),
+                in.flag("tab-list.enabled", true),
+                in.flag("blood-pacts.show-in-tab", true),
+                in.flag("seasons.public-history", true),
+                in.flag("alt-detection.enabled", true),
+                shields);
+
+        PluginSettings settings = new PluginSettings(rules, naturalDeathLoss, in.text("database.file", "lifesteal.db"), purgatory,
+                in.flag("bounties.enabled", true), in.flag("bounties.anonymous", true), lastStand, mostWanted, combat,
+                EventSettings.from(in), SocialSettings.from(in, starting, revive), extras);
+        return new Loaded(settings, List.copyOf(in.warnings()));
+    }
+
+    static Duration minutes(double value) {
+        return Duration.ofSeconds(Math.round(value * 60));
+    }
+
+    static Duration hours(double value) {
+        return Duration.ofMinutes(Math.round(value * 60));
     }
 }

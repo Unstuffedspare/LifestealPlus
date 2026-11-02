@@ -2,13 +2,11 @@ package dev.lifestealplus.purgatory;
 
 import dev.lifestealplus.EliminationHandler;
 import dev.lifestealplus.LifestealPlugin;
+import dev.lifestealplus.Msg;
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
-import net.kyori.adventure.text.Component;
-import net.kyori.adventure.text.format.NamedTextColor;
-import net.kyori.adventure.text.minimessage.tag.resolver.Placeholder;
 import net.kyori.adventure.title.Title;
 import org.bukkit.GameMode;
 import org.bukkit.Location;
@@ -61,15 +59,11 @@ public final class Purgatory implements EliminationHandler {
         player.setGameMode(GameMode.ADVENTURE);
         kit.give(player);
         player.showTitle(Title.title(
-                Component.text("Purgatory", NamedTextColor.DARK_AQUA),
-                Component.text("Earn your way back", NamedTextColor.GRAY),
+                Msg.get("purgatory.arrived-title"),
+                Msg.get("purgatory.arrived-subtitle"),
                 Title.Times.times(Duration.ofMillis(500), Duration.ofSeconds(4), Duration.ofSeconds(1))));
         player.playSound(player, Sound.AMBIENT_SOUL_SAND_VALLEY_MOOD, 1f, 0.8f);
-        player.sendRichMessage("""
-                <dark_aqua>You've lost your last heart and fallen into Purgatory.</dark_aqua>
-                <gray>Win <white><needed></white> trials to earn your way back. Right-click the lodestone or use \
-                <white>/purgatory start</white> to call one; others here can join you.""",
-                Placeholder.unparsed("needed", String.valueOf(plugin.settings().purgatory().fragmentsNeeded())));
+        Msg.send(player, "purgatory.arrived", Msg.t("needed", plugin.settings().purgatory().fragmentsNeeded()));
     }
 
     @Override
@@ -96,12 +90,9 @@ public final class Purgatory implements EliminationHandler {
         player.teleport(EliminationHandler.home(player));
         player.setHealth(hearts * 2.0);
         player.setFoodLevel(20);
-        player.showTitle(Title.title(
-                Component.text("Revived", NamedTextColor.GREEN),
-                Component.text(hearts + " hearts", NamedTextColor.GRAY)));
+        player.showTitle(Title.title(Msg.get("purgatory.revived-title"), Msg.get("purgatory.revived-subtitle", Msg.t("hearts", hearts))));
         player.playSound(player, Sound.BLOCK_BEACON_ACTIVATE, 1f, 1.2f);
-        player.sendRichMessage("<green>You've clawed your way out of Purgatory with <hearts> hearts.",
-                Placeholder.unparsed("hearts", String.valueOf(hearts)));
+        Msg.send(player, "purgatory.revived", Msg.t("hearts", hearts));
     }
 
     @Override
@@ -124,15 +115,14 @@ public final class Purgatory implements EliminationHandler {
             player.teleport(world.hub());
             player.setGameMode(GameMode.ADVENTURE);
             kit.give(player);
-            player.sendRichMessage("<dark_aqua>You drift back into Purgatory.");
+            Msg.send(player, "ghosts.back-to-purgatory");
             return false;
         }
         trials.leave(player);
         data.set(ghostKey, PersistentDataType.BOOLEAN, true);
         player.setGameMode(GameMode.SPECTATOR);
         player.teleport(plugin.getServer().getWorlds().getFirst().getSpawnLocation());
-        player.sendRichMessage("<gray>👻 You slip out of Purgatory as a ghost. You can watch, but not touch. "
-                + "<white>/whisper</white> reaches one living player an hour; <white>/ghost</white> takes you back.");
+        Msg.send(player, "ghosts.now-a-ghost");
         return true;
     }
 

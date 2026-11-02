@@ -1,0 +1,476 @@
+# =============================================================================
+#  LifestealPlus messages
+# =============================================================================
+#  - Every message players see. Change the text, then run /lifesteal reload.
+#  - Colours and styles use MiniMessage tags like <red>, <bold> or
+#    <gradient:red:gold>. Full list: https://docs.advntr.dev/minimessage/format.html
+#  - Words in <angle brackets> listed in a message's comment are filled in by
+#    the plugin (a player's name, a number of hearts...). Keep those.
+#  - Set any message to "" to stop it being sent.
+#  - Messages added in a later version are copied in automatically on startup.
+# =============================================================================
+
+# ---- Used in many places ---------------------------------------------------
+common:
+  # Shared messages.
+  players-only: "<red>Only players can use this."
+  error: "<red>That didn't work; the error is in the server log."
+  # <name>
+  no-such-player: "<red>No player named <name> has joined this server."
+  # When the rules refuse something (not enough hearts, already in a pact...). <reason>
+  not-allowed: "<red><reason>"
+  # When a player uses a command for a feature an admin has turned off.
+  feature-off: "<gray>That's switched off on this server."
+  not-online: "<red>That player isn't online."
+
+# ---- Joining ---------------------------------------------------------------
+login:
+  # Shown when someone can't join because the database didn't answer.
+  data-unavailable: "Lifesteal data is unavailable right now. Try again in a minute."
+
+# ---- How lengths of time are written ---------------------------------------
+time:
+  # How lengths of time are written inside other messages. <n>, or <h> and <m>.
+  minute: "1 minute"
+  minutes: "<n> minutes"
+  hour: "1 hour"
+  hours: "<n> hours"
+  hours-minutes: "<h>h <m>m"
+  seconds: "<n> seconds"
+
+# ---- Dimension names used inside other messages ----------------------------
+dimension:
+  # Names used inside other messages.
+  overworld: "the Overworld"
+  nether: "the Nether"
+  end: "the End"
+
+# ---- /hearts and the heart cap ---------------------------------------------
+hearts:
+  # Told to everyone when hearts.max-by-week raises the cap. <cap>, <week>
+  cap-risen: "<red>❤ The heart cap has risen to <cap> for week <week>."
+  # /hearts. <player>, <hearts>, <max>
+  show: "<red>❤</red> <player> has <hearts>/<max> hearts."
+  # <player>
+  eliminated: "<red><player> is eliminated."
+  usage: "<red>Usage: /hearts <player>"
+
+# ---- Losing your last heart, and coming back -------------------------------
+elimination:
+  # Told to everyone. <player>
+  eliminated: "<dark_red><bold><player></bold> has lost their last heart and is eliminated."
+  # Told to everyone. <player>, <hearts>
+  revived: "<green><bold><player></bold> has been revived with <hearts> hearts."
+  # Only used when Purgatory is turned off.
+  spectating: "<red>You're out of hearts. You can watch, but you're eliminated until someone revives you."
+  # Only used when Purgatory is turned off. <hearts>
+  back-from-spectating: "<green>You're back in the game with <hearts> hearts."
+
+# ---- Repeat kills (repeat-kills) -------------------------------------------
+repeat-kill:
+  # <victim>, <window>
+  killer: "<gray>No heart from <victim>: you already took one from them in the last <window>."
+  # <killer>, <window>
+  victim: "<gray>You kept your heart: <killer> already took one from you in the last <window>."
+
+# ---- Vengeance marks and the tracker ---------------------------------------
+vengeance:
+  # To the victim of a kill. <killer>, <window>, <back>
+  you-marked: "<red>You've marked <killer> for vengeance.</red> <gray>Kill them within <window> to take back <back> hearts."
+  # To the killer. <victim>, <window>
+  you-are-marked: "<red><victim> has marked you for vengeance</red> <gray>for the next <window>."
+  # Told to everyone. <killer>, <victim>, <hearts>
+  taken: "<red>⚔ <killer> took vengeance on <victim>, taking back <hearts> hearts."
+  none: "<gray>No vengeance marks either way."
+  # /vengeance. <player>, <left>
+  you-can-avenge: "<red>You can take vengeance on <player></red> <gray>(<left> left)"
+  # /vengeance. <player>, <left>
+  can-avenge-you: "<dark_red><player> can take vengeance on you</dark_red> <gray>(<left> left)"
+  # Above the hotbar while you hold a mark. <target>, <arrow>, <distance>, <time>
+  tracker: "<red>⚔ <target> <arrow> <distance> blocks</red> <gray>(<time> left)"
+  # When your target is offline or in another dimension. <target>, <time>
+  tracker-far: "<red>⚔ <target></red> <gray>is somewhere else (<time> left)"
+
+# ---- Bounties --------------------------------------------------------------
+bounty:
+  # Told to everyone. <killer>, <victim>, <hearts>
+  claimed: "<gold>💰 <killer> claimed the bounty on <victim>: <hearts> hearts."
+  # Told to everyone. <left>, <victim>, <killer>
+  left-over: "<gold><left> hearts of bounty are still on <victim> <gray>(<killer> couldn't carry more)."
+  # Told to everyone when bounties.anonymous is false. <who>, <hearts>, <target>, <total>
+  placed: "<gold>💰 <who> has put a <hearts>-heart bounty on <target></gold> <gray>(<total> hearts in total)."
+  # Told to everyone when bounties.anonymous is true. <hearts>, <target>, <total>
+  placed-anonymous: "<gold>💰 Someone has put a <hearts>-heart bounty on <target></gold> <gray>(<total> hearts in total)."
+  # <left>
+  placed-you: "<gray>Your bounty is placed. You have <left> hearts left."
+  # <player>, <total>
+  check: "<gold>There's a <total>-heart bounty on <player>."
+  # <player>
+  check-none: "<gray>There's no bounty on <player>."
+  list-header: "<gold>Bounties"
+  # <hearts>, <player>
+  list-line: " <gold><hearts>❤</gold> <white><player>"
+  list-empty: "<gray>No bounties right now. Place one with /bounty place <player> <hearts>."
+
+# ---- Newbie shield ---------------------------------------------------------
+shield:
+  # <time>
+  on-join: "<aqua>🛡 You have a new-player shield for another <time> of playtime.</aqua> <gray>Other players can't hurt you and you can't lose hearts. Attacking anyone ends it."
+  # To someone hitting a shielded player. <victim>, <time>
+  target-protected: "<aqua>🛡 <victim> is a new player, protected for another <time>."
+  # <victim>
+  broken: "<yellow>You attacked <victim>, so your new-player shield is gone."
+  worn-off: "<yellow>Your new-player shield has worn off. You can lose hearts now."
+  kill-blocked: "<aqua>🛡 No hearts moved: one of you still has a new-player shield."
+  # /shield. <time>
+  status: "<aqua>🛡 Your new-player shield lasts another <time> of playtime.</aqua> <gray>Attacking another player ends it."
+  none: "<gray>You don't have a new-player shield."
+
+# ---- Combat countdown ------------------------------------------------------
+combat:
+  # Above the hotbar while in combat. <seconds>
+  countdown: "<red>⚔ In combat: <seconds>s. Logging out leaves your body behind."
+  over: "<gray>You're out of combat."
+
+# ---- Combat-log bodies -----------------------------------------------------
+combat-log:
+  # Told to everyone. <player>, <seconds>
+  logged-out: "<red>☠ <player> logged out in combat.</red> <gray>Their body stays for <seconds> seconds."
+  # Shown under the body's name.
+  body-label: "<red>Logged out in combat"
+  # Told to everyone. <killer>, <player>
+  body-killed: "<red>☠ <killer> killed <player>'s body."
+  # Told to everyone. <player>
+  body-destroyed: "<red>☠ <player>'s body was destroyed."
+  # Told to everyone. <player>
+  body-faded: "<gray><player>'s body fades away."
+  back-in-body: "<gray>You're back in your body."
+  body-died-while-away: "<red>You logged out in combat and your body was killed.</red> <gray>Your items dropped where it fell."
+
+# ---- Last Stand ------------------------------------------------------------
+last-stand:
+  started: "<gold><bold>Last Stand.</bold></gold> <yellow>You're down to your last hearts: Strength and Speed until you climb back."
+
+# ---- Most Wanted -----------------------------------------------------------
+most-wanted:
+  # Told to everyone. <player>, <hearts>, <x>, <z>, <dimension>
+  announcement: "<dark_red>🎯 Most Wanted:</dark_red> <red><player></red> <gray>(<hearts> hearts) was last seen around <white>x <x>, z <z></white> in <dimension>."
+  you: "<red>You're the Most Wanted. Everyone knows roughly where you are now."
+
+# ---- Purgatory (nothing here gives away what happens in trials) ------------
+purgatory:
+  # Purgatory. These say nothing about what happens in trials.
+  arrived-title: "<dark_aqua>Purgatory"
+  arrived-subtitle: "<gray>Earn your way back"
+  # <needed>
+  arrived: "<dark_aqua>You've lost your last heart and fallen into Purgatory.</dark_aqua>\n<gray>Win <white><needed></white> trials to earn your way back. Right-click the lodestone or use <white>/purgatory start</white> to call one; others here can join you."
+  revived-title: "<green>Revived"
+  # <hearts>
+  revived-subtitle: "<gray><hearts> hearts"
+  # <hearts>
+  revived: "<green>You've clawed your way out of Purgatory with <hearts> hearts."
+  not-eliminated: "<gray>Purgatory is where eliminated players go to earn their way back. You're not eliminated."
+  # /purgatory. <have>, <needed>, <when>, <trial>
+  status: "<dark_aqua>Fragments: <white><have>/<needed></white>. <gray><when>\n<gray><trial>"
+  next-win-counts: "Your next win earns a fragment."
+  # <wait>
+  next-fragment-in: "Your next fragment can be earned in <wait>."
+
+# ---- Purgatory trials ------------------------------------------------------
+trial:
+  # <player>, <seconds>
+  called: "<dark_aqua><player> is calling a trial. <click:run_command:'/purgatory join'><aqua><u>[Join]</u></aqua></click> <gray>(starts in <seconds>s)"
+  already-underway: "<gray>A trial is already underway. Wait for it to finish."
+  none-gathering: "<gray>No trial is gathering. Right-click the lodestone or use /purgatory start to call one."
+  joined: "<aqua>You've joined the trial. Survive every wave to earn a fragment."
+  # <wait>
+  joined-to-help: "<aqua>You've joined the trial to help.</aqua> <gray>You won one recently, so this one won't earn you a fragment (next in <wait>)."
+  fell: "<gray>You fell in the trial. You'll have to try again."
+  # Big countdown on screen before a trial. <seconds>
+  countdown: "<aqua><seconds>"
+  # <wave>
+  wave-title: "<aqua>Wave <wave>"
+  final-wave-title: "<dark_red>Final wave"
+  # <wave>, <total>
+  wave-subtitle: "<gray><wave> of <total>"
+  everyone-fell: "<red>The trial has claimed everyone who entered."
+  time-ran-out: "<red>The trial's time ran out."
+  won: "<aqua>The trial is won."
+  won-title: "<aqua>Trial won"
+  helped: "<gray>You helped win this one. Your next fragment can be earned once your cooldown ends."
+  # <have>, <needed>, <wait>
+  fragment-earned: "<aqua>Fragment earned: <white><have>/<needed></white>.</aqua> <gray>You can earn the next one in <wait>."
+  not-in-purgatory: "<gray>Only players in Purgatory can take part in trials."
+  status-idle: "No trial is running."
+  # <seconds>
+  status-gathering: "A trial is gathering (<seconds>s left to join)."
+  # <wave>, <total>, <standing>
+  status-running: "A trial is underway (wave <wave> of <total>, <standing> still standing)."
+
+# ---- Ghosts and whispers ---------------------------------------------------
+ghosts:
+  # When an eliminated player tries /msg while ghosts.limit-chat is on.
+  living-cant-hear: "<gray>👻 The living can't hear you. /whisper <player> <message> reaches one of them once an hour; your chat reaches the other eliminated players."
+  now-a-ghost: "<gray>👻 You slip out of Purgatory as a ghost. You can watch, but not touch. <white>/whisper</white> reaches one living player an hour; <white>/ghost</white> takes you back."
+  back-to-purgatory: "<dark_aqua>You drift back into Purgatory."
+  only-eliminated: "<gray>Only the eliminated can walk as ghosts."
+  already-spectating: "<gray>You're already spectating; /whisper still works."
+  whisper-only-eliminated: "<gray>Only the eliminated whisper. You can just talk."
+  whisper-no-target: "<gray>Whispers only reach living players who are online."
+  # <time>
+  voice-spent: "<gray>Your voice is spent. You can whisper again in <time>."
+  # <ghost>, <message>
+  whisper-received: "<gray><italic>👻 <ghost>'s ghost whispers to you: <message>"
+  # <player>
+  whisper-sent: "<gray>👻 Your whisper reaches <player>."
+
+# ---- Rifts -----------------------------------------------------------------
+rift:
+  # <player>
+  not-eliminated: "<gray><player> isn't eliminated."
+  # <player>, <cost>, <revive>
+  confirm: "<dark_purple>Opening a rift for <player> costs <cost> of your hearts</dark_purple> <gray>(they come back with <revive>). Run <white>/rift confirm</white> within 30 seconds."
+  nothing-to-confirm: "<gray>Nothing to confirm. Start with /rift <player>."
+  # Told to everyone. <rescuer>, <target>
+  opened: "<dark_purple>⚡ <rescuer> tore open a rift and pulled <target> out of Purgatory."
+
+# ---- Revival votes (/pledge) -----------------------------------------------
+pledge:
+  # Told to everyone. <pledger>, <n>, <target>, <hearts>, <needed>, <voters>, <min>
+  progress: "<yellow>🗳 <pledger> pledged <n> heart(s) to bring <target> back</yellow> <gray>(<hearts>/<needed> hearts, <voters>/<min> players). /pledge <target> <amount> to chip in."
+  # Told to everyone. <voters>, <hearts>, <target>
+  voted-back: "<green>🗳 <voters> players pledged <hearts> hearts and voted <target> back to life."
+  # <target>, <n>
+  cancelled: "<gray>You took back your pledge for <target> (<n> hearts)."
+  # <other>, <n>
+  refunded: "<gray><other> came back another way, so your pledge of <n> heart(s) is returned."
+  list-empty: "<gray>Nobody has pledged for anyone yet. /pledge <player> <hearts> to start."
+  # <needed>, <min>
+  list-header: "<yellow>Revival pledges <gray>(<needed> hearts from <min> players brings someone back)"
+  # <target>, <hearts>, <voters>
+  list-line: " <white><target></white> <gray><hearts> hearts from <voters> player(s)"
+
+# ---- Blood Pacts -----------------------------------------------------------
+pact:
+  # <partner>
+  status: "<dark_red>🩸 You're in a Blood Pact with <partner>.</dark_red> <gray>Their gains are yours; their deaths cost you a heart. /pact break ends it."
+  none: "<gray>You're not in a Blood Pact. /pact <player> offers one."
+  offer-someone-online: "<gray>Offer a pact to someone else who's online."
+  # <player>
+  offered: "<dark_red>🩸 You offered <player> a Blood Pact.</dark_red> <gray>They have a minute to accept."
+  # <player>
+  offer: "<dark_red>🩸 <player> offers you a Blood Pact:</dark_red> <gray>you'd share the hearts each of you wins from kills and bounties, and when either of you dies the other loses a heart too.</gray> <click:run_command:'/pact accept <player>'><red><u>[Accept]</u></red></click>"
+  # <player>
+  no-offer: "<gray>No pact offer from <player> to accept."
+  # Told to everyone. <a>, <b>
+  sealed: "<dark_red>🩸 <a> and <b> have sealed a Blood Pact."
+  # Told to everyone. <a>, <b>
+  broken: "<gray>🩸 <a> has broken their Blood Pact with <b>."
+  # <other>, <n>
+  shared-gain: "<dark_red>🩸 Blood Pact:</dark_red> <green><other> won hearts, so you gain <n> too."
+  # <other>
+  shared-death: "<dark_red>🩸 Blood Pact:</dark_red> <red><other> died, and it costs you a heart."
+  list-header: "<dark_red>Blood Pacts"
+  # <a>, <b>
+  list-line: " <white><a></white> <dark_red>🩸</dark_red> <white><b>"
+  list-empty: "<gray>Nobody is bound by a Blood Pact right now."
+
+# ---- /withdraw -------------------------------------------------------------
+withdraw:
+  # <n>, <left>
+  done: "<red>❤</red> <gray>You drew <n> heart(s) out into Heart items. You have <left> left. Held Hearts fade over time, so don't sit on them."
+
+# ---- Heart items -----------------------------------------------------------
+items:
+  # Heart items.
+  heart-name: "<red>Heart"
+  heart-hint: "<gray>Right-click the air (or sneak-click a block) to gain a heart."
+  # Tooltip line when heart-items.decay is on. <starts>, <gone>
+  heart-fading: "<dark_gray>Starts fading <starts>, gone by <gone>."
+  fragment-name: "<light_purple>Heart Fragment"
+  # <needed>
+  fragment-hint: "<gray>Right-click the air with <needed> to make a Heart."
+  cant-use-eliminated: "<gray>You can't use a Heart while eliminated."
+  at-cap: "<gray>You're already at the most hearts you can have."
+  # <hearts>
+  heart-used: "<red>❤</red> <green>+1 heart.</green> <gray>You have <hearts> now."
+  heart-crumbled: "<gray>That Heart was too old: it crumbles to dust in your hand."
+  # <n>
+  heart-faded: "<gray>That Heart had faded. It breaks into <light_purple><n> Heart Fragments</light_purple>."
+  # <needed>, <have>
+  need-more-fragments: "<gray>Hold <needed> Heart Fragments together to make a Heart (you have <have>)."
+  fragments-fused: "<light_purple>The fragments fuse into a Heart."
+
+# ---- Blood Moon ------------------------------------------------------------
+blood-moon:
+  # Blood Moon.
+  bar: "<dark_red>Blood Moon"
+  title: "<dark_red>Blood Moon"
+  # <multiplier>
+  subtitle: "<red>Kills take <multiplier>× hearts"
+  # Told to everyone. <time>, <multiplier>
+  rises: "<red>🩸 A Blood Moon rises. For the next <time>, kills take <multiplier>× hearts and monsters may drop Heart Fragments."
+  sets: "<gray>The Blood Moon sets."
+
+# ---- Airdrops --------------------------------------------------------------
+airdrops:
+  # Told to everyone. <x>, <z>, <time>
+  incoming: "<gold>📦 A heart crate will land at <white>x <x>, z <z></white> in <time>."
+  # <x>, <y>, <z>
+  landed: "<gold>📦 The heart crate has landed at <white>x <x>, y <y>, z <z></white>."
+  # <player>
+  opened: "<gold>📦 <player> has opened the heart crate!"
+  crumbled: "<gray>The heart crate crumbles away."
+  crate-name: "<gold>Heart Crate"
+  dont-break: "<gold>Open the crate instead."
+
+# ---- The finale ------------------------------------------------------------
+finale:
+  purgatory-sealed: "<dark_red>Purgatory is sealed for the finale. Nobody returns now."
+  trial-won-but-sealed: "<dark_red>The trial is won, but the finale has sealed Purgatory: no fragments now."
+  title: "<dark_red>The Finale"
+  subtitle: "<red>The border is closing. Last one standing wins."
+  # Told to everyone. <time>, <size>
+  started: "<dark_red><bold>The Finale has begun.</bold></dark_red> <red>Over the next <time> the border closes to <size> blocks around spawn. Purgatory is sealed: nobody comes back now."
+  stopped: "<gray>The finale has been called off. The border is back and Purgatory is open again."
+  # <time>
+  come-back: "<red>The finale is in the overworld. You have <time> to come back before you're pulled to spawn."
+  brought-back: "<red>You've been brought back for the finale."
+  portals-closed: "<red>The portals are closed for the finale."
+  # <player>
+  winner-title: "<gold><player>"
+  # <player>
+  winner-subtitle: "<yellow>wins the season"
+  # Told to everyone. <player>
+  winner: "<gold><bold>👑 <player> is the last one standing and wins the season!"
+
+# ---- Tab list (tab-list) ---------------------------------------------------
+tab:
+  # How each player looks in the tab list (when tab-list is on). <name>, <hearts>, <pact>
+  player: "<white><name></white> <red><hearts>❤</red><pact>"
+  # An eliminated player in the tab list. <name>, <pact>
+  eliminated: "<gray><strikethrough><name></strikethrough> ☠<pact>"
+  # Added after a pacted player (when blood-pacts.show-in-tab is on). <partner>
+  pact: " <dark_red>🩸<partner>"
+
+# ---- Seasons ---------------------------------------------------------------
+season:
+  # <name>
+  current: "<gold>Current season:</gold> <white><name>"
+  # <list>
+  archived: "<gold>Past seasons:</gold> <gray><list>"
+  none-archived: "none yet"
+  # /seasons. <season>, <winner>, <hearts>
+  past-line: " <white><season></white> <gray>won by</gray> <gold><winner></gold> <gray>(<hearts>❤)"
+  # <current>
+  same-name: "<red>The new season needs a different name from the current one (<current>)."
+  # <current>, <next>
+  confirm: "<red><bold>This ends <current> for everyone.</bold></red> <gray>Its standings and ledger are archived, then every player's hearts, bounties, marks and Purgatory progress are wiped and <next> begins.</gray>\n<yellow>Run <white>/lifesteal season confirm</white> within 30 seconds to go ahead."
+  nothing-to-confirm: "<gray>Nothing to confirm. Start with /lifesteal season reset <next season name>."
+  # <new>
+  title: "<gold><new>"
+  # <old>
+  subtitle: "<gray><old> is over"
+  # Told to everyone. <old>, <new>, <winner>
+  ended: "<gold><bold><old> is over.</bold></gold> <winner><gold>Welcome to <new>: everyone starts fresh.</gold> <gray>See the final standings with /leaderboard <old>"
+  # <player>
+  winner: "<yellow><player> finished on top.</yellow> "
+  failed: "<red>The season reset failed; the error is in the server log."
+
+# ---- /leaderboard ----------------------------------------------------------
+leaderboard:
+  # <season>
+  live-header: "<gold><season>: most hearts"
+  # <rank>, <name>, <hearts>
+  live-line: " <gray>#<rank></gray> <white><name></white> <red><hearts>❤"
+  empty: "<gray>Nobody yet."
+  # <season>
+  no-such-season: "<gray>No archived season called <season>."
+  # <season>
+  final-header: "<gold><season>: final standings"
+  # <rank>, <name>, <hearts>, <kills>, <deaths>, <elims>
+  final-line: " <gray>#<rank></gray> <white><name></white> <red><hearts>❤</red> <gray><kills> kills, <deaths> deaths, eliminated <elims>×"
+
+# ---- Alt detection (admins only) -------------------------------------------
+alts:
+  # Admins only. <killer>, <victim>
+  linked-kill: "<gold>⚠ <killer> killed <victim>, and they've logged in from the same address.</gold> <gray>Could be farming, could be housemates: /lifesteal alts <killer>"
+  # /lifesteal alts. <player>
+  none: "<gray><player> shares no address with any other account."
+  # <player>
+  header: "<gold><player> shares an address with:"
+  # <name>, <hearts>
+  line: " <white><name></white> <gray>(<hearts> hearts)"
+  flags-none: "<gray>No kills between linked accounts so far."
+  flags-header: "<gold>Kills between accounts sharing an address <gray>(newest first)"
+  # <time>, <killer>, <victim>
+  flags-line: " <gray><time></gray> <white><killer></white> killed <white><victim></white>"
+
+# ---- Heart ledger (admins only) --------------------------------------------
+ledger:
+  # Admin ledger. <player>, <page>, <pages>
+  header: "<gold>Heart ledger for <player> <gray>(page <page>/<pages>, newest first)"
+  empty-page: "<gray>Nothing on this page."
+  # <event>, <time>, <delta>, <before>, <after>, <cause>, <detail>
+  line: "<dark_gray>#<event></dark_gray> <gray><time></gray> <delta> <white><before>→<after></white> <yellow><cause></yellow><detail>"
+  # <n>
+  gain: "<green>+<n>"
+  # <n>
+  loss: "<red>-<n>"
+  no-change: "<gray>±0"
+  # <player>
+  versus: " vs <player>"
+  # <player>
+  by: " by <player>"
+  # <note>
+  note: " (<note>)"
+
+# ---- Admin command replies -------------------------------------------------
+admin:
+  # /lifesteal give, take, set and revive. <player>, <before>, <after>
+  hearts-changed: "<green><player>: <before> → <after> hearts"
+  # <player>, <before>, <after>
+  hearts-unchanged: "<green><player>: <before> → <after> hearts <gray>(no change: at the cap, or eliminated)"
+  # <player>, <hearts>
+  not-eliminated: "<red><player> isn't eliminated (they have <hearts> hearts)."
+  # <count>, <player>
+  bounties-cleared: "<green>Cleared <count> bounties on <player> and refunded the placers."
+  # <player>, <time>
+  shield-set: "<green><player> now has a new-player shield for <time>."
+  # <player>
+  shield-removed: "<green>Removed <player>'s new-player shield."
+  most-wanted-nobody: "<gray>Nobody to announce: too few players online, or nobody alive."
+  reloaded: "<green>LifestealPlus reloaded. Everything in config.yml and messages.yml looks fine."
+  # <count>
+  reloaded-with-warnings: "<yellow>LifestealPlus reloaded, but <count> setting(s) couldn't be used and were left at their defaults:"
+  # <warning>
+  reload-warning: " <gray>- <warning>"
+  no-blood-moon: "<gray>No Blood Moon is up."
+  blood-moon-already: "<gray>A Blood Moon is already up."
+  airdrop-busy: "<gray>A crate is already on its way or waiting."
+  no-finale: "<gray>No finale is running."
+  finale-already: "<gray>The finale is already running."
+  # <player>, <amount>, <kind>
+  items-given: "<green>Gave <player> <amount> <kind> item(s)."
+  # /lifesteal event status. <state>
+  status-blood-moon: "<gold>Blood Moon:</gold> <state>"
+  # <state>
+  status-airdrop: "<gold>Next airdrop:</gold> <state>"
+  # <state>
+  status-finale: "<gold>Finale:</gold> <state>"
+  state-now: "up now"
+  # <time>
+  state-in: "in <time>"
+  state-not-scheduled: "not scheduled (switched off, or one is in progress)"
+  state-running: "running"
+  state-not-running: "not running"
+
+# ---- /lifesteal features ---------------------------------------------------
+features:
+  # /lifesteal features
+  header: "<gold>LifestealPlus features</gold> <gray>(as named in config.yml)"
+  # <name>
+  switched-on: " <green>● on</green>  <white><name>"
+  # <name>
+  switched-off: " <red>○ off</red> <gray><name>"
+  footer: "<gray>Change them in config.yml, then /lifesteal reload."

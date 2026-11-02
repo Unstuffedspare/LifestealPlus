@@ -7,9 +7,6 @@ import dev.lifestealplus.core.KillOutcome;
 import java.time.Duration;
 import java.util.List;
 import java.util.UUID;
-import net.kyori.adventure.text.minimessage.MiniMessage;
-import net.kyori.adventure.text.minimessage.tag.resolver.Placeholder;
-import net.kyori.adventure.text.minimessage.tag.resolver.TagResolver;
 import org.bukkit.entity.Player;
 
 /**
@@ -45,60 +42,41 @@ public final class KillHandler {
     private void tellAboutKill(KillOutcome outcome) {
         String killerName = outcome.killer().name(), victimName = outcome.victim().name();
         if (outcome.repeat()) explainRepeatKill(outcome);
-        if (outcome.linked()) {
+        if (outcome.linked() && plugin.settings().extras().altDetection()) {
             for (Player admin : plugin.getServer().getOnlinePlayers()) {
                 if (!admin.hasPermission("lifestealplus.admin")) continue;
-                admin.sendRichMessage("<gold>⚠ <killer> killed <victim>, and they've logged in from the same address.</gold> "
-                                + "<gray>Could be farming, could be housemates: /lifesteal alts <killer>",
-                        Placeholder.unparsed("killer", killerName),
-                        Placeholder.unparsed("victim", victimName));
+                Msg.send(admin, "alts.linked-kill", Msg.t("killer", killerName), Msg.t("victim", victimName));
             }
             plugin.getLogger().info("Linked accounts: " + killerName + " killed " + victimName);
         }
         if (outcome.shielded()) {
             Player killer = plugin.getServer().getPlayer(outcome.killer().player());
-            if (killer != null) killer.sendRichMessage("<aqua>🛡 No hearts moved: one of you still has a new-player shield.");
+            Msg.send(killer, "shield.kill-blocked");
         }
         if (outcome.vengeance()) {
-            broadcast("<red>⚔ <killer> took vengeance on <victim>, taking back <hearts> hearts.",
-                    Placeholder.unparsed("killer", killerName),
-                    Placeholder.unparsed("victim", victimName),
-                    Placeholder.unparsed("hearts", String.valueOf(outcome.killer().delta())));
+            Msg.broadcast("vengeance.taken", Msg.t("killer", killerName), Msg.t("victim", victimName),
+                    Msg.t("hearts", outcome.killer().delta()));
         }
         if (outcome.marked()) {
             String window = formatWindow(hearts.rules().vengeanceWindow());
             int back = hearts.rules().heartsPerKill() + hearts.rules().vengeanceBonus();
             Player avenger = plugin.getServer().getPlayer(outcome.victim().player());
             if (avenger != null) {
-                avenger.sendRichMessage("<red>You've marked <killer> for vengeance.</red> <gray>Kill them within <window> "
-                                + "to take back <back> hearts.",
-                        Placeholder.unparsed("killer", killerName),
-                        Placeholder.unparsed("window", window),
-                        Placeholder.unparsed("back", String.valueOf(back)));
+                Msg.send(avenger, "vengeance.you-marked", Msg.t("killer", killerName), Msg.t("window", window), Msg.t("back", back));
             }
             Player marked = plugin.getServer().getPlayer(outcome.killer().player());
             if (marked != null) {
-                marked.sendRichMessage("<red><victim> has marked you for vengeance</red> <gray>for the next <window>.",
-                        Placeholder.unparsed("victim", victimName),
-                        Placeholder.unparsed("window", window));
+                Msg.send(marked, "vengeance.you-are-marked", Msg.t("victim", victimName), Msg.t("window", window));
             }
         }
         if (outcome.bounty() != null && outcome.bounty().change().delta() > 0) {
-            broadcast("<gold>💰 <killer> claimed the bounty on <victim>: <hearts> hearts.",
-                    Placeholder.unparsed("killer", killerName),
-                    Placeholder.unparsed("victim", victimName),
-                    Placeholder.unparsed("hearts", String.valueOf(outcome.bounty().change().delta())));
+            Msg.broadcast("bounty.claimed", Msg.t("killer", killerName), Msg.t("victim", victimName),
+                    Msg.t("hearts", outcome.bounty().change().delta()));
         }
         if (outcome.bounty() != null && outcome.bounty().remaining() > 0) {
-            broadcast("<gold><left> hearts of bounty are still on <victim> <gray>(<killer> couldn't carry more).",
-                    Placeholder.unparsed("left", String.valueOf(outcome.bounty().remaining())),
-                    Placeholder.unparsed("victim", victimName),
-                    Placeholder.unparsed("killer", killerName));
+            Msg.broadcast("bounty.left-over", Msg.t("left", outcome.bounty().remaining()), Msg.t("victim", victimName),
+                    Msg.t("killer", killerName));
         }
-    }
-
-    private void broadcast(String message, TagResolver... tags) {
-        plugin.getServer().broadcast(MiniMessage.miniMessage().deserialize(message, tags));
     }
 
     /** Without this, a kill that pays nothing looks like a bug to both players. */
@@ -106,21 +84,15 @@ public final class KillHandler {
         String window = formatWindow(hearts.rules().repeatKillWindow());
         Player killer = plugin.getServer().getPlayer(outcome.killer().player());
         if (killer != null) {
-            killer.sendRichMessage("<gray>No heart from <victim>: you already took one from them in the last <window>.",
-                    Placeholder.unparsed("victim", outcome.victim().name()),
-                    Placeholder.unparsed("window", window));
+            Msg.send(killer, "repeat-kill.killer", Msg.t("victim", outcome.victim().name()), Msg.t("window", window));
         }
         Player victim = plugin.getServer().getPlayer(outcome.victim().player());
         if (victim != null) {
-            victim.sendRichMessage("<gray>You kept your heart: <killer> already took one from you in the last <window>.",
-                    Placeholder.unparsed("killer", outcome.killer().name()),
-                    Placeholder.unparsed("window", window));
+            Msg.send(victim, "repeat-kill.victim", Msg.t("killer", outcome.killer().name()), Msg.t("window", window));
         }
     }
 
     static String formatWindow(Duration window) {
-        long minutes = window.toMinutes();
-        if (minutes % 60 == 0) return (minutes / 60) + (minutes == 60 ? " hour" : " hours");
-        return minutes + " minutes";
+        return Msg.duration(window);
     }
 }

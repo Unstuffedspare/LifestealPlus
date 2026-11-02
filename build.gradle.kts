@@ -27,6 +27,8 @@ dependencies {
     testImplementation("org.junit.jupiter:junit-jupiter")
     testRuntimeOnly("org.junit.platform:junit-platform-launcher")
     testImplementation("org.xerial:sqlite-jdbc:$sqliteVersion")
+    // For testing how config.yml is read (YamlConfiguration).
+    testImplementation("io.papermc.paper:paper-api:26.3.build.235-stable")
 }
 
 tasks.withType<JavaCompile>().configureEach {

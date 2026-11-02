@@ -4,13 +4,13 @@ import com.mojang.brigadier.Command;
 import com.mojang.brigadier.tree.LiteralCommandNode;
 import dev.lifestealplus.HeartTracker;
 import dev.lifestealplus.LifestealPlugin;
+import dev.lifestealplus.Msg;
 import dev.lifestealplus.core.HeartService;
 import io.papermc.paper.command.brigadier.CommandSourceStack;
 import io.papermc.paper.command.brigadier.Commands;
 import java.time.Duration;
 import java.util.function.Consumer;
 import java.util.logging.Level;
-import net.kyori.adventure.text.minimessage.tag.resolver.Placeholder;
 import org.bukkit.entity.Player;
 
 /** /purgatory: your progress, and calling or joining a trial. */
@@ -45,30 +45,30 @@ public final class PurgatoryCommands {
         if (source.getSender() instanceof Player player) {
             action.accept(player);
         } else {
-            source.getSender().sendRichMessage("<red>Only players can use this.");
+            Msg.send(source.getSender(), "common.players-only");
         }
         return Command.SINGLE_SUCCESS;
     }
 
     private void status(Player player) {
         if (!tracker.isEliminated(player)) {
-            player.sendRichMessage("<gray>Purgatory is where eliminated players go to earn their way back. You're not eliminated.");
+            Msg.send(player, "purgatory.not-eliminated");
             return;
         }
         hearts.progress(player.getUniqueId()).whenCompleteAsync((progress, error) -> {
             if (error != null) {
                 plugin.getLogger().log(Level.SEVERE, "Couldn't read Purgatory progress", error);
-                player.sendRichMessage("<red>Couldn't read your progress; the error is in the server log.");
+                Msg.send(player, "common.error");
                 return;
             }
             Duration wait = trials.cooldownLeft(progress);
-            player.sendRichMessage("<dark_aqua>Fragments: <white><have>/<needed></white>. <gray><when>\n<gray><trial>",
-                    Placeholder.unparsed("have", String.valueOf(progress.fragments())),
-                    Placeholder.unparsed("needed", String.valueOf(plugin.settings().purgatory().fragmentsNeeded())),
-                    Placeholder.unparsed("when", wait.isZero()
-                            ? "Your next win earns a fragment."
-                            : "Your next fragment can be earned in " + TrialManager.describe(wait) + "."),
-                    Placeholder.unparsed("trial", trials.status()));
+            Msg.send(player, "purgatory.status",
+                    Msg.t("have", progress.fragments()),
+                    Msg.t("needed", plugin.settings().purgatory().fragmentsNeeded()),
+                    Msg.c("when", wait.isZero()
+                            ? Msg.get("purgatory.next-win-counts")
+                            : Msg.get("purgatory.next-fragment-in", Msg.t("wait", TrialManager.describe(wait)))),
+                    Msg.c("trial", trials.status()));
         }, tracker.mainThread());
     }
 }

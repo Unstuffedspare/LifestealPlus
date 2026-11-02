@@ -8,7 +8,6 @@ import com.mojang.brigadier.suggestion.SuggestionProvider;
 import com.mojang.brigadier.tree.LiteralCommandNode;
 import dev.lifestealplus.admin.AdminCommands;
 import dev.lifestealplus.combat.NewbieShield;
-import dev.lifestealplus.core.BountyException;
 import dev.lifestealplus.core.BountyTotal;
 import dev.lifestealplus.core.HeartCause;
 import dev.lifestealplus.core.HeartChange;
@@ -16,6 +15,7 @@ import dev.lifestealplus.core.HeartRequest;
 import dev.lifestealplus.core.HeartService;
 import dev.lifestealplus.core.LedgerEntry;
 import dev.lifestealplus.core.PlayerHearts;
+import dev.lifestealplus.core.RuleException;
 import dev.lifestealplus.core.VengeanceMark;
 import io.papermc.paper.command.brigadier.CommandSourceStack;
 import io.papermc.paper.command.brigadier.Commands;
@@ -28,8 +28,7 @@ import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionException;
 import java.util.function.Consumer;
 import java.util.logging.Level;
-import net.kyori.adventure.text.minimessage.MiniMessage;
-import net.kyori.adventure.text.minimessage.tag.resolver.Placeholder;
+import net.kyori.adventure.text.Component;
 import net.kyori.adventure.text.minimessage.tag.resolver.TagResolver;
 import org.bukkit.command.CommandSender;
 import org.bukkit.entity.Player;
@@ -50,11 +49,13 @@ final class LifestealCommands {
     private final NewbieShield shield;
     private final EventCommands events;
     private final AdminCommands admin;
+    private final FeaturesCommand features;
 
     LifestealCommands(LifestealPlugin plugin, HeartService hearts, HeartTracker tracker, MostWanted mostWanted,
-                      NewbieShield shield, EventCommands events, AdminCommands admin) {
+                      NewbieShield shield, EventCommands events, AdminCommands admin, FeaturesCommand features) {
         this.events = events;
         this.admin = admin;
+        this.features = features;
         this.plugin = plugin;
         this.hearts = hearts;
         this.tracker = tracker;
@@ -73,17 +74,16 @@ final class LifestealCommands {
 
     private LiteralCommandNode<CommandSourceStack> shieldCommand() {
         return Commands.literal("shield")
+                .requires(src -> src.getSender().hasPermission("lifestealplus.shield"))
                 .executes(ctx -> {
                     if (!(ctx.getSource().getSender() instanceof Player player)) {
-                        ctx.getSource().getSender().sendRichMessage("<red>Only players have shields.");
+                        Msg.send(ctx.getSource().getSender(), "common.players-only");
                         return 0;
                     }
                     if (shield.isShielded(player)) {
-                        player.sendRichMessage("<aqua>🛡 Your new-player shield lasts another <time> of playtime.</aqua> "
-                                        + "<gray>Attacking another player ends it.",
-                                Placeholder.unparsed("time", NewbieShield.describe(shield.left(player))));
+                        Msg.send(player, "shield.status", Msg.t("time", NewbieShield.describe(shield.left(player))));
                     } else {
-                        player.sendRichMessage("<gray>You don't have a new-player shield.");
+                        Msg.send(player, "shield.none");
                     }
                     return Command.SINGLE_SUCCESS;
                 })
@@ -103,11 +103,8 @@ final class LifestealCommands {
                                     withPlayer(sender, StringArgumentType.getString(ctx, "player"), target ->
                                             hearts.bountyOn(target.uuid()).whenCompleteAsync((total, error) -> {
                                                 if (error != null) fail(sender, error);
-                                                else sender.sendRichMessage(total == 0
-                                                                ? "<gray>There's no bounty on <player>."
-                                                                : "<gold>There's a <total>-heart bounty on <player>.",
-                                                        Placeholder.unparsed("player", target.name()),
-                                                        Placeholder.unparsed("total", String.valueOf(total)));
+                                                else Msg.send(sender, total == 0 ? "bounty.check-none" : "bounty.check",
+                                                        Msg.t("player", target.name()), Msg.t("total", total));
                                             }, tracker.mainThread()));
                                     return Command.SINGLE_SUCCESS;
                                 })))
@@ -117,7 +114,7 @@ final class LifestealCommands {
                                 .then(Commands.argument("hearts", IntegerArgumentType.integer(1))
                                         .executes(ctx -> {
                                             if (!(ctx.getSource().getSender() instanceof Player placer)) {
-                                                ctx.getSource().getSender().sendRichMessage("<red>Only players can place bounties.");
+                                                Msg.send(ctx.getSource().getSender(), "common.players-only");
                                                 return 0;
                                             }
                                             int amount = IntegerArgumentType.getInteger(ctx, "hearts");
@@ -129,11 +126,15 @@ final class LifestealCommands {
     }
 
     private void placeBounty(Player placer, PlayerHearts target, int amount) {
+        if (!plugin.settings().bountiesEnabled()) {
+            Msg.send(placer, "common.feature-off");
+            return;
+        }
         hearts.placeBounty(placer.getUniqueId(), target.uuid(), amount).whenCompleteAsync((placed, error) -> {
             if (error != null) {
                 Throwable cause = error instanceof CompletionException ? error.getCause() : error;
-                if (cause instanceof BountyException rule) {
-                    placer.sendRichMessage("<red><reason>", Placeholder.unparsed("reason", rule.getMessage()));
+                if (cause instanceof RuleException rule) {
+                    Msg.send(placer, "common.not-allowed", Msg.t("reason", rule.getMessage()));
                 } else {
                     fail(placer, error);
                 }
@@ -141,15 +142,10 @@ final class LifestealCommands {
             }
             // Only successful placements reach the tracker, so a refused bounty isn't logged as a failure.
             tracker.track(CompletableFuture.completedFuture(List.of(placed.placerChange())));
-            String who = plugin.settings().bountyAnonymous() ? "Someone" : placer.getName();
-            plugin.getServer().broadcast(MiniMessage.miniMessage().deserialize(
-                    "<gold>💰 <who> has put a <hearts>-heart bounty on <target></gold> <gray>(<total> hearts in total).",
-                    Placeholder.unparsed("who", who),
-                    Placeholder.unparsed("hearts", String.valueOf(amount)),
-                    Placeholder.unparsed("target", target.name()),
-                    Placeholder.unparsed("total", String.valueOf(placed.totalOnTarget()))));
-            placer.sendRichMessage("<gray>Your bounty is placed. You have <left> hearts left.",
-                    Placeholder.unparsed("left", String.valueOf(placed.placerChange().after())));
+            Msg.broadcast(plugin.settings().bountyAnonymous() ? "bounty.placed-anonymous" : "bounty.placed",
+                    Msg.t("who", placer.getName()), Msg.t("hearts", amount), Msg.t("target", target.name()),
+                    Msg.t("total", placed.totalOnTarget()));
+            Msg.send(placer, "bounty.placed-you", Msg.t("left", placed.placerChange().after()));
         }, tracker.mainThread());
     }
 
@@ -160,14 +156,12 @@ final class LifestealCommands {
                 return;
             }
             if (top.isEmpty()) {
-                sender.sendRichMessage("<gray>No bounties right now. Place one with /bounty place <player> <hearts>.");
+                Msg.send(sender, "bounty.list-empty");
                 return;
             }
-            sender.sendRichMessage("<gold>Bounties");
+            Msg.send(sender, "bounty.list-header");
             for (BountyTotal b : top) {
-                sender.sendRichMessage(" <gold><hearts>❤</gold> <white><player>",
-                        Placeholder.unparsed("hearts", String.valueOf(b.hearts())),
-                        Placeholder.unparsed("player", b.targetName()));
+                Msg.send(sender, "bounty.list-line", Msg.t("hearts", b.hearts()), Msg.t("player", b.targetName()));
             }
         }, tracker.mainThread());
         return Command.SINGLE_SUCCESS;
@@ -178,7 +172,7 @@ final class LifestealCommands {
                 .requires(src -> src.getSender().hasPermission("lifestealplus.vengeance"))
                 .executes(ctx -> {
                     if (!(ctx.getSource().getSender() instanceof Player player)) {
-                        ctx.getSource().getSender().sendRichMessage("<red>Only players have vengeance marks.");
+                        Msg.send(ctx.getSource().getSender(), "common.players-only");
                         return 0;
                     }
                     hearts.marks(player.getUniqueId()).whenCompleteAsync((marks, error) -> {
@@ -187,18 +181,14 @@ final class LifestealCommands {
                             return;
                         }
                         if (marks.held().isEmpty() && marks.against().isEmpty()) {
-                            player.sendRichMessage("<gray>No vengeance marks either way.");
+                            Msg.send(player, "vengeance.none");
                             return;
                         }
                         for (VengeanceMark m : marks.held()) {
-                            player.sendRichMessage("<red>You can take vengeance on <player></red> <gray>(<left> left)",
-                                    Placeholder.unparsed("player", m.markedName()),
-                                    Placeholder.unparsed("left", timeLeft(m.expires())));
+                            Msg.send(player, "vengeance.you-can-avenge", Msg.t("player", m.markedName()), Msg.t("left", timeLeft(m.expires())));
                         }
                         for (VengeanceMark m : marks.against()) {
-                            player.sendRichMessage("<dark_red><player> can take vengeance on you</dark_red> <gray>(<left> left)",
-                                    Placeholder.unparsed("player", m.avengerName()),
-                                    Placeholder.unparsed("left", timeLeft(m.expires())));
+                            Msg.send(player, "vengeance.can-avenge-you", Msg.t("player", m.avengerName()), Msg.t("left", timeLeft(m.expires())));
                         }
                     }, tracker.mainThread());
                     return Command.SINGLE_SUCCESS;
@@ -207,8 +197,7 @@ final class LifestealCommands {
     }
 
     private static String timeLeft(Instant expires) {
-        long minutes = Math.max(1, (Duration.between(Instant.now(), expires).toSeconds() + 59) / 60);
-        return minutes == 1 ? "1 minute" : minutes + " minutes";
+        return Msg.duration(Duration.between(Instant.now(), expires));
     }
 
     private LiteralCommandNode<CommandSourceStack> heartsCommand() {
@@ -216,7 +205,7 @@ final class LifestealCommands {
                 .requires(src -> src.getSender().hasPermission("lifestealplus.hearts"))
                 .executes(ctx -> {
                     if (!(ctx.getSource().getSender() instanceof Player self)) {
-                        ctx.getSource().getSender().sendRichMessage("<red>Usage: /hearts <player>");
+                        Msg.send(ctx.getSource().getSender(), "hearts.usage");
                         return 0;
                     }
                     showHearts(self, self.getName());
@@ -260,10 +249,8 @@ final class LifestealCommands {
                                                     tracker.track(hearts.clearBounties(target.uuid(), sender.getName()))
                                                             .whenCompleteAsync((refunds, error) -> {
                                                                 if (error != null) fail(sender, error);
-                                                                else sender.sendRichMessage(
-                                                                        "<green>Cleared <count> bounties on <player> and refunded the placers.",
-                                                                        Placeholder.unparsed("count", String.valueOf(refunds.size())),
-                                                                        Placeholder.unparsed("player", target.name()));
+                                                                else Msg.send(sender, "admin.bounties-cleared",
+                                                                        Msg.t("count", refunds.size()), Msg.t("player", target.name()));
                                                             }, tracker.mainThread()));
                                             return Command.SINGLE_SUCCESS;
                                         }))))
@@ -281,14 +268,12 @@ final class LifestealCommands {
                                                             return;
                                                         }
                                                         shield.changed(target.uuid(), amount);
-                                                        sender.sendRichMessage(amount.isZero()
-                                                                        ? "<green>Removed <player>'s new-player shield."
-                                                                        : "<green><player> now has a new-player shield for <time>.",
-                                                                Placeholder.unparsed("player", target.name()),
-                                                                Placeholder.unparsed("time", NewbieShield.describe(amount)));
+                                                        Msg.send(sender, amount.isZero() ? "admin.shield-removed" : "admin.shield-set",
+                                                                Msg.t("player", target.name()), Msg.t("time", NewbieShield.describe(amount)));
                                                     }, tracker.mainThread()));
                                             return Command.SINGLE_SUCCESS;
                                         }))))
+                .then(features.node())
                 .then(admin.altsNode())
                 .then(admin.flagsNode())
                 .then(admin.seasonNode())
@@ -298,20 +283,17 @@ final class LifestealCommands {
                 .then(Commands.literal("mostwanted")
                         .executes(ctx -> {
                             if (mostWanted.announce() == null) {
-                                ctx.getSource().getSender().sendRichMessage(
-                                        "<gray>Nobody to announce: too few players online, or nobody alive.");
+                                Msg.send(ctx.getSource().getSender(), "admin.most-wanted-nobody");
                             }
                             return Command.SINGLE_SUCCESS;
                         }))
                 .then(Commands.literal("reload")
                         .executes(ctx -> {
                             CommandSender sender = ctx.getSource().getSender();
-                            try {
-                                plugin.reloadSettings();
-                                sender.sendRichMessage("<green>LifestealPlus config reloaded. (Changing database.file needs a restart.)");
-                            } catch (RuntimeException e) {
-                                sender.sendRichMessage("<red>Config not reloaded: <reason>", Placeholder.unparsed("reason", String.valueOf(e.getMessage())));
-                            }
+                            List<String> warnings = plugin.reloadSettings();
+                            Msg.send(sender, warnings.isEmpty() ? "admin.reloaded" : "admin.reloaded-with-warnings",
+                                    Msg.t("count", warnings.size()));
+                            warnings.forEach(w -> Msg.send(sender, "admin.reload-warning", Msg.t("warning", w)));
                             return Command.SINGLE_SUCCESS;
                         }))
                 .build();
@@ -341,9 +323,7 @@ final class LifestealCommands {
         CommandSender sender = ctx.getSource().getSender();
         withPlayer(sender, StringArgumentType.getString(ctx, "player"), target -> {
             if (!target.eliminated()) {
-                sender.sendRichMessage("<red><player> isn't eliminated (they have <hearts> hearts).",
-                        Placeholder.unparsed("player", target.name()),
-                        Placeholder.unparsed("hearts", String.valueOf(target.hearts())));
+                Msg.send(sender, "admin.not-eliminated", Msg.t("player", target.name()), Msg.t("hearts", target.hearts()));
                 return;
             }
             change(sender, HeartRequest.set(target.uuid(), amount, HeartCause.REVIVE, sender.getName()));
@@ -359,34 +339,30 @@ final class LifestealCommands {
                         fail(sender, error);
                         return;
                     }
-                    sender.sendRichMessage("<gold>Heart ledger for <player> <gray>(page <page>/<pages>, newest first)",
-                            Placeholder.unparsed("player", target.name()),
-                            Placeholder.unparsed("page", String.valueOf(result.page())),
-                            Placeholder.unparsed("pages", String.valueOf(result.pages())));
-                    if (result.entries().isEmpty()) sender.sendRichMessage("<gray>Nothing on this page.");
-                    result.entries().forEach(entry -> sender.sendRichMessage(LEDGER_LINE, ledgerTags(entry)));
+                    Msg.send(sender, "ledger.header", Msg.t("player", target.name()), Msg.t("page", result.page()),
+                            Msg.t("pages", result.pages()));
+                    if (result.entries().isEmpty()) Msg.send(sender, "ledger.empty-page");
+                    result.entries().forEach(entry -> Msg.send(sender, "ledger.line", ledgerTags(entry)));
                 }, tracker.mainThread()));
         return Command.SINGLE_SUCCESS;
     }
 
-    private static final String LEDGER_LINE =
-            "<dark_gray>#<event></dark_gray> <gray><time></gray> <delta> <white><before>→<after></white> <yellow><cause></yellow><detail>";
-
     private static TagResolver ledgerTags(LedgerEntry e) {
         int delta = e.after() - e.before();
-        String deltaText = delta > 0 ? "<green>+" + delta : delta < 0 ? "<red>" + delta : "<gray>±0";
-        StringBuilder detail = new StringBuilder();
-        if (e.otherName() != null) detail.append(" vs ").append(e.otherName());
-        if (e.actor() != null && !e.actor().equals("server")) detail.append(" by ").append(e.actor());
-        if (e.note() != null) detail.append(" (").append(e.note()).append(")");
+        Component deltaText = Msg.get(delta > 0 ? "ledger.gain" : delta < 0 ? "ledger.loss" : "ledger.no-change",
+                Msg.t("n", Math.abs(delta)));
+        Component detail = Component.empty();
+        if (e.otherName() != null) detail = detail.append(Msg.get("ledger.versus", Msg.t("player", e.otherName())));
+        if (e.actor() != null && !e.actor().equals("server")) detail = detail.append(Msg.get("ledger.by", Msg.t("player", e.actor())));
+        if (e.note() != null) detail = detail.append(Msg.get("ledger.note", Msg.t("note", e.note())));
         return TagResolver.resolver(
-                Placeholder.unparsed("event", String.valueOf(e.eventId())),
-                Placeholder.unparsed("time", TIME.format(e.at())),
-                Placeholder.parsed("delta", deltaText),
-                Placeholder.unparsed("before", String.valueOf(e.before())),
-                Placeholder.unparsed("after", String.valueOf(e.after())),
-                Placeholder.unparsed("cause", e.cause().name()),
-                Placeholder.unparsed("detail", detail.toString()));
+                Msg.t("event", e.eventId()),
+                Msg.t("time", TIME.format(e.at())),
+                Msg.c("delta", deltaText),
+                Msg.t("before", e.before()),
+                Msg.t("after", e.after()),
+                Msg.t("cause", e.cause().name()),
+                Msg.c("detail", detail));
     }
 
     private void change(CommandSender sender, HeartRequest request) {
@@ -396,23 +372,18 @@ final class LifestealCommands {
                 return;
             }
             HeartChange c = changes.getFirst();
-            String suffix = c.after() == c.before() ? " <gray>(no change: at the cap, or eliminated)" : "";
-            sender.sendRichMessage("<green><player>: <before> → <after> hearts" + suffix,
-                    Placeholder.unparsed("player", c.name()),
-                    Placeholder.unparsed("before", String.valueOf(c.before())),
-                    Placeholder.unparsed("after", String.valueOf(c.after())));
+            Msg.send(sender, c.after() == c.before() ? "admin.hearts-unchanged" : "admin.hearts-changed",
+                    Msg.t("player", c.name()), Msg.t("before", c.before()), Msg.t("after", c.after()));
         }, tracker.mainThread());
     }
 
     private void showHearts(CommandSender sender, String name) {
         withPlayer(sender, name, target -> {
             if (target.eliminated()) {
-                sender.sendRichMessage("<red><player> is eliminated.", Placeholder.unparsed("player", target.name()));
+                Msg.send(sender, "hearts.eliminated", Msg.t("player", target.name()));
             } else {
-                sender.sendRichMessage("<red>❤</red> <player> has <hearts>/<max> hearts.",
-                        Placeholder.unparsed("player", target.name()),
-                        Placeholder.unparsed("hearts", String.valueOf(target.hearts())),
-                        Placeholder.unparsed("max", String.valueOf(hearts.rules().maxHearts())));
+                Msg.send(sender, "hearts.show", Msg.t("player", target.name()), Msg.t("hearts", target.hearts()),
+                        Msg.t("max", hearts.rules().maxHearts()));
             }
         });
     }
@@ -423,7 +394,7 @@ final class LifestealCommands {
             if (error != null) {
                 fail(sender, error);
             } else if (found.isEmpty()) {
-                sender.sendRichMessage("<red>No player named <name> has joined this server.", Placeholder.unparsed("name", name));
+                Msg.send(sender, "common.no-such-player", Msg.t("name", name));
             } else {
                 then.accept(found.get());
             }
@@ -432,7 +403,7 @@ final class LifestealCommands {
 
     private void fail(CommandSender sender, Throwable error) {
         plugin.getLogger().log(Level.SEVERE, "Lifesteal command failed", error);
-        sender.sendRichMessage("<red>That didn't work; the error is in the server log.");
+        Msg.send(sender, "common.error");
     }
 
     private static final SuggestionProvider<CommandSourceStack> ONLINE_NAMES = (ctx, builder) -> {
