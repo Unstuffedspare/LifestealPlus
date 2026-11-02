@@ -34,7 +34,11 @@ public final class KillHandler {
     /** A death with no player to blame. {@code note} goes in the ledger (the damage type, or "body"). */
     public void naturalDeath(UUID victim, String note) {
         int loss = plugin.settings().naturalDeathLoss();
-        if (loss <= 0) return;
+        if (loss <= 0) {
+            // Dying still ends a kill streak, even when it costs nothing.
+            hearts.endStreak(victim);
+            return;
+        }
         tracker.track(hearts.apply(List.of(HeartRequest.add(victim, -loss, HeartCause.DEATH, "server").withNote(note))));
     }
 
@@ -69,6 +73,7 @@ public final class KillHandler {
                 Msg.send(marked, "vengeance.you-are-marked", Msg.t("victim", victimName), Msg.t("window", window));
             }
         }
+        tellAboutStreaks(outcome);
         if (outcome.bounty() != null && outcome.bounty().change().delta() > 0) {
             Msg.broadcast("bounty.claimed", Msg.t("killer", killerName), Msg.t("victim", victimName),
                     Msg.t("hearts", outcome.bounty().change().delta()));
@@ -80,6 +85,19 @@ public final class KillHandler {
     }
 
     /** Without this, a kill that pays nothing looks like a bug to both players. */
+    private void tellAboutStreaks(KillOutcome outcome) {
+        String killerName = outcome.killer().name(), victimName = outcome.victim().name();
+        if (outcome.endedStreak() > 0) {
+            Msg.broadcast(outcome.shutdown() ? "streak.shutdown" : "streak.ended", Msg.t("killer", killerName),
+                    Msg.t("victim", victimName), Msg.t("n", outcome.endedStreak()),
+                    Msg.t("bonus", plugin.settings().streaks().shutdownBonus()));
+        }
+        boolean grew = !outcome.repeat() && !outcome.shielded() && outcome.victim().delta() < 0;
+        if (grew && plugin.settings().streaks().announceAt().contains(outcome.killerStreak())) {
+            Msg.broadcast("streak.milestone", Msg.t("player", killerName), Msg.t("n", outcome.killerStreak()));
+        }
+    }
+
     private void explainRepeatKill(KillOutcome outcome) {
         String window = formatWindow(hearts.rules().repeatKillWindow());
         Player killer = plugin.getServer().getPlayer(outcome.killer().player());

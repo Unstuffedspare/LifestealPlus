@@ -45,6 +45,7 @@ public final class LifestealPlugin extends JavaPlugin {
     private Purgatory purgatory;
     private CapSchedule capSchedule;
     private NewbieShield shield;
+    private NewsFeed news;
 
     @Override
     public void onEnable() {
@@ -103,6 +104,8 @@ public final class LifestealPlugin extends JavaPlugin {
         PurgatoryCommands purgatoryCommands = settings.purgatory().enabled() ? startPurgatory(tracker) : null;
         capSchedule = new CapSchedule(this, hearts);
         SocialCommands social = new SocialCommands(this, hearts, tracker, heartItems, finale, purgatory);
+        news = new NewsFeed(this, hearts, tracker);
+        getServer().getPluginManager().registerEvents(news, this);
         getServer().getPluginManager().registerEvents(new GhostChat(this, tracker), this);
         // Pact shares and pledge refunds happen inside other changes; mirror them and tell the players.
         hearts.onSideEffects(changes -> {
@@ -112,6 +115,7 @@ public final class LifestealPlugin extends JavaPlugin {
         getLifecycleManager().registerEventHandler(LifecycleEvents.COMMANDS, event -> {
             commands.register(event.registrar());
             social.register(event.registrar());
+            news.register(event.registrar());
             event.registrar().register(admin.seasonsCommand(), "Past seasons and who won them");
             if (purgatoryCommands != null) purgatoryCommands.register(event.registrar());
         });
@@ -150,6 +154,7 @@ public final class LifestealPlugin extends JavaPlugin {
     private void applyStoreSwitches() {
         PluginSettings s = settings;
         hearts.setFeatures(s.extras().shieldsEnabled(), s.extras().shieldExpiry(), s.social().pactsEnabled(), s.extras().altDetection());
+        hearts.setStreaks(s.streaks());
     }
 
     private void logWarnings(List<String> warnings) {
@@ -180,6 +185,7 @@ public final class LifestealPlugin extends JavaPlugin {
         if (bloodMoon != null) bloodMoon.shutdown();
         if (airdrops != null) airdrops.shutdown();
         if (hearts == null) return;
+        if (news != null) news.shutdown();
         try {
             hearts.close();
         } catch (Exception e) {

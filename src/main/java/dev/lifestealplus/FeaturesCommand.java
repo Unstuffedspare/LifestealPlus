@@ -31,6 +31,7 @@ final class FeaturesCommand {
         features.put("vengeance", !s.rules().vengeanceWindow().isZero());
         features.put("vengeance.tracker", s.extras().vengeanceTracker());
         features.put("bounties", s.bountiesEnabled());
+        features.put("streaks", s.streaks().enabled());
         features.put("newbie-shield", s.extras().shieldsEnabled());
         features.put("combat-log", !s.combat().tag().isZero());
         features.put("last-stand", s.lastStandHearts() > 0);
@@ -49,6 +50,7 @@ final class FeaturesCommand {
         features.put("airdrops", !s.events().airdrops().every().isZero());
         features.put("alt-detection", s.extras().altDetection());
         features.put("tab-list", s.extras().tabList());
+        features.put("recap", s.recap().enabled());
         features.put("seasons.public-history", s.extras().publicSeasons());
         features.put("lifestealz-import.convert-items", s.extras().convertLifestealZItems());
 

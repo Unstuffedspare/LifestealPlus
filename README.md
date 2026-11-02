@@ -12,6 +12,7 @@ Everything is switchable and every message is editable. A typo in the config nev
 | Repeat-kill protection | Killing the same player again soon after moves no hearts. Stops farming and spawn-camping. | `repeat-kills` |
 | Vengeance | Get killed, and you can take your heart back (plus a bonus) by killing your killer within the time limit. An optional tracker points the way. | `vengeance` |
 | Bounties | Stake your own hearts on someone's head. Whoever kills them collects. | `bounties` |
+| Kill streaks | Kills in a row are announced, and ending a long streak takes a bonus heart from the streaker. | `streaks` |
 | Newbie shield | New players can't be hurt by others, or lose hearts, for their first few hours of playtime (and no more than a few days after joining). | `newbie-shield` |
 | Combat logging | Logging out mid-fight leaves your body behind to be killed. | `combat-log` |
 | Last Stand | Strength and Speed when you're down to your last heart. | `last-stand` |
@@ -27,6 +28,7 @@ Everything is switchable and every message is editable. A typo in the config nev
 | Airdrops | Heart crates land at announced coordinates. | `airdrops` |
 | Finale | An admin-started season ending: the border closes, last one standing wins. | `finale` |
 | Alt detection | Flags kills between accounts that log in from the same address (stored only as a scrambled hash). | `alt-detection` |
+| While you were away | Players coming back get a short summary of what they missed; `/news` shows the latest. | `recap` |
 | Tab list | Hearts (and pacts) next to names in the tab list. | `tab-list` |
 | Seasons | Archive a season's standings and start fresh; past seasons stay viewable. | `seasons` |
 
@@ -106,6 +108,8 @@ Every message players see is in `plugins/LifestealPlus/messages.yml`.
 | `/leaderboard [season]` | Most hearts this season, or a past season's final standings | `lifestealplus.leaderboard` |
 | `/seasons` | Past seasons and who won them | `lifestealplus.leaderboard` |
 | `/shield` | How long your newbie shield lasts | `lifestealplus.shield` |
+| `/streak [player]` | Kills in a row right now, and the best this season | `lifestealplus.streak` |
+| `/news` | The latest eliminations, comebacks, streaks, bounties and events | `lifestealplus.news` |
 | `/vengeance` | Who you can take vengeance on, and who can on you | `lifestealplus.vengeance` |
 | `/bounty [list]`, `/bounty check <player>`, `/bounty place <player> <hearts>` | See and place bounties | `lifestealplus.bounty` |
 | `/withdraw [hearts]` | Turn your hearts into Heart items | `lifestealplus.withdraw` |

@@ -90,6 +90,50 @@ public final class HeartService implements AutoCloseable {
         });
     }
 
+    public CompletableFuture<Void> setStreaks(StreakRules streaks) {
+        return submit(() -> {
+            store.setStreaks(streaks);
+            return null;
+        });
+    }
+
+    public CompletableFuture<Void> endStreak(UUID player) {
+        return submit(() -> {
+            store.endStreak(player);
+            return null;
+        });
+    }
+
+    public CompletableFuture<Optional<PlayerStreak>> streak(UUID player) {
+        return submit(() -> store.streak(player));
+    }
+
+    public CompletableFuture<Void> addNews(String kind, String player, String other, int amount) {
+        return submit(() -> {
+            store.addNews(kind, player, other, amount);
+            return null;
+        });
+    }
+
+    public CompletableFuture<List<NewsItem>> latestNews(int limit) {
+        return submit(() -> store.latestNews(limit));
+    }
+
+    public CompletableFuture<Void> markLeft(UUID player) {
+        return submit(() -> {
+            store.markLeft(player);
+            return null;
+        });
+    }
+
+    public CompletableFuture<Optional<Recap>> recap(UUID player, Duration minAway, int limit) {
+        return submit(() -> store.recap(player, minAway, limit));
+    }
+
+    public CompletableFuture<Integer> pruneNews(Duration keep) {
+        return submit(() -> store.pruneNews(keep));
+    }
+
     public CompletableFuture<List<VengeanceMark>> liveMarks() {
         return submit(store::liveMarks);
     }

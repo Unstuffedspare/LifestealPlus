@@ -4,6 +4,7 @@ import dev.lifestealplus.EventSettings;
 import dev.lifestealplus.LifestealPlugin;
 import dev.lifestealplus.Msg;
 import dev.lifestealplus.core.HeartService;
+import dev.lifestealplus.core.NewsItem;
 import dev.lifestealplus.items.HeartItems;
 import java.time.Duration;
 import java.time.Instant;
@@ -131,6 +132,7 @@ public final class BloodMoon implements Listener {
             p.playSound(p, Sound.ENTITY_WITHER_AMBIENT, 0.7f, 0.5f);
         }
         Msg.broadcast("blood-moon.rises", Msg.t("time", Msg.duration(lasting)), Msg.t("multiplier", multiplier));
+        hearts.addNews(NewsItem.BLOOD_MOON, null, null, multiplier);
         return true;
     }
 

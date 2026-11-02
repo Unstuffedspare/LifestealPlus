@@ -4,6 +4,7 @@ import dev.lifestealplus.EventSettings;
 import dev.lifestealplus.LifestealPlugin;
 import dev.lifestealplus.Msg;
 import dev.lifestealplus.core.HeartService;
+import dev.lifestealplus.core.NewsItem;
 import dev.lifestealplus.items.HeartItems;
 import java.time.Duration;
 import java.time.Instant;
@@ -169,6 +170,7 @@ public final class Airdrops implements Listener {
         if (opened) return;
         opened = true;
         broadcast("airdrops.opened", Msg.t("player", event.getPlayer().getName()));
+        hearts.addNews(NewsItem.AIRDROP, event.getPlayer().getName(), null, 0);
     }
 
     /** Once it's been emptied it has done its job. */

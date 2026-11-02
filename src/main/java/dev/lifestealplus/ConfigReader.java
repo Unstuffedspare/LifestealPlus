@@ -65,6 +65,11 @@ final class ConfigReader {
         return value;
     }
 
+    /** Like {@link #wholes(String)}, with a fallback for when the setting isn't there at all. */
+    List<Integer> wholes(String key, List<Integer> fallback) {
+        return config.isSet(key) ? wholes(key) : fallback;
+    }
+
     /** A list of whole numbers; anything in it that isn't one is skipped with a warning. */
     List<Integer> wholes(String key) {
         List<Integer> values = new ArrayList<>();

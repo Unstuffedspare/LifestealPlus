@@ -57,6 +57,17 @@ bounties:
   # Announce new bounties without naming who placed them (admins can still check the ledger).
   anonymous: true
 
+streaks:
+  # Kills that take a heart, in a row, without dying. Long streaks are announced, and
+  # whoever ends one takes extra hearts from the player on the streak. /streak shows yours.
+  enabled: true
+  # Streak lengths announced to everyone.
+  announce-at: [3, 5, 10]
+  # Ending a streak at least this long takes bonus hearts from the streaker, on top of
+  # the normal heart. 0 = no bonus.
+  shutdown-at: 5
+  shutdown-bonus-hearts: 1
+
 newbie-shield:
   # First-time players can't be hurt by other players, and can't lose or gain hearts,
   # for this many hours of playtime. Attacking anyone ends it early.
@@ -187,6 +198,17 @@ alt-detection:
 tab-list:
   # Show hearts (and pacts) next to names in the tab list. The look is set in messages.yml.
   enabled: true
+
+recap:
+  # Players coming back after a while get a short "while you were away" summary:
+  # eliminations, comebacks, streaks, bounties and events. /news shows the latest.
+  enabled: true
+  # Only for players who've been away at least this long.
+  min-away-hours: 1
+  # Lines in the summary; /news has the rest.
+  lines: 5
+  # How long news is kept.
+  keep-days: 14
 
 seasons:
   # Let everyone see past seasons with /seasons and /leaderboard <season>.

@@ -25,7 +25,7 @@ import org.sqlite.SQLiteDataSource;
  */
 public final class HeartStore implements AutoCloseable {
 
-    private static final int SCHEMA_VERSION = 9;
+    private static final int SCHEMA_VERSION = 10;
 
     private final Connection conn;
     private final Clock clock;
@@ -267,6 +267,27 @@ public final class HeartStore implements AutoCloseable {
                 return null;
             });
         }
+        if (version < 10) {
+            inTransaction(() -> {
+                try (Statement st = conn.createStatement()) {
+                    st.execute("ALTER TABLE players ADD COLUMN streak INTEGER NOT NULL DEFAULT 0");
+                    st.execute("ALTER TABLE players ADD COLUMN best_streak INTEGER NOT NULL DEFAULT 0");
+                    st.execute("ALTER TABLE players ADD COLUMN last_left INTEGER");
+                    st.execute("""
+                            CREATE TABLE news (
+                                id     INTEGER PRIMARY KEY AUTOINCREMENT,
+                                at     INTEGER NOT NULL,
+                                kind   TEXT    NOT NULL,
+                                player TEXT,
+                                other  TEXT,
+                                amount INTEGER NOT NULL DEFAULT 0
+                            )""");
+                    st.execute("CREATE INDEX news_at ON news (at)");
+                    st.execute("PRAGMA user_version = 10");
+                }
+                return null;
+            });
+        }
     }
 
     /**
@@ -280,6 +301,11 @@ public final class HeartStore implements AutoCloseable {
     private Duration shieldExpiry = Duration.ZERO;
     private boolean pactsOn = true;
     private boolean altFlagsOn = true;
+    private StreakRules streaks = StreakRules.OFF;
+
+    public void setStreaks(StreakRules streaks) {
+        this.streaks = streaks;
+    }
 
     /** @param shieldExpiry a shield ends this long after it began, however little was played; zero for no limit */
     public void setFeatures(boolean shields, Duration shieldExpiry, boolean pacts, boolean altFlags) {
@@ -931,6 +957,9 @@ public final class HeartStore implements AutoCloseable {
             long now = clock.millis();
             String victimName = require(victim).name();
             String killerName = require(killer).name();
+            int victimStreak = streaks.enabled() ? streakOf(victim) : 0;
+            int ended = victimStreak >= streaks.noteworthy() ? victimStreak : 0;
+            if (ended > 0) news(now, NewsItem.STREAK_ENDED, victimName, killerName, ended);
             boolean linked = altFlagsOn && areLinked(victim, killer);
             if (linked) {
                 try (PreparedStatement ps = conn.prepareStatement("""
@@ -955,7 +984,7 @@ public final class HeartStore implements AutoCloseable {
                         HeartRequest.add(killer, rules.heartsPerKill(), HeartCause.PVP_KILL, "server")
                                 .withOther(victim, victimName).withNote(NEWBIE_SHIELD),
                         rules, eventId, now, true);
-                return new KillOutcome(loss, gain, false, false, false, null, true, linked);
+                return new KillOutcome(loss, gain, false, false, false, null, true, linked, streakOf(killer), ended, false);
             }
 
             if (paidKillSince(victim, killer, now - rules.repeatKillWindow().toMillis(), rules)) {
@@ -968,12 +997,13 @@ public final class HeartStore implements AutoCloseable {
                                 .withOther(victim, victimName).withNote(REPEAT_KILL),
                         rules, eventId, now, true);
                 BountyClaim bounty = claimBounties(victim, victimName, killer, rules, eventId, now);
-                return new KillOutcome(loss, gain, true, false, false, bounty, false, linked);
+                return new KillOutcome(loss, gain, true, false, false, bounty, false, linked, streakOf(killer), ended, false);
             }
 
             boolean vengeance = consumeMark(victim, killer, now);
-            String note = vengeance ? VENGEANCE : null;
-            int amount = rules.heartsPerKill() + (vengeance ? rules.vengeanceBonus() : 0);
+            boolean shutdown = streaks.shutdownApplies(victimStreak);
+            String note = vengeance && shutdown ? VENGEANCE + ", " + SHUTDOWN : vengeance ? VENGEANCE : shutdown ? SHUTDOWN : null;
+            int amount = rules.heartsPerKill() + (vengeance ? rules.vengeanceBonus() : 0) + (shutdown ? streaks.shutdownBonus() : 0);
             HeartChange loss = applyOne(
                     HeartRequest.add(victim, -amount, HeartCause.PVP_DEATH, "server")
                             .withOther(killer, killerName).withNote(note),
@@ -987,12 +1017,15 @@ public final class HeartStore implements AutoCloseable {
             boolean marked = !vengeance && taken > 0 && !rules.vengeanceWindow().isZero();
             if (marked) mark(killer, victim, now + rules.vengeanceWindow().toMillis());
             BountyClaim bounty = claimBounties(victim, victimName, killer, rules, eventId, now);
-            return new KillOutcome(loss, gain, false, vengeance, marked, bounty, false, linked);
+            int killerStreak = streaks.enabled() && taken > 0 ? extendStreak(killer) : streakOf(killer);
+            if (taken > 0 && streaks.announceAt().contains(killerStreak)) news(now, NewsItem.STREAK, killerName, null, killerStreak);
+            return new KillOutcome(loss, gain, false, vengeance, marked, bounty, false, linked, killerStreak, ended, shutdown);
         });
     }
 
     private static final String REPEAT_KILL = "repeat kill";
     private static final String VENGEANCE = "vengeance";
+    private static final String SHUTDOWN = "streak shutdown";
     private static final String NEWBIE_SHIELD = "newbie shield";
 
     /** Heart changes a newbie shield stops: deaths, and anything won from other players. Admin changes still apply. */
@@ -1087,7 +1120,9 @@ public final class HeartStore implements AutoCloseable {
                 ps.setLong(4, now);
                 ps.executeUpdate();
             }
-            return new BountyPlacement(paid, bountyOn(target));
+            int total = bountyOn(target);
+            news(now, NewsItem.BOUNTY, on.name(), null, total);
+            return new BountyPlacement(paid, total);
         });
     }
 
@@ -1277,9 +1312,137 @@ public final class HeartStore implements AutoCloseable {
         HeartChange change = new HeartChange(ledgerId, eventId, request.player(), current.name(), request.cause(), before, after,
                 request.otherName());
         if (!blocked) sharePact(request, change, rules, eventId, now);
+        HeartCause cause = request.cause();
+        if (cause == HeartCause.DEATH || cause == HeartCause.PVP_DEATH || change.eliminatedNow()) endStreak(request.player());
+        if (cause != HeartCause.IMPORT && change.eliminatedNow()) {
+            boolean byPlayer = cause == HeartCause.PVP_DEATH && request.otherName() != null;
+            news(now, byPlayer ? NewsItem.ELIMINATED_BY : NewsItem.ELIMINATED, current.name(), byPlayer ? request.otherName() : null, 0);
+        }
+        // A first join goes from 0 to the starting hearts, which isn't a comeback.
+        if (cause != HeartCause.IMPORT && cause != HeartCause.FIRST_JOIN && change.revivedNow()) {
+            news(now, NewsItem.REVIVED, current.name(), null, after);
+        }
         if (change.eliminatedNow()) dissolvePact(request.player());
         if (change.revivedNow()) refundPledges(request.player(), current.name(), rules, eventId, now);
         return change;
+    }
+
+    private int streakOf(UUID player) throws SQLException {
+        try (PreparedStatement ps = conn.prepareStatement("SELECT streak FROM players WHERE uuid = ?")) {
+            ps.setString(1, player.toString());
+            try (ResultSet rs = ps.executeQuery()) {
+                return rs.next() ? rs.getInt(1) : 0;
+            }
+        }
+    }
+
+    /** One more kill in a row; returns the new length. */
+    private int extendStreak(UUID player) throws SQLException {
+        try (PreparedStatement ps = conn.prepareStatement(
+                "UPDATE players SET streak = streak + 1, best_streak = MAX(best_streak, streak + 1) WHERE uuid = ?")) {
+            ps.setString(1, player.toString());
+            ps.executeUpdate();
+        }
+        return streakOf(player);
+    }
+
+    /** A death the rules didn't charge for (no hearts lost) still ends the streak. */
+    public void endStreak(UUID player) throws SQLException {
+        try (PreparedStatement ps = conn.prepareStatement("UPDATE players SET streak = 0 WHERE uuid = ? AND streak > 0")) {
+            ps.setString(1, player.toString());
+            ps.executeUpdate();
+        }
+    }
+
+    public Optional<PlayerStreak> streak(UUID player) throws SQLException {
+        try (PreparedStatement ps = conn.prepareStatement("SELECT name, streak, best_streak FROM players WHERE uuid = ?")) {
+            ps.setString(1, player.toString());
+            try (ResultSet rs = ps.executeQuery()) {
+                return rs.next() ? Optional.of(new PlayerStreak(rs.getString(1), rs.getInt(2), rs.getInt(3))) : Optional.empty();
+            }
+        }
+    }
+
+    private void news(long at, String kind, String player, String other, int amount) throws SQLException {
+        try (PreparedStatement ps = conn.prepareStatement(
+                "INSERT INTO news (at, kind, player, other, amount) VALUES (?, ?, ?, ?, ?)")) {
+            ps.setLong(1, at);
+            ps.setString(2, kind);
+            setNullable(ps, 3, player);
+            setNullable(ps, 4, other);
+            ps.setInt(5, amount);
+            ps.executeUpdate();
+        }
+    }
+
+    /** News from outside the heart rules: Blood Moons, airdrops, the finale. */
+    public void addNews(String kind, String player, String other, int amount) throws SQLException {
+        news(clock.millis(), kind, player, other, amount);
+    }
+
+    /** The newest news first. */
+    public List<NewsItem> latestNews(int limit) throws SQLException {
+        return newsSince(0, limit);
+    }
+
+    private List<NewsItem> newsSince(long since, int limit) throws SQLException {
+        try (PreparedStatement ps = conn.prepareStatement(
+                "SELECT at, kind, player, other, amount FROM news WHERE at > ? ORDER BY at DESC, id DESC LIMIT ?")) {
+            ps.setLong(1, since);
+            ps.setInt(2, limit);
+            List<NewsItem> items = new ArrayList<>();
+            try (ResultSet rs = ps.executeQuery()) {
+                while (rs.next()) {
+                    items.add(new NewsItem(Instant.ofEpochMilli(rs.getLong(1)), rs.getString(2), rs.getString(3),
+                            rs.getString(4), rs.getInt(5)));
+                }
+            }
+            return items;
+        }
+    }
+
+    public void markLeft(UUID player) throws SQLException {
+        try (PreparedStatement ps = conn.prepareStatement("UPDATE players SET last_left = ? WHERE uuid = ?")) {
+            ps.setLong(1, clock.millis());
+            ps.setString(2, player.toString());
+            ps.executeUpdate();
+        }
+    }
+
+    /**
+     * What happened since the player last left, if they were away at least {@code minAway} and
+     * anything happened; empty otherwise (including for players who've never left).
+     */
+    public Optional<Recap> recap(UUID player, Duration minAway, int limit) throws SQLException {
+        long left;
+        try (PreparedStatement ps = conn.prepareStatement("SELECT last_left FROM players WHERE uuid = ?")) {
+            ps.setString(1, player.toString());
+            try (ResultSet rs = ps.executeQuery()) {
+                if (!rs.next()) return Optional.empty();
+                left = rs.getLong(1);
+                if (rs.wasNull()) return Optional.empty();
+            }
+        }
+        Duration away = Duration.ofMillis(clock.millis() - left);
+        if (away.compareTo(minAway) < 0) return Optional.empty();
+        int total;
+        try (PreparedStatement ps = conn.prepareStatement("SELECT COUNT(*) FROM news WHERE at > ?")) {
+            ps.setLong(1, left);
+            try (ResultSet rs = ps.executeQuery()) {
+                rs.next();
+                total = rs.getInt(1);
+            }
+        }
+        if (total == 0) return Optional.empty();
+        return Optional.of(new Recap(away, newsSince(left, limit), total));
+    }
+
+    /** Forgets news older than {@code keep}; returns how much went. */
+    public int pruneNews(Duration keep) throws SQLException {
+        try (PreparedStatement ps = conn.prepareStatement("DELETE FROM news WHERE at < ?")) {
+            ps.setLong(1, clock.millis() - keep.toMillis());
+            return ps.executeUpdate();
+        }
     }
 
     public PurgatoryProgress progress(UUID player) throws SQLException {

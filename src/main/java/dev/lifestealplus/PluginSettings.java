@@ -1,6 +1,7 @@
 package dev.lifestealplus;
 
 import dev.lifestealplus.core.HeartRules;
+import dev.lifestealplus.core.StreakRules;
 import java.time.Duration;
 import java.util.List;
 import org.bukkit.configuration.file.FileConfiguration;
@@ -17,7 +18,7 @@ import org.bukkit.configuration.file.FileConfiguration;
 public record PluginSettings(HeartRules rules, int naturalDeathLoss, String databaseFile, PurgatorySettings purgatory,
                              boolean bountiesEnabled, boolean bountyAnonymous, int lastStandHearts,
                              MostWantedSettings mostWanted, CombatSettings combat, EventSettings events,
-                             SocialSettings social, Extras extras) {
+                             SocialSettings social, Extras extras, StreakRules streaks, RecapSettings recap) {
 
     /**
      * @param enabled read once at startup: turning Purgatory on or off needs a restart
@@ -52,6 +53,16 @@ public record PluginSettings(HeartRules rules, int naturalDeathLoss, String data
     public record Extras(boolean vengeanceTracker, int trackerRoundTo, boolean tabList, boolean pactsInTab,
                          boolean publicSeasons, boolean altDetection, boolean shieldsEnabled, Duration shieldExpiry,
                          boolean convertLifestealZItems) {
+    }
+
+    /**
+     * The "while you were away" summary and /news.
+     *
+     * @param minAway only players away at least this long get the summary
+     * @param lines how many items the summary shows; /news has the rest
+     * @param keep how long news is kept
+     */
+    public record RecapSettings(boolean enabled, Duration minAway, int lines, Duration keep) {
     }
 
     /** The settings, plus anything in the file that had to be replaced by a default. */
@@ -115,9 +126,19 @@ public record PluginSettings(HeartRules rules, int naturalDeathLoss, String data
                 hours(24 * in.number("newbie-shield.expires-after-days", 3, 0, 365)),
                 in.flag("lifestealz-import.convert-items", true));
 
+        StreakRules streaks = in.flag("streaks.enabled", true)
+                ? new StreakRules(true, in.wholes("streaks.announce-at", List.of(3, 5, 10)),
+                        in.whole("streaks.shutdown-at", 5, 0, 1000), in.whole("streaks.shutdown-bonus-hearts", 1, 0, 1000))
+                : StreakRules.OFF;
+        RecapSettings recap = new RecapSettings(
+                in.flag("recap.enabled", true),
+                hours(in.number("recap.min-away-hours", 1, 0, 24 * 30)),
+                in.whole("recap.lines", 5, 1, 20),
+                hours(24 * in.number("recap.keep-days", 14, 1, 365)));
+
         PluginSettings settings = new PluginSettings(rules, naturalDeathLoss, in.text("database.file", "lifesteal.db"), purgatory,
                 in.flag("bounties.enabled", true), in.flag("bounties.anonymous", true), lastStand, mostWanted, combat,
-                EventSettings.from(in), SocialSettings.from(in, starting, revive), extras);
+                EventSettings.from(in), SocialSettings.from(in, starting, revive), extras, streaks, recap);
         return new Loaded(settings, List.copyOf(in.warnings()));
     }
 

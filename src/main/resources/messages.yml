@@ -516,6 +516,52 @@ settings:
   current: "<gold><setting></gold> <gray>is</gray> <white><value></white>"
   console: "<gray>The settings menu needs a player. From here, use /lifesteal config <setting> <value>."
 
+# ---- Kill streaks ----------------------------------------------------------
+streak:
+  # <player>, <n>
+  milestone: "<gold>🔥 <player> is on a <n>-kill streak!"
+  # <killer>, <victim>, <n>
+  ended: "<yellow><killer> ended <victim>'s <n>-kill streak."
+  # <killer>, <victim>, <n>, <bonus>
+  shutdown: "<gold><killer> ended <victim>'s <n>-kill streak and took <bonus> bonus heart(s) for it!"
+  # /streak. <player>, <current>, <best>
+  status: "<gold>🔥 <player></gold> <gray>has</gray> <white><current></white> <gray>kill(s) in a row right now. Best this season:</gray> <white><best></white>"
+
+# ---- The "while you were away" summary -------------------------------------
+recap:
+  # <time>
+  header: "<gold>While you were away (<time>):"
+  # <text>
+  line: "<dark_gray>- </dark_gray><text>"
+  # <n>
+  more: "<gray>...and <n> more. <white>/news</white> shows the latest."
+
+# ---- /news, and the items in the summary -----------------------------------
+news:
+  header: "<gold>Latest news:"
+  # <ago>, <text>
+  line: "<dark_gray><ago> ago</dark_gray> <text>"
+  empty: "<gray>Nothing has happened yet."
+  # Each news.* message is one item in /news and the recap. <player>
+  eliminated: "<red><player></red> <gray>was eliminated."
+  # <player>, <other> (the killer)
+  eliminated-by: "<red><player></red> <gray>was eliminated by</gray> <white><other></white><gray>."
+  # <player>, <n>
+  revived: "<green><player></green> <gray>came back with <n> hearts."
+  # <player>, <n>
+  streak: "<gold><player></gold> <gray>reached a <n>-kill streak."
+  # <player> (on the streak), <other>, <n>
+  streak-ended: "<white><other></white> <gray>ended</gray> <gold><player></gold><gray>'s <n>-kill streak."
+  # <player>, <n>
+  bounty: "<gray>A bounty went up on</gray> <white><player></white> <gray>(<n> hearts in total)."
+  # <n> (the kill multiplier)
+  blood-moon: "<dark_red>A Blood Moon rose."
+  # <player>
+  airdrop: "<white><player></white> <gray>looted an airdrop."
+  finale: "<gold>The season finale began."
+  # <player>
+  finale-winner: "<gold><player> won the season finale!"
+
 # ---- Importing from LifeStealZ (admins) ------------------------------------
 import:
   # /lifesteal import lifestealz. <file>

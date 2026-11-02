@@ -3,6 +3,7 @@ package dev.lifestealplus.events;
 import dev.lifestealplus.LifestealPlugin;
 import dev.lifestealplus.Msg;
 import dev.lifestealplus.core.HeartService;
+import dev.lifestealplus.core.NewsItem;
 import dev.lifestealplus.event.PlayerEliminatedEvent;
 import java.time.Duration;
 import java.util.logging.Level;
@@ -70,6 +71,7 @@ public final class Finale implements Listener {
             p.playSound(p, Sound.ENTITY_ENDER_DRAGON_GROWL, 0.8f, 0.8f);
         }
         Msg.broadcast("finale.started", Msg.t("time", Msg.duration(over)), Msg.t("size", (int) finalSize));
+        hearts.addNews(NewsItem.FINALE, null, null, 0);
         evacuateOtherDimensions();
         return true;
     }
@@ -135,6 +137,7 @@ public final class Finale implements Listener {
                 p.playSound(p, Sound.UI_TOAST_CHALLENGE_COMPLETE, 1f, 1f);
             }
             Msg.broadcast("finale.winner", Msg.t("player", name));
+            hearts.addNews(NewsItem.FINALE_WINNER, name, null, 0);
         }));
     }
 

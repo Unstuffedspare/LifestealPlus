@@ -58,6 +58,17 @@ class MessagesTest {
         assertEquals(List.of(), missing);
     }
 
+    /** News messages are looked up as "news." + kind, which the scan above can't see. */
+    @Test
+    void everyKindOfNewsHasAMessage() throws IllegalAccessException {
+        YamlConfiguration messages = shipped();
+        for (var field : dev.lifestealplus.core.NewsItem.class.getFields()) {
+            if (field.getType() != String.class) continue;
+            String key = "news." + field.get(null);
+            assertTrue(messages.isString(key), "messages.yml is missing " + key);
+        }
+    }
+
     private static boolean isConfigKey(String key) {
         YamlConfiguration config = YamlConfiguration.loadConfiguration(new InputStreamReader(
                 MessagesTest.class.getResourceAsStream("/config.yml"), StandardCharsets.UTF_8));

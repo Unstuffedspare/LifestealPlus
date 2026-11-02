@@ -46,6 +46,12 @@ permissions:
   lifestealplus.purgatory:
     description: Use /purgatory to see your progress and call or join trials while eliminated.
     default: true
+  lifestealplus.streak:
+    description: See kill streaks with /streak.
+    default: true
+  lifestealplus.news:
+    description: See what's been happening with /news.
+    default: true
   lifestealplus.admin:
     description: Everything under /lifesteal (hearts, ledger, events, finale, seasons, alts, features, reload), and alt-account alerts.
     default: op
