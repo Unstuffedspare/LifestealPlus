@@ -155,3 +155,7 @@ A season reset doesn't touch the world or inventories, so start the new season o
 ```
 
 The plugin jar ends up in `build/libs/`. The build uses Java 25 and downloads it automatically if it's missing.
+
+## Licence
+
+MIT. See [LICENSE](LICENSE).
