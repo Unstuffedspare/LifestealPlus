@@ -47,6 +47,7 @@ public final class CombatTagger implements Listener {
         if (!(event.getEntity() instanceof Player victim)) return;
         Player attacker = attacker(event.getDamager());
         if (attacker == null || attacker.equals(victim)) return;
+        if (!plugin.settings().lifestealIn(victim.getWorld())) return;
         if (!fighting(attacker) || !fighting(victim)) return;
         long tagMillis = plugin.settings().combat().tag().toMillis();
         if (tagMillis <= 0) return;

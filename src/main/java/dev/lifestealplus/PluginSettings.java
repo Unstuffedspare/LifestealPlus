@@ -4,6 +4,10 @@ import dev.lifestealplus.core.HeartRules;
 import dev.lifestealplus.core.StreakRules;
 import java.time.Duration;
 import java.util.List;
+import java.util.Locale;
+import java.util.Set;
+import java.util.stream.Collectors;
+import org.bukkit.World;
 import org.bukkit.configuration.file.FileConfiguration;
 
 /**
@@ -14,11 +18,18 @@ import org.bukkit.configuration.file.FileConfiguration;
  * @param bountiesEnabled whether new bounties can be placed (existing ones still pay out)
  * @param bountyAnonymous announce new bounties without naming who placed them
  * @param lastStandHearts players at this many hearts or fewer (but not eliminated) get Last Stand; 0 means off
+ * @param excludedWorlds lower-cased names of worlds where hearts don't move
  */
 public record PluginSettings(HeartRules rules, int naturalDeathLoss, String databaseFile, PurgatorySettings purgatory,
                              boolean bountiesEnabled, boolean bountyAnonymous, int lastStandHearts,
                              MostWantedSettings mostWanted, CombatSettings combat, EventSettings events,
-                             SocialSettings social, Extras extras, StreakRules streaks, RecapSettings recap) {
+                             SocialSettings social, Extras extras, StreakRules streaks, RecapSettings recap,
+                             Set<String> excludedWorlds) {
+
+    /** Whether dying and killing in this world move hearts (false for the worlds listed in worlds.excluded). */
+    public boolean lifestealIn(World world) {
+        return !excludedWorlds.contains(world.getName().toLowerCase(Locale.ROOT));
+    }
 
     /**
      * @param enabled read once at startup: turning Purgatory on or off needs a restart
@@ -138,7 +149,8 @@ public record PluginSettings(HeartRules rules, int naturalDeathLoss, String data
 
         PluginSettings settings = new PluginSettings(rules, naturalDeathLoss, in.text("database.file", "lifesteal.db"), purgatory,
                 in.flag("bounties.enabled", true), in.flag("bounties.anonymous", true), lastStand, mostWanted, combat,
-                EventSettings.from(in), SocialSettings.from(in, starting, revive), extras, streaks, recap);
+                EventSettings.from(in), SocialSettings.from(in, starting, revive), extras, streaks, recap,
+                in.texts("worlds.excluded").stream().map(name -> name.toLowerCase(Locale.ROOT)).collect(Collectors.toUnmodifiableSet()));
         return new Loaded(settings, List.copyOf(in.warnings()));
     }
 

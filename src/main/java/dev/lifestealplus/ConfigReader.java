@@ -85,6 +85,17 @@ final class ConfigReader {
         return values;
     }
 
+    /** A list of names, like world names; an empty list if it isn't set. */
+    List<String> texts(String key) {
+        if (!config.isSet(key)) return List.of();
+        if (!config.isList(key)) {
+            warnings.add(key + " should be a list like [creative, events]; ignoring it.");
+            return List.of();
+        }
+        return config.getList(key).stream().filter(item -> item != null && !String.valueOf(item).isBlank())
+                .map(item -> String.valueOf(item).strip()).toList();
+    }
+
     private int inRange(String key, int value, int fallback, int min, int max) {
         if (value >= min && value <= max) return value;
         warnings.add(key + " is " + value + ", but it has to be between " + min + " and "

@@ -31,6 +31,12 @@ hearts:
   # Hearts lost dying to anything other than a player (mobs, falling, lava). 0 = none.
   natural-death-loss: 1
 
+worlds:
+  # Worlds where nothing lifesteal happens: dying costs no hearts, kills take none, and
+  # combat tags, newbie shields and Most Wanted leave players alone. Good for a creative,
+  # event or minigame world. Use the world's folder name, e.g. [creative, events].
+  excluded: []
+
 repeat-kills:
   # Killing the same player again within the cooldown moves no hearts: the killer
   # gains nothing and the victim keeps theirs. Stops friends farming each other and

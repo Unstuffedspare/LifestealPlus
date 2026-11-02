@@ -41,7 +41,7 @@ final class MostWanted {
         List<Player> leaders = new ArrayList<>();
         for (Player player : plugin.getServer().getOnlinePlayers()) {
             Integer hearts = tracker.cachedHearts(player.getUniqueId());
-            if (hearts == null || hearts <= 0) continue;
+            if (hearts == null || hearts <= 0 || !plugin.settings().lifestealIn(player.getWorld())) continue;
             if (hearts > best) {
                 best = hearts;
                 leaders.clear();

@@ -110,6 +110,8 @@ public final class NewbieShield implements Listener {
         if (!(event.getEntity() instanceof Player victim)) return;
         Player attacker = attacker(event.getDamager());
         if (attacker == null || attacker.equals(victim)) return;
+        // Nothing is at stake in a world without lifesteal, so the shield neither blocks nor breaks there.
+        if (!plugin.settings().lifestealIn(victim.getWorld())) return;
 
         if (isShielded(victim)) {
             event.setCancelled(true);
@@ -139,6 +141,7 @@ public final class NewbieShield implements Listener {
                 left.remove(id);
                 continue;
             }
+            if (!plugin.settings().lifestealIn(player.getWorld())) continue;
             hearts.spendShield(id, TICK).whenComplete((remaining, error) -> {
                 if (error != null) {
                     plugin.getLogger().log(Level.SEVERE, "Couldn't update the newbie shield for " + player.getName(), error);

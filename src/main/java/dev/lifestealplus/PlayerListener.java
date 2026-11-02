@@ -81,6 +81,7 @@ final class PlayerListener implements Listener {
     @EventHandler(priority = EventPriority.MONITOR, ignoreCancelled = true)
     void onDeath(PlayerDeathEvent event) {
         Player victim = event.getPlayer();
+        if (!plugin.settings().lifestealIn(victim.getWorld())) return;
         Integer current = tracker.cachedHearts(victim.getUniqueId());
         if (current != null && current <= 0) return;
 

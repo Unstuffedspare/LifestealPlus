@@ -71,6 +71,16 @@ LifeStealZ's heart items turn into this plugin's Hearts when a player joins or o
 
 Each setting shows the explanation from `config.yml`. Changes are saved to `config.yml` and take effect straight away. A value the plugin can't use is refused, with the reason, so nothing breaks.
 
+**Presets.** The star button on the menu's first page offers three ready-made mixes. Each one shows exactly what it would change; click it twice to apply.
+
+| Preset | What it's like |
+| --- | --- |
+| Casual | Only other players cost you hearts, newcomers are protected for longer, and coming back from elimination is easier. |
+| Standard | The defaults the plugin ships with. |
+| Hardcore | Fewer hearts, short protection, longer combat tags, and a hard road back from elimination. |
+
+A preset only touches the settings presets are about (heart amounts, protection, the way back from elimination and so on), and always gives the same result, whatever was set before. Anything else you've changed stays as it is. From the console: `/lifesteal preset` lists them, `/lifesteal preset hardcore` shows what it would change, and `/lifesteal preset hardcore confirm` applies it.
+
 From the console (or chat), `/lifesteal config <setting> <value>` does the same, for example `/lifesteal config newbie-shield.enabled off`. Press Tab to pick the setting's name, and leave the value out to see what it's set to now.
 
 **Or edit the file.** All settings are in `plugins/LifestealPlus/config.yml`, and every one is explained in the file itself.
@@ -84,6 +94,8 @@ From the console (or chat), `/lifesteal config <setting> <value>` does the same,
 Some things worth deciding before a season starts:
 
 - `hearts.starting`, `hearts.max` and `hearts.per-kill` set the basic economy.
+- `hearts.natural-death-loss` (1): hearts lost dying to anything other than a player. Set it to 0 if only PvP should cost hearts.
+- `worlds.excluded`, e.g. `[creative, events]`: worlds where nothing lifesteal happens. Dying there costs no hearts, kills take none, and combat tags, newbie shields and Most Wanted leave players alone. Use it for a creative, event or minigame world.
 - `newbie-shield.hours`: on a fresh season every player is new, so everyone starts shielded for these hours. That works as an opening grace period. Turn it off if you want PvP straight away.
 - `newbie-shield.expires-after-days` (3): the shield also ends this many days after a player first joins, however little they've played, so nobody keeps it forever.
 - `hearts.max-by-week`, e.g. `[15, 20, 25]`, makes the cap rise through the season. Leave it empty for a fixed cap.
@@ -128,6 +140,7 @@ Every player permission is allowed by default. Take one away with your permissio
 |---|---|
 | `settings` | Menu for changing any setting in game |
 | `config <setting> [value]` | See or change one setting (works from the console) |
+| `preset [name] [confirm]` | List the presets, see what one would change, or apply it |
 | `features` | Every feature, on or off |
 | `reload` | Re-read `config.yml` and `messages.yml`, and report any settings that couldn't be used |
 | `give / take / set <player> <hearts>` | Change hearts (works on offline players) |

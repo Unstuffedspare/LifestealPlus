@@ -37,6 +37,7 @@ class SettingsCatalogTest {
         assertFalse(catalog.find("hearts.max").needsRestart());
         assertTrue(catalog.sections().contains("newbie-shield"));
         assertEquals("hearts", catalog.sections().getFirst());
+        assertEquals(Kind.LIST, catalog.find("worlds.excluded").kind());
     }
 
     @Test
@@ -56,6 +57,7 @@ class SettingsCatalogTest {
         assertEquals(1.5, SettingsCatalog.parse(catalog.find("hearts.max"), "1.5"), "the check, not the parse, refuses it");
         assertEquals(List.of(15, 20, 25), SettingsCatalog.parse(catalog.find("hearts.max-by-week"), "[15, 20 25]"));
         assertEquals(List.of(), SettingsCatalog.parse(catalog.find("hearts.max-by-week"), "none"));
+        assertEquals(List.of("creative", "events"), SettingsCatalog.parse(catalog.find("worlds.excluded"), "creative, events"));
         assertThrows(IllegalArgumentException.class, () -> SettingsCatalog.parse(catalog.find("hearts.max"), "twenty"));
         assertThrows(IllegalArgumentException.class, () -> SettingsCatalog.parse(catalog.find("newbie-shield.enabled"), "maybe"));
     }
@@ -79,5 +81,8 @@ class SettingsCatalogTest {
         assertEquals("hearts.max should be a whole number (it's \"1.5\").", SettingsCatalog.problem(config, "hearts.max", 1.5));
         assertTrue(SettingsCatalog.problem(config, "hearts.max", 0).startsWith("hearts.max is 0, but it has to be between 1 and 1000"));
         assertTrue(SettingsCatalog.problem(config, "hearts.max", 5).startsWith("hearts.starting (10) is above hearts.max (5)"));
+        assertNull(SettingsCatalog.problem(config, "worlds.excluded", List.of("creative", "events")));
+        assertEquals("hearts.max-by-week contains \"soon\", which isn't a whole number.",
+                SettingsCatalog.problem(config, "hearts.max-by-week", List.of("soon")));
     }
 }

@@ -1,0 +1,79 @@
+# Presets change a batch of settings at once, from /lifesteal settings or with
+# /lifesteal preset <name>. Every preset covers the same settings: anything one preset
+# lists that another doesn't goes back to its default, so applying a preset always gives
+# the same result whatever was set before. Settings no preset mentions are left alone.
+
+casual:
+  description: "Relaxed. Only other players cost you hearts, newcomers are protected for longer, and coming back from elimination is easier."
+  settings:
+    hearts:
+      natural-death-loss: 0
+      revive: 5
+    repeat-kills:
+      cooldown-hours: 12
+    streaks:
+      shutdown-bonus-hearts: 0
+    newbie-shield:
+      hours: 6
+      expires-after-days: 7
+    last-stand:
+      hearts: 2
+    most-wanted:
+      enabled: false
+    purgatory:
+      fragments-needed: 2
+      trial-cooldown-minutes: 10
+      difficulty: 0.75
+    rifts:
+      cost: 4
+    revival-votes:
+      hearts-needed: 4
+      min-players: 2
+    blood-moon:
+      kill-multiplier: 1
+    heart-items:
+      decay:
+        days: 7
+
+standard:
+  description: "The defaults the plugin ships with. A fair fight with a way back."
+  settings: {}
+
+hardcore:
+  description: "Brutal. Fewer hearts, short protection, longer combat tags, and a hard road back from elimination."
+  settings:
+    hearts:
+      starting: 8
+      max: 15
+      revive: 2
+    repeat-kills:
+      cooldown-hours: 2
+    streaks:
+      shutdown-at: 3
+      shutdown-bonus-hearts: 2
+    newbie-shield:
+      hours: 1
+      expires-after-days: 1
+    combat-log:
+      tag-seconds: 30
+      body-seconds: 60
+    last-stand:
+      enabled: false
+    most-wanted:
+      interval-minutes: 60
+      precision-blocks: 50
+      min-players-online: 2
+    purgatory:
+      fragments-needed: 4
+      trial-cooldown-minutes: 30
+      difficulty: 1.5
+    rifts:
+      cost: 10
+    revival-votes:
+      hearts-needed: 10
+      min-players: 4
+    blood-moon:
+      kill-multiplier: 3
+    heart-items:
+      decay:
+        days: 2

@@ -282,6 +282,7 @@ final class LifestealCommands {
                 .then(features.node())
                 .then(settingsMenu.settingsNode())
                 .then(settingsMenu.configNode())
+                .then(settingsMenu.presetNode())
                 .then(importer.node())
                 .then(admin.altsNode())
                 .then(admin.flagsNode())

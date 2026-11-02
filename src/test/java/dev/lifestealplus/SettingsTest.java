@@ -126,4 +126,13 @@ class SettingsTest {
         assertEquals(List.of(15, 25), loaded.settings().social().capSchedule());
         assertEquals(2, loaded.warnings().size());
     }
+
+    @Test
+    void excludedWorldsAreMatchedWithoutCase() throws Exception {
+        PluginSettings.Loaded loaded = load("worlds:\n  excluded: [Creative, events]\n");
+        assertEquals(List.of(), loaded.warnings());
+        assertEquals(java.util.Set.of("creative", "events"), loaded.settings().excludedWorlds());
+        assertTrue(PluginSettings.load(shipped()).settings().excludedWorlds().isEmpty());
+        assertEquals(1, load("worlds:\n  excluded: creative\n").warnings().size(), "a single name isn't a list");
+    }
 }

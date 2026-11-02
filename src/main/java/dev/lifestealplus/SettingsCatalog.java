@@ -114,17 +114,13 @@ final class SettingsCatalog {
                 }
             }
             case LIST -> {
+                // Numbers if every entry is one ([15, 20, 25]), otherwise names ([creative, events]);
+                // a list wanting the other kind is refused when the change is checked.
                 String inside = text.replace("[", "").replace("]", "").strip();
-                List<Integer> values = new ArrayList<>();
-                if (inside.isEmpty() || inside.equalsIgnoreCase("none")) yield values;
-                for (String part : inside.split("[,\\s]+")) {
-                    try {
-                        values.add(Integer.parseInt(part));
-                    } catch (NumberFormatException e) {
-                        throw new IllegalArgumentException("whole numbers like 15, 20, 25 (or none)");
-                    }
-                }
-                yield values;
+                if (inside.isEmpty() || inside.equalsIgnoreCase("none")) yield new ArrayList<>();
+                List<String> parts = List.of(inside.split("[,\\s]+"));
+                if (!parts.stream().allMatch(part -> part.matches("-?\\d{1,9}"))) yield new ArrayList<Object>(parts);
+                yield new ArrayList<Object>(parts.stream().map(Integer::parseInt).toList());
             }
             case TEXT -> {
                 if (text.isEmpty()) throw new IllegalArgumentException("some text");
@@ -156,13 +152,18 @@ final class SettingsCatalog {
      * with the change made and refuses it if that leaves any new warning.
      */
     static String problem(FileConfiguration config, String key, Object value) {
+        return problem(config, Map.of(key, value));
+    }
+
+    /** Like {@link #problem(FileConfiguration, String, Object)}, with several changes made together. */
+    static String problem(FileConfiguration config, Map<String, Object> changes) {
         YamlConfiguration changed = new YamlConfiguration();
         try {
             changed.loadFromString(config.saveToString());
         } catch (InvalidConfigurationException e) {
             return "config.yml couldn't be read: " + e.getMessage();
         }
-        changed.set(key, value);
+        changes.forEach(changed::set);
         List<String> before = PluginSettings.load(config).warnings();
         // Warnings end with what the plugin would use instead ("; using 20."), which doesn't apply to a refusal.
         return PluginSettings.load(changed).warnings().stream()

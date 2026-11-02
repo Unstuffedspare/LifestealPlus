@@ -515,6 +515,47 @@ settings:
   # /lifesteal config <setting>. <setting>, <value>
   current: "<gold><setting></gold> <gray>is</gray> <white><value></white>"
   console: "<gray>The settings menu needs a player. From here, use /lifesteal config <setting> <value>."
+  # The presets button on the first page.
+  presets: "<gold>Presets"
+  presets-lore: "<gray>Change a batch of settings at once."
+  # <name>
+  presets-current: "<gray>In use: <white><name>"
+  presets-custom: "<gray>In use: <white>your own mix"
+  hint-open-presets: "<dark_gray>Click to see the presets"
+  presets-title: "Presets"
+  # <name>
+  preset: "<yellow><name>"
+  # <name>
+  preset-in-use: "<green><name> <dark_gray>- <green>in use"
+  preset-active: "<green>These are your settings right now."
+  # <n>
+  preset-changes: "<gray>Changes <white><n></white> setting(s):"
+  # <setting>, <from>, <to>
+  preset-change: "<dark_gray>- <gray><setting>: <white><from></white> -> <yellow><to>"
+  # <n>
+  preset-more: "<dark_gray>...and <n> more"
+  hint-preset: "<dark_gray>Click to apply"
+  preset-confirm: "<gold>Click again to apply"
+
+# ---- Presets (/lifesteal preset) --------------------------------------------
+preset:
+  list-header: "<gold>Presets</gold> <gray>(click one to see what it would change):"
+  # <preset>, <description>
+  list-entry: "<click:run_command:'/lifesteal preset <preset>'><yellow><u><preset></u></yellow></click> <gray>- <description>"
+  # <preset>, <description>
+  list-in-use: "<green><preset></green> <dark_gray>(in use)</dark_gray> <gray>- <description>"
+  # <preset>, <n>
+  would-change: "<gold>The <preset> preset would change <n> setting(s):"
+  # <setting>, <from>, <to>
+  change: "<dark_gray>- <gray><setting>: <white><from></white> -> <yellow><to>"
+  # <preset>
+  confirm: "<click:run_command:'/lifesteal preset <preset> confirm'><green><u>[Apply]</u></green></click> <gray>or type /lifesteal preset <preset> confirm"
+  # <preset>, <n>
+  applied: "<green>Applied the <preset> preset (<n> setting(s) changed)."
+  # <preset>
+  in-use: "<gray>Your settings already match the <preset> preset."
+  # <preset>
+  unknown: "<red>There's no preset called <preset>. Try casual, standard or hardcore."
 
 # ---- Kill streaks ----------------------------------------------------------
 streak:

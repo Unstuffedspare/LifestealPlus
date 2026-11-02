@@ -25,6 +25,7 @@ import java.nio.charset.StandardCharsets;
 import java.time.Clock;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 import java.util.concurrent.CompletableFuture;
 import java.util.logging.Level;
 import org.bukkit.configuration.Configuration;
@@ -95,8 +96,11 @@ public final class LifestealPlugin extends JavaPlugin {
         }
         AdminCommands admin = new AdminCommands(this, hearts, tracker,
                 new SeasonReset(this, hearts, tracker, shield, bodies, finale, () -> capSchedule.seasonStarted()));
-        SettingsMenu settingsMenu = new SettingsMenu(this, new SettingsCatalog(YamlConfiguration.loadConfiguration(
-                new InputStreamReader(getResource("config.yml"), StandardCharsets.UTF_8))));
+        YamlConfiguration shippedConfig = YamlConfiguration.loadConfiguration(
+                new InputStreamReader(getResource("config.yml"), StandardCharsets.UTF_8));
+        Presets presets = new Presets(YamlConfiguration.loadConfiguration(
+                new InputStreamReader(getResource("presets.yml"), StandardCharsets.UTF_8)), shippedConfig);
+        SettingsMenu settingsMenu = new SettingsMenu(this, new SettingsCatalog(shippedConfig), presets);
         getServer().getPluginManager().registerEvents(settingsMenu, this);
         LifestealCommands commands = new LifestealCommands(this, hearts, tracker, mostWanted, shield,
                 new EventCommands(this, heartItems, bloodMoon, airdrops, finale), admin, new FeaturesCommand(this),
@@ -225,10 +229,15 @@ public final class LifestealPlugin extends JavaPlugin {
      * @return why the value can't be used, or null once it's saved and applied
      */
     String changeSetting(String key, Object value) {
+        return changeSettings(Map.of(key, value));
+    }
+
+    /** Like {@link #changeSetting}, for several settings at once (a preset): all of them or none. */
+    String changeSettings(Map<String, Object> changes) {
         reloadConfig();
-        String problem = SettingsCatalog.problem(getConfig(), key, value);
+        String problem = SettingsCatalog.problem(getConfig(), changes);
         if (problem != null) return problem;
-        getConfig().set(key, value);
+        changes.forEach(getConfig()::set);
         saveConfig();
         reloadSettings();
         return null;

@@ -40,20 +40,25 @@ import org.bukkit.inventory.ItemStack;
  * settings, then click a setting to switch it, nudge it up or down, or type a new value in
  * chat. /lifesteal config &lt;setting&gt; [value] does the same from chat or the console. Either
  * way the change is written to config.yml, comments and all, and takes effect at once.
+ * Presets (casual, standard, hardcore) change a batch at once, from the menu or /lifesteal preset.
  */
 final class SettingsMenu implements Listener {
 
     private static final Duration TYPING_WINDOW = Duration.ofSeconds(60);
     private static final int WRAP = 42;
 
-    /** One open page: the list of features (section null), or one feature's settings. */
+    /** One open page: the list of features (section null), one feature's settings, or the presets. */
     private static final class Page implements InventoryHolder {
         final String section;
+        final boolean presets;
         final Map<Integer, String> slots = new HashMap<>();
+        /** The preset clicked once on this page; a second click applies it. */
+        String armed;
         Inventory inventory;
 
-        Page(String section) {
+        Page(String section, boolean presets) {
             this.section = section;
+            this.presets = presets;
         }
 
         @Override
@@ -66,12 +71,16 @@ final class SettingsMenu implements Listener {
     }
 
     private final LifestealPlugin plugin;
+    private static final int PRESET_LINES = 12;
+
     private final SettingsCatalog catalog;
+    private final Presets presets;
     private final Map<UUID, Typing> typing = new ConcurrentHashMap<>();
 
-    SettingsMenu(LifestealPlugin plugin, SettingsCatalog catalog) {
+    SettingsMenu(LifestealPlugin plugin, SettingsCatalog catalog, Presets presets) {
         this.plugin = plugin;
         this.catalog = catalog;
+        this.presets = presets;
     }
 
     LiteralArgumentBuilder<CommandSourceStack> settingsNode() {
@@ -111,6 +120,74 @@ final class SettingsMenu implements Listener {
                                     if (setting != null) typed(sender, setting, StringArgumentType.getString(ctx, "value"));
                                     return Command.SINGLE_SUCCESS;
                                 })));
+    }
+
+    LiteralArgumentBuilder<CommandSourceStack> presetNode() {
+        return Commands.literal("preset")
+                .executes(ctx -> {
+                    listPresets(ctx.getSource().getSender());
+                    return Command.SINGLE_SUCCESS;
+                })
+                .then(Commands.argument("preset", StringArgumentType.word())
+                        .suggests((ctx, builder) -> {
+                            presets.all().stream().map(Presets.Preset::name).filter(n -> n.startsWith(builder.getRemainingLowerCase()))
+                                    .forEach(builder::suggest);
+                            return builder.buildFuture();
+                        })
+                        .executes(ctx -> {
+                            CommandSender sender = ctx.getSource().getSender();
+                            Presets.Preset preset = findPreset(sender, StringArgumentType.getString(ctx, "preset"));
+                            if (preset != null) previewPreset(sender, preset);
+                            return Command.SINGLE_SUCCESS;
+                        })
+                        .then(Commands.literal("confirm").executes(ctx -> {
+                            CommandSender sender = ctx.getSource().getSender();
+                            Presets.Preset preset = findPreset(sender, StringArgumentType.getString(ctx, "preset"));
+                            if (preset != null) applyPreset(sender, preset);
+                            return Command.SINGLE_SUCCESS;
+                        })));
+    }
+
+    private Presets.Preset findPreset(CommandSender sender, String name) {
+        Presets.Preset preset = presets.find(name);
+        if (preset == null) Msg.send(sender, "preset.unknown", Msg.t("preset", name));
+        return preset;
+    }
+
+    private void listPresets(CommandSender sender) {
+        Msg.send(sender, "preset.list-header");
+        for (Presets.Preset preset : presets.all()) {
+            Msg.send(sender, preset.inUse(plugin.getConfig()) ? "preset.list-in-use" : "preset.list-entry",
+                    Msg.t("preset", preset.name()), Msg.t("description", preset.description()));
+        }
+    }
+
+    private void previewPreset(CommandSender sender, Presets.Preset preset) {
+        Map<String, Object> changes = preset.changes(plugin.getConfig());
+        if (changes.isEmpty()) {
+            Msg.send(sender, "preset.in-use", Msg.t("preset", preset.name()));
+            return;
+        }
+        Msg.send(sender, "preset.would-change", Msg.t("preset", preset.name()), Msg.t("n", changes.size()));
+        changes.forEach((key, value) -> Msg.send(sender, "preset.change", Msg.t("setting", key),
+                Msg.t("from", SettingsCatalog.show(plugin.getConfig().get(key))), Msg.t("to", SettingsCatalog.show(value))));
+        Msg.send(sender, "preset.confirm", Msg.t("preset", preset.name()));
+    }
+
+    /** Writes every change the preset makes, or none of them, and says how it went. */
+    private void applyPreset(CommandSender who, Presets.Preset preset) {
+        Map<String, Object> changes = preset.changes(plugin.getConfig());
+        if (changes.isEmpty()) {
+            Msg.send(who, "preset.in-use", Msg.t("preset", preset.name()));
+            return;
+        }
+        String problem = plugin.changeSettings(changes);
+        if (problem != null) {
+            Msg.send(who, "settings.refused", Msg.t("reason", problem));
+            return;
+        }
+        Msg.send(who, "preset.applied", Msg.t("preset", preset.name()), Msg.t("n", changes.size()));
+        plugin.getLogger().info(who.getName() + " applied the " + preset.name() + " preset, changing " + changes.size() + " settings.");
     }
 
     private Setting lookup(CommandSender sender, String key) {
@@ -160,7 +237,7 @@ final class SettingsMenu implements Listener {
     // The menu
 
     private void open(Player player, String section) {
-        Page page = new Page(section);
+        Page page = new Page(section, false);
         int entries = section == null ? catalog.sections().size() : catalog.in(section).size();
         int size = Math.min(54, (entries / 9 + 2) * 9);
         Component title = section == null ? Msg.get("settings.menu-title")
@@ -170,10 +247,28 @@ final class SettingsMenu implements Listener {
         player.openInventory(page.inventory);
     }
 
+    private void openPresets(Player player) {
+        Page page = new Page(null, true);
+        page.inventory = org.bukkit.Bukkit.createInventory(page, 27, Msg.get("settings.presets-title"));
+        draw(page);
+        player.openInventory(page.inventory);
+    }
+
     private void draw(Page page) {
         Inventory inventory = page.inventory;
         inventory.clear();
         page.slots.clear();
+        if (page.presets) {
+            // Up to five presets, spaced out across the middle row.
+            List<Presets.Preset> all = presets.all().subList(0, Math.min(5, presets.all().size()));
+            for (int i = 0; i < all.size(); i++) {
+                int slot = 13 - (all.size() - 1) + 2 * i;
+                page.slots.put(slot, all.get(i).name());
+                inventory.setItem(slot, presetIcon(all.get(i), all.get(i).name().equals(page.armed)));
+            }
+            inventory.setItem(inventory.getSize() - 5, icon(Material.ARROW, Msg.get("settings.back"), List.of()));
+            return;
+        }
         List<String> targets = page.section == null ? catalog.sections() : catalog.in(page.section).stream().map(Setting::key).toList();
         for (int slot = 0; slot < targets.size() && slot < inventory.getSize() - 9; slot++) {
             String target = targets.get(slot);
@@ -183,6 +278,45 @@ final class SettingsMenu implements Listener {
         inventory.setItem(inventory.getSize() - 5, page.section == null
                 ? icon(Material.BARRIER, Msg.get("settings.close"), List.of())
                 : icon(Material.ARROW, Msg.get("settings.back"), List.of()));
+        if (page.section == null) inventory.setItem(inventory.getSize() - 4, presetsButton());
+    }
+
+    private ItemStack presetsButton() {
+        String current = presets.all().stream().filter(p -> p.inUse(plugin.getConfig())).map(p -> SettingsCatalog.words(p.name()))
+                .findFirst().orElse(null);
+        List<Component> lore = new ArrayList<>(List.of(Msg.get("settings.presets-lore")));
+        lore.add(current == null ? Msg.get("settings.presets-custom") : Msg.get("settings.presets-current", Msg.t("name", current)));
+        lore.add(Component.empty());
+        lore.add(Msg.get("settings.hint-open-presets"));
+        return icon(Material.NETHER_STAR, Msg.get("settings.presets"), lore);
+    }
+
+    private ItemStack presetIcon(Presets.Preset preset, boolean armed) {
+        Map<String, Object> changes = preset.changes(plugin.getConfig());
+        String name = SettingsCatalog.words(preset.name());
+        List<Component> lore = new ArrayList<>(text(List.of(preset.description())));
+        lore.add(Component.empty());
+        if (changes.isEmpty()) {
+            lore.add(Msg.get("settings.preset-active"));
+            return icon(presetMaterial(preset), Msg.get("settings.preset-in-use", Msg.t("name", name)), lore);
+        }
+        lore.add(Msg.get("settings.preset-changes", Msg.t("n", changes.size())));
+        changes.entrySet().stream().limit(PRESET_LINES).forEach(change -> lore.add(Msg.get("settings.preset-change",
+                Msg.t("setting", change.getKey()), Msg.t("from", SettingsCatalog.show(plugin.getConfig().get(change.getKey()))),
+                Msg.t("to", SettingsCatalog.show(change.getValue())))));
+        if (changes.size() > PRESET_LINES) lore.add(Msg.get("settings.preset-more", Msg.t("n", changes.size() - PRESET_LINES)));
+        lore.add(Component.empty());
+        lore.add(Msg.get(armed ? "settings.preset-confirm" : "settings.hint-preset"));
+        return icon(presetMaterial(preset), Msg.get("settings.preset", Msg.t("name", name)), lore);
+    }
+
+    private static Material presetMaterial(Presets.Preset preset) {
+        return switch (preset.name()) {
+            case "casual" -> Material.POPPY;
+            case "standard" -> Material.IRON_SWORD;
+            case "hardcore" -> Material.WITHER_SKELETON_SKULL;
+            default -> Material.PAPER;
+        };
     }
 
     private ItemStack sectionIcon(String section) {
@@ -264,12 +398,30 @@ final class SettingsMenu implements Listener {
             return;
         }
         if (slot == page.inventory.getSize() - 5) {
-            if (page.section == null) player.closeInventory();
+            if (page.section == null && !page.presets) player.closeInventory();
             else open(player, null);
+            return;
+        }
+        if (page.section == null && !page.presets && slot == page.inventory.getSize() - 4) {
+            openPresets(player);
             return;
         }
         String target = page.slots.get(slot);
         if (target == null) return;
+
+        if (page.presets) {
+            // The first click shows the changes are about to happen; the second makes them.
+            Presets.Preset preset = presets.find(target);
+            if (preset.inUse(plugin.getConfig())) return;
+            if (target.equals(page.armed)) {
+                page.armed = null;
+                applyPreset(player, preset);
+            } else {
+                page.armed = target;
+            }
+            draw(page);
+            return;
+        }
 
         if (page.section == null) {
             Setting onOff = catalog.find(target + ".enabled");
