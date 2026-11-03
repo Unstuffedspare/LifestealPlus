@@ -36,6 +36,8 @@ time:
   hour: "1 hour"
   hours: "<n> hours"
   hours-minutes: "<h>h <m>m"
+  day: "1 day"
+  days: "<n> days"
   seconds: "<n> seconds"
 
 # ---- Dimension names used inside other messages ----------------------------
@@ -74,6 +76,13 @@ elimination:
   spectating: "<red>You're out of hearts. You can watch, but you're eliminated until someone revives you."
   # Only used when Purgatory is turned off. <hearts>
   back-from-spectating: "<green>You're back in the game with <hearts> hearts."
+  # Only used when eliminations.ban is on: the screen a banned player is kicked with. <time>
+  banned: "<red>You lost your last heart.<newline><gray>You're banned for <time>, then you come back with a few hearts."
+  banned-forever: "<red>You lost your last heart.<newline><gray>You're banned until someone brings you back or a new season starts."
+  # The reason kept in the server's ban list (plain text).
+  ban-reason: "Eliminated: out of hearts"
+  # When they're back after the ban. <hearts>
+  back-from-ban: "<green>Your ban is over. You're back in the game with <hearts> hearts."
 
 # ---- Repeat kills (repeat-kills) -------------------------------------------
 repeat-kill:
@@ -497,9 +506,9 @@ admin:
   # <player>
   shield-removed: "<green>Removed <player>'s new-player shield."
   most-wanted-nobody: "<gray>Nobody to announce: too few players online, or nobody alive."
-  reloaded: "<green>LifestealPlus reloaded. Everything in config.yml and messages.yml looks fine."
+  reloaded: "<green>LifestealPlus reloaded. Everything in config.yml, messages.yml and hooks.yml looks fine."
   # <count>
-  reloaded-with-warnings: "<yellow>LifestealPlus reloaded, but <count> setting(s) couldn't be used and were left at their defaults:"
+  reloaded-with-warnings: "<yellow>LifestealPlus reloaded, but <count> setting(s) couldn't be used and were left at their defaults or skipped:"
   # <warning>
   reload-warning: " <gray>- <warning>"
   no-blood-moon: "<gray>No Blood Moon is up."

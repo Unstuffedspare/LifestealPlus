@@ -78,6 +78,11 @@ public final class HeartService implements AutoCloseable {
         return submit(() -> store.giveHearts(from, to, hearts, taxPercent, rules()));
     }
 
+    /** How many times a player has been eliminated this season. */
+    public CompletableFuture<Integer> eliminations(UUID player) {
+        return submit(() -> store.eliminations(player));
+    }
+
     public CompletableFuture<Integer> revivalCost(UUID target, int base) {
         return submit(() -> store.revivalCost(target, base));
     }

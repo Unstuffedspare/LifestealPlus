@@ -50,6 +50,8 @@ public final class LifestealPlugin extends JavaPlugin {
     private Airdrops airdrops;
     private TimedEvents timedEvents;
     private MenuLook menuLook;
+    private CommandHooks hooks;
+    private BanElimination bans;
     private KingOfTheHill koth;
     private Finale finale;
     private Purgatory purgatory;
@@ -123,7 +125,9 @@ public final class LifestealPlugin extends JavaPlugin {
         HeartTracker tracker = new HeartTracker(this);
         heartItems = new HeartItems(this, hearts, tracker);
         heartItems.syncRecipe();
-        KillHandler kills = new KillHandler(this, hearts, tracker, heartItems);
+        hooks = new CommandHooks(this, hearts);
+        getServer().getPluginManager().registerEvents(hooks, this);
+        KillHandler kills = new KillHandler(this, hearts, tracker, heartItems, hooks);
         CombatTagger tagger = new CombatTagger(this, tracker);
         bodies = new CombatBodies(this, hearts, kills, tagger);
         getServer().getPluginManager().registerEvents(tagger, this);
@@ -156,7 +160,11 @@ public final class LifestealPlugin extends JavaPlugin {
         AuditLog audit = new AuditLog(this, hearts, tracker);
         getServer().getPluginManager().registerEvents(audit, this);
         AdminCommands admin = new AdminCommands(this, hearts, tracker,
-                new SeasonReset(this, hearts, tracker, shield, bodies, finale, () -> capSchedule.seasonStarted(),
+                new SeasonReset(this, hearts, tracker, shield, bodies, finale, ended -> {
+                    capSchedule.seasonStarted();
+                    bans.unbanEveryone();
+                    hooks.seasonEnded(ended.season(), ended.next(), ended.winner());
+                },
                         () -> backups.backUp("before-season-reset", null)));
         YamlConfiguration shippedConfig = YamlConfiguration.loadConfiguration(
                 new InputStreamReader(getResource("config.yml"), StandardCharsets.UTF_8));
@@ -194,6 +202,9 @@ public final class LifestealPlugin extends JavaPlugin {
             getLogger().warning("Purgatory needs its own world, and Folia can't create worlds while running; eliminated players spectate instead.");
         }
         PurgatoryCommands purgatoryCommands = settings.purgatory().enabled() && !Tasks.folia() ? startPurgatory(tracker) : null;
+        bans = new BanElimination(this, hearts, tracker, tracker.eliminationHandler());
+        tracker.setEliminationHandler(bans);
+        getServer().getPluginManager().registerEvents(bans, this);
         capSchedule = new CapSchedule(this, hearts);
         SocialCommands social = new SocialCommands(this, hearts, tracker, heartItems, finale, purgatory);
         news = new NewsFeed(this, hearts, tracker);
@@ -328,7 +339,9 @@ public final class LifestealPlugin extends JavaPlugin {
         airdrops.settingsChanged();
         timedEvents.settingsChanged();
         menuLook.reload();
-        return loaded.warnings();
+        List<String> warnings = new java.util.ArrayList<>(loaded.warnings());
+        warnings.addAll(hooks.reload());
+        return warnings;
     }
 
     /**

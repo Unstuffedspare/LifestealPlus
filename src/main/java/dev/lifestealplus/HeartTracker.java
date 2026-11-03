@@ -59,6 +59,10 @@ public final class HeartTracker {
         this.elimination = elimination;
     }
 
+    EliminationHandler eliminationHandler() {
+        return elimination;
+    }
+
     /** Mirrors the outcome of a heart operation once it commits. Logs failures instead of losing them. */
     public CompletableFuture<List<HeartChange>> track(CompletableFuture<List<HeartChange>> pending) {
         return pending.whenCompleteAsync((changes, error) -> {

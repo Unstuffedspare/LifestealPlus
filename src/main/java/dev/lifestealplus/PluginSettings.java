@@ -26,7 +26,8 @@ public record PluginSettings(HeartRules rules, int naturalDeathLoss, PurgatorySe
                              SocialSettings social, Extras extras, StreakRules streaks, RecapSettings recap,
                              Set<String> excludedWorlds, HeartRecipe heartRecipe, CombatItemRules combatItems,
                              String discordWebhook, RewardSettings rewards, RevivalSettings revival,
-                             EconomySettings economy, BackupSettings backups, DatabaseSettings database) {
+                             EconomySettings economy, BackupSettings backups, DatabaseSettings database,
+                             BanSettings bans) {
 
     /** Whether dying and killing in this world move hearts (false for the worlds listed in worlds.excluded). */
     public boolean lifestealIn(World world) {
@@ -153,6 +154,63 @@ public record PluginSettings(HeartRules rules, int naturalDeathLoss, PurgatorySe
     public record MySql(String host, int port, String database, String user, String password, String serverName) {
     }
 
+    /**
+     * Banning eliminated players (eliminations.ban).
+     *
+     * @param lengths as written ("3d", "forever"), checked on load; one per elimination this season, the last repeating
+     */
+    public record BanSettings(boolean enabled, List<String> lengths) {
+
+        /** As written, for a player's {@code elimination}th elimination this season (1 for the first). */
+        public String lengthText(int elimination) {
+            return lengths.get(Math.min(lengths.size(), Math.max(1, elimination)) - 1);
+        }
+
+        /** How long that ban lasts; zero for forever. */
+        public Duration length(int elimination) {
+            return banLength(lengthText(elimination));
+        }
+    }
+
+    private static final java.util.regex.Pattern BAN_LENGTH =
+            java.util.regex.Pattern.compile("(\\d+)\\s*(m|mins?|minutes?|h|hours?|d|days?|w|weeks?)");
+
+    /** "30m", "12h", "3d", "2w" or "forever" (zero); null if it isn't one of those. */
+    static Duration banLength(String text) {
+        String clean = text.strip().toLowerCase(Locale.ROOT);
+        if (clean.equals("forever") || clean.equals("permanent")) return Duration.ZERO;
+        java.util.regex.Matcher m = BAN_LENGTH.matcher(clean);
+        if (!m.matches()) return null;
+        long n = Long.parseLong(m.group(1));
+        if (n <= 0 || n > 100_000) return null;
+        return switch (m.group(2).charAt(0)) {
+            case 'm' -> Duration.ofMinutes(n);
+            case 'h' -> Duration.ofHours(n);
+            case 'd' -> Duration.ofDays(n);
+            default -> Duration.ofDays(7 * n);
+        };
+    }
+
+    private static BanSettings bans(ConfigReader in) {
+        List<String> fallback = List.of("1d", "3d", "7d");
+        boolean enabled = in.flag("eliminations.ban.enabled", false);
+        List<String> lengths = in.texts("eliminations.ban.lengths");
+        for (String length : lengths) {
+            if (banLength(length) == null) {
+                in.warn("eliminations.ban.lengths has \"" + length + "\", which isn't a length like 30m, 12h, 3d, 2w or forever; using "
+                        + fallback + ".");
+                return new BanSettings(enabled, fallback);
+            }
+        }
+        if (lengths.isEmpty()) {
+            if (in.raw("eliminations.ban.lengths", null) != null) {
+                in.warn("eliminations.ban.lengths needs at least one length; using " + fallback + ".");
+            }
+            return new BanSettings(enabled, fallback);
+        }
+        return new BanSettings(enabled, List.copyOf(lengths));
+    }
+
     /** The settings, plus anything in the file that had to be replaced by a default. */
     public record Loaded(PluginSettings settings, List<String> warnings) {
     }
@@ -262,7 +320,7 @@ public record PluginSettings(HeartRules rules, int naturalDeathLoss, PurgatorySe
                                 in.whole("heart-shop.daily-limit", 2, 0, 1000))),
                 new BackupSettings(in.flag("backups.enabled", true) ? hours(in.number("backups.every-hours", 24, 1, 24 * 30)) : Duration.ZERO,
                         in.whole("backups.keep", 7, 1, 1000)),
-                database(in));
+                database(in), bans(in));
         return new Loaded(settings, List.copyOf(in.warnings()));
     }
 

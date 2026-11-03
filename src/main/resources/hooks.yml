@@ -1,0 +1,57 @@
+# LifestealPlus command hooks
+#
+# Console commands the plugin runs when things happen: money or a crate key for a kill
+# streak, a ban through your network's ban plugin, a log line, anything another plugin's
+# commands can do. Each hook is a list of commands, run in order from the console, without
+# the leading /. Leave a hook as [] to run nothing.
+#
+# Fill-ins like {player} are swapped for the real thing. Each hook lists the ones it has.
+# Player names are plain Minecraft names, so they're safe to put in a command.
+#
+# Hooks run on the server where it happened. These are only set here, not in
+# /lifesteal settings, so a settings admin can't use them to run console commands.
+# /lifesteal reload picks up changes.
+
+# Someone lost their last heart.
+#   {player} {uuid}
+#   {killer}     who killed them, or nobody (a mob, a fall, an admin)
+#   {cause}      pvp-death, death (to the world), admin-take, admin-set, ...
+#   {count}      how many times they've been eliminated this season, this one included
+#   {ban-length} the length eliminations.ban.lengths gives this elimination, like 3d or forever,
+#                for a ban plugin even when eliminations.ban is off
+# For example:
+#   elimination:
+#     - "tempban {player} {ban-length} Out of hearts"
+elimination: []
+
+# Someone came back from being eliminated.
+#   {player} {uuid} {hearts}
+#   {cause} revive (a rift, pledges, Purgatory, /lifesteal revive, a ban ending), revival-item
+#           (a Revival Charm), admin-set, ...
+revival: []
+
+# A kill that took a heart (not a repeat kill, and nobody was shielded).
+#   {killer} {victim} {killer-uuid} {victim-uuid} {killer-hearts} {victim-hearts}
+kill: []
+
+# A kill streak reached a number. List the numbers you want, each with its commands.
+#   {player} {uuid} {streak}
+# For example:
+#   streak:
+#     5:
+#       - "eco give {player} 500"
+#     10:
+#       - "crate key give {player} rare 1"
+streak: {}
+
+# A kill ended someone's streak: one at least as long as the shortest in streaks.announce-at.
+#   {killer} {victim} {killer-uuid} {victim-uuid} {streak}
+streak-ended: []
+
+# A kill collected a bounty.
+#   {killer} {victim} {killer-uuid} {victim-uuid} {hearts} (from the bounty)
+bounty-claimed: []
+
+# A season ended with /lifesteal season reset.
+#   {old} {season} (the new one) {winner} (most hearts at the end, or nobody)
+season-reset: []

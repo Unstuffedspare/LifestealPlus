@@ -40,15 +40,19 @@ public final class SeasonReset {
     private final NewbieShield shield;
     private final CombatBodies bodies;
     private final Finale finale;
+    /** A season that just ended: its name, the new one's, and who finished with the most hearts (or null). */
+    public record Ended(String season, String next, String winner) {
+    }
+
     /** Runs once a new season has begun (the rising cap counts weeks from here). */
-    private final Runnable onNewSeason;
+    private final java.util.function.Consumer<Ended> onNewSeason;
     private final Map<String, Pending> pending = new ConcurrentHashMap<>();
 
     /** Makes a backup; the reset only goes ahead once it's safely written. */
     private final java.util.function.Supplier<CompletableFuture<?>> backUp;
 
     public SeasonReset(LifestealPlugin plugin, HeartService hearts, HeartTracker tracker, NewbieShield shield,
-                       CombatBodies bodies, Finale finale, Runnable onNewSeason,
+                       CombatBodies bodies, Finale finale, java.util.function.Consumer<Ended> onNewSeason,
                        java.util.function.Supplier<CompletableFuture<?>> backUp) {
         this.backUp = backUp;
         this.onNewSeason = onNewSeason;
@@ -101,7 +105,7 @@ public final class SeasonReset {
                         return;
                     }
                     announce(archived, request.nextName());
-                    onNewSeason.run();
+                    onNewSeason.accept(new Ended(archived.season(), request.nextName(), winner(archived)));
                     for (Player player : plugin.getServer().getOnlinePlayers()) restart(player);
                 }, tracker.mainThread());
     }
@@ -109,8 +113,12 @@ public final class SeasonReset {
     private record Archived(String season, List<SeasonStanding> standings) {
     }
 
+    private static String winner(Archived archived) {
+        return archived.standings().isEmpty() ? null : archived.standings().getFirst().name();
+    }
+
     private void announce(Archived archived, String next) {
-        String winner = archived.standings().isEmpty() ? null : archived.standings().getFirst().name();
+        String winner = winner(archived);
         for (Player p : plugin.getServer().getOnlinePlayers()) {
             p.showTitle(Title.title(Msg.get("season.title", Msg.t("new", next)), Msg.get("season.subtitle", Msg.t("old", archived.season()))));
         }

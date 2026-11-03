@@ -25,8 +25,10 @@ public final class KillHandler {
     private final HeartService hearts;
     private final HeartTracker tracker;
     private final HeartItems heartItems;
+    private final CommandHooks hooks;
 
-    KillHandler(LifestealPlugin plugin, HeartService hearts, HeartTracker tracker, HeartItems heartItems) {
+    KillHandler(LifestealPlugin plugin, HeartService hearts, HeartTracker tracker, HeartItems heartItems, CommandHooks hooks) {
+        this.hooks = hooks;
         this.plugin = plugin;
         this.hearts = hearts;
         this.tracker = tracker;
@@ -36,7 +38,10 @@ public final class KillHandler {
     public void pvpKill(UUID victim, UUID killer) {
         var kill = hearts.kill(victim, killer);
         tracker.track(kill.thenApply(KillOutcome::changes));
-        kill.thenAcceptAsync(this::tellAboutKill, tracker.mainThread());
+        kill.thenAcceptAsync(outcome -> {
+            tellAboutKill(outcome);
+            hooks.kill(outcome);
+        }, tracker.mainThread());
     }
 
     /** A death with no player to blame. {@code note} goes in the ledger (the damage type, or "body"). */

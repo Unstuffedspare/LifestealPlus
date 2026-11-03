@@ -179,6 +179,29 @@ class SettingsTest {
     }
 
     @Test
+    void banLengthsGrowThroughTheSeasonAndTheLastRepeats() throws Exception {
+        PluginSettings.BanSettings bans = PluginSettings.load(shipped()).settings().bans();
+        assertFalse(bans.enabled());
+        assertEquals(Duration.ofDays(1), bans.length(1));
+        assertEquals(Duration.ofDays(7), bans.length(3));
+        assertEquals(Duration.ofDays(7), bans.length(9));
+
+        bans = load("eliminations:\n  ban:\n    enabled: true\n    lengths: [30m, 12 hours, 2w, forever]\n").settings().bans();
+        assertTrue(bans.enabled());
+        assertEquals(List.of(Duration.ofMinutes(30), Duration.ofHours(12), Duration.ofDays(14), Duration.ZERO),
+                List.of(bans.length(1), bans.length(2), bans.length(3), bans.length(4)));
+        assertEquals("forever", bans.lengthText(5));
+    }
+
+    @Test
+    void aBanLengthThatIsntOneFallsBack() throws Exception {
+        PluginSettings.Loaded loaded = load("eliminations:\n  ban:\n    lengths: [1d, soon]\n");
+        assertEquals(List.of("1d", "3d", "7d"), loaded.settings().bans().lengths());
+        assertTrue(loaded.warnings().getFirst().startsWith("eliminations.ban.lengths has \"soon\""), loaded.warnings().toString());
+        assertTrue(load("eliminations:\n  ban:\n    lengths: []\n").warnings().getFirst().contains("at least one length"));
+    }
+
+    @Test
     void discordTextIsEscaped() {
         assertEquals("\"a \\\"b\\\"\\nc\\\\d\"", DiscordFeed.json("a \"b\"\nc\\d"));
     }

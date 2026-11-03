@@ -95,6 +95,10 @@ public final class Msg {
         long minutes = Math.max(1, (d.toSeconds() + 59) / 60);
         if (minutes < 60) return raw(minutes == 1 ? "time.minute" : "time.minutes").replace("<n>", String.valueOf(minutes));
         long hours = minutes / 60, rest = minutes % 60;
+        if (rest == 0 && hours % 24 == 0) {
+            long days = hours / 24;
+            return raw(days == 1 ? "time.day" : "time.days").replace("<n>", String.valueOf(days));
+        }
         if (rest == 0) return raw(hours == 1 ? "time.hour" : "time.hours").replace("<n>", String.valueOf(hours));
         return raw("time.hours-minutes").replace("<h>", String.valueOf(hours)).replace("<m>", String.valueOf(rest));
     }

@@ -109,6 +109,16 @@ eliminations:
   # And hears this: a Minecraft sound name like entity.wither.spawn or
   # ui.toast.challenge_complete. none = silent.
   sound: entity.wither.spawn
+  ban:
+    # Ban eliminated players instead of sending them to Purgatory or making them spectate.
+    # When the ban runs out (or an admin lifts it) they come back with hearts.revive hearts.
+    # A rift, a pledge or a Revival Charm lifts the ban early, and a new season lifts them all.
+    # This bans from this server only: on a network, leave it off and ban through your proxy's
+    # ban plugin in hooks.yml.
+    enabled: false
+    # How long the ban lasts for a player's 1st, 2nd, 3rd... elimination this season; the last
+    # one repeats. Like 30m, 12h, 3d or 2w, or forever.
+    lengths: [1d, 3d, 7d]
 
 rewards:
   # Ways to earn hearts without fighting: Heart Fragments for milestones. (Fragments
