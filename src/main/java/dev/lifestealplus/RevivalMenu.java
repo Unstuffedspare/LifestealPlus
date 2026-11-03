@@ -32,8 +32,6 @@ import org.bukkit.inventory.meta.SkullMeta;
  */
 final class RevivalMenu implements Listener {
 
-    private static final int SIZE = 54;
-
     private static final class Page implements InventoryHolder {
         final Map<Integer, PlayerHearts> slots = new HashMap<>();
         /** The slot clicked once; a second click on it revives. */
@@ -51,8 +49,11 @@ final class RevivalMenu implements Listener {
     private final HeartTracker tracker;
     private final HeartItems items;
     private final Finale finale;
+    private final MenuLook look;
 
-    RevivalMenu(LifestealPlugin plugin, HeartService hearts, HeartTracker tracker, HeartItems items, Finale finale) {
+    RevivalMenu(LifestealPlugin plugin, HeartService hearts, HeartTracker tracker, HeartItems items, Finale finale,
+                MenuLook look) {
+        this.look = look;
         this.plugin = plugin;
         this.hearts = hearts;
         this.tracker = tracker;
@@ -70,7 +71,8 @@ final class RevivalMenu implements Listener {
             Msg.send(player, "revival.charm-eliminated");
             return;
         }
-        hearts.eliminatedPlayers(SIZE - 9).whenCompleteAsync((out, error) -> {
+        int size = look.rows("revival-menu", 1, 6) * 9;
+        hearts.eliminatedPlayers(size).whenCompleteAsync((out, error) -> {
             if (error != null) {
                 plugin.getLogger().log(Level.SEVERE, "Couldn't list eliminated players", error);
                 Msg.send(player, "common.error");
@@ -81,10 +83,11 @@ final class RevivalMenu implements Listener {
                 return;
             }
             Page page = new Page();
-            page.inventory = plugin.getServer().createInventory(page, SIZE, Msg.get("revival.menu-title"));
+            page.inventory = plugin.getServer().createInventory(page, size, Msg.get("revival.menu-title"));
             for (int i = 0; i < out.size(); i++) page.slots.put(i, out.get(i));
             draw(page);
             player.openInventory(page.inventory);
+            look.play(player, "open");
         }, tracker.mainThread());
     }
 
@@ -100,6 +103,7 @@ final class RevivalMenu implements Listener {
                     TextDecoration.State.FALSE))));
             page.inventory.setItem(slot, head);
         });
+        look.fill(page.inventory, "revival-menu");
     }
 
     @EventHandler
@@ -109,6 +113,7 @@ final class RevivalMenu implements Listener {
         if (!(event.getWhoClicked() instanceof Player player)) return;
         PlayerHearts target = page.slots.get(event.getRawSlot());
         if (target == null) return;
+        look.play(player, "click");
         if (page.armed != event.getRawSlot()) {
             page.armed = event.getRawSlot();
             draw(page);

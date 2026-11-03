@@ -32,7 +32,9 @@ public enum HeartCause {
     REVIVAL_ITEM(true),
     /** Hearts handed to another player with /giveheart, and received that way. */
     TRADE_SENT(false),
-    TRADE_RECEIVED(false);
+    TRADE_RECEIVED(false),
+    /** Put back from a backup by an admin. */
+    RESTORE(true);
 
     private final boolean canRevive;
 

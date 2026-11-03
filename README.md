@@ -76,13 +76,18 @@ LifeStealZ's heart items turn into this plugin's Hearts when a player joins or o
 
 Each setting shows the explanation from `config.yml`. Changes are saved to `config.yml` and take effect straight away. A value the plugin can't use is refused, with the reason, so nothing breaks.
 
-**Presets.** The star button on the menu's first page offers three ready-made mixes. Each one shows exactly what it would change; click it twice to apply.
+**Presets.** The star button on the menu's first page offers eight ready-made mixes. Each one shows exactly what it would change; click it twice to apply.
 
 | Preset | What it's like |
 | --- | --- |
 | Casual | Only other players cost you hearts, newcomers are protected for longer, and coming back from elimination is easier. |
+| SMP | For a group of friends. Fights matter, but the world is forgiving and there are plenty of ways back. |
+| Team | For playing in pairs and groups. Blood Pacts last, gifts are free, and friends can vote each other back cheaply. |
 | Standard | The defaults the plugin ships with. |
+| Competitive | For tournaments. Only PvP costs hearts, and nobody can buy, craft or gift them. |
 | Hardcore | Fewer hearts, short protection, longer combat tags, no crafted Hearts, and a hard road back from elimination. |
+| Ultra Hardcore | Five hearts, no protection, no totems, and Purgatory is the only way back. |
+| Anarchy | No safety nets: no newbie shields, no farming protection, combat logging allowed, and frequent Blood Moons. |
 
 A preset only touches the settings presets are about (heart amounts, protection, the way back from elimination and so on), and always gives the same result, whatever was set before. Anything else you've changed stays as it is. From the console: `/lifesteal preset` lists them, `/lifesteal preset hardcore` shows what it would change, and `/lifesteal preset hardcore confirm` applies it.
 
@@ -117,6 +122,16 @@ Some things worth deciding before a season starts:
 - Personal caps: give a player the permission `lifestealplus.max-hearts.<n>` (for example `lifestealplus.max-hearts.30`, with a permissions plugin such as LuckPerms) and their cap is n instead of `hearts.max`. The highest one counts, it's picked up within a minute, and losing it never takes hearts away.
 - `discord.webhook-url`: paste a Discord channel's webhook link (channel settings > Integrations > Webhooks) and the server's news (eliminations, comebacks, long streaks, bounties, events) is posted there within seconds. `none` turns it off.
 - `ghosts.limit-chat` stops eliminated players talking freely to the living, so their hourly whisper matters. Turn it off for a more relaxed server.
+
+### Menus
+
+How the menus look is in `plugins/LifestealPlus/menus.yml`: the item behind every button, how many rows the presets and Revival Charm menus have, an optional filler for empty slots, and the sounds for opening, clicking, changing and refusing. Titles and wording are in `messages.yml`. Apply changes with `/lifesteal reload`.
+
+### Backups and records
+
+- **Backups:** the heart database is copied to `plugins/LifestealPlus/backups` every day and before every season reset, and the last 7 are kept (`backups`). `/lifesteal backup restore` puts back one player, or after a restart, everything.
+- **Audit log:** every admin action is recorded and kept through season resets. See it with `/lifesteal audit`, or export it.
+- **Exports:** `/lifesteal export ledger` writes every heart change this season as a CSV you can open in a spreadsheet; add a player's name for just theirs.
 
 ### Messages
 
@@ -180,6 +195,11 @@ Every player permission is allowed by default. Take one away with your permissio
 | `item <player> heart\|fragment\|charm [amount]` | Hand out heart items and Revival Charms |
 | `mostwanted` | Announce the Most Wanted now |
 | `dashboard` | The server at a glance: the season, hearts in play and where this week's came from, upcoming events, latest eliminations |
+| `audit [page]` | Every admin action: commands from players, the console and RCON, and changes made in the settings menu |
+| `backup`, `backup now` | List backups, or make one now |
+| `backup restore <file> <player>` | Put one player's hearts back as they were in a backup (recorded in their ledger) |
+| `backup restore <file>` | Restore the whole database from a backup at the next restart (the current one is kept too) |
+| `export ledger [player]`, `export audit` | Save the ledger or the audit log as a CSV file in `plugins/LifestealPlus/exports` |
 | `import lifestealz [file]`, `import confirm [unban]` | Bring players' hearts over from LifeStealZ (see above) |
 
 A season reset doesn't touch the world or inventories, so start the new season on a fresh map if you want one.

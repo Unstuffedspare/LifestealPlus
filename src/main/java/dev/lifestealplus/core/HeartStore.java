@@ -26,7 +26,7 @@ import org.sqlite.SQLiteDataSource;
  */
 public final class HeartStore implements AutoCloseable {
 
-    private static final int SCHEMA_VERSION = 12;
+    private static final int SCHEMA_VERSION = 13;
 
     private final Connection conn;
     private final Clock clock;
@@ -307,6 +307,23 @@ public final class HeartStore implements AutoCloseable {
                     // Time played this season, for playtime rewards (cleared with the rest at a season reset).
                     st.execute("ALTER TABLE players ADD COLUMN played_ms INTEGER NOT NULL DEFAULT 0");
                     st.execute("PRAGMA user_version = 12");
+                }
+                return null;
+            });
+        }
+        if (version < 13) {
+            inTransaction(() -> {
+                try (Statement st = conn.createStatement()) {
+                    // What admins did, kept across season resets.
+                    st.execute("""
+                            CREATE TABLE audit (
+                                id     INTEGER PRIMARY KEY AUTOINCREMENT,
+                                at     INTEGER NOT NULL,
+                                actor  TEXT    NOT NULL,
+                                action TEXT    NOT NULL,
+                                detail TEXT    NOT NULL
+                            )""");
+                    st.execute("PRAGMA user_version = 13");
                 }
                 return null;
             });
@@ -939,6 +956,123 @@ public final class HeartStore implements AutoCloseable {
         try (PreparedStatement ps = conn.prepareStatement("DELETE FROM logins WHERE last_seen < ?")) {
             ps.setLong(1, clock.millis() - keep.toMillis());
             return ps.executeUpdate();
+        }
+    }
+
+    /** A consistent copy of the whole database, made without stopping anything. */
+    public void backUpTo(Path file) throws SQLException {
+        try {
+            java.nio.file.Files.createDirectories(file.getParent());
+        } catch (java.io.IOException e) {
+            throw new SQLException("Couldn't make the backups folder", e);
+        }
+        try (PreparedStatement ps = conn.prepareStatement("VACUUM INTO ?")) {
+            ps.setString(1, file.toAbsolutePath().toString());
+            ps.execute();
+        }
+    }
+
+    /** A player's hearts as they were in a backup, found by name; empty if they weren't in it. */
+    public Optional<PlayerHearts> heartsInBackup(Path file, String name) throws SQLException {
+        SQLiteDataSource ds = new SQLiteDataSource();
+        ds.setUrl("jdbc:sqlite:" + file.toAbsolutePath());
+        ds.setReadOnly(true);
+        try (Connection backup = ds.getConnection();
+             PreparedStatement ps = backup.prepareStatement("SELECT uuid, name, hearts FROM players WHERE name = ? COLLATE NOCASE")) {
+            ps.setString(1, name);
+            try (ResultSet rs = ps.executeQuery()) {
+                return rs.next() ? Optional.of(new PlayerHearts(UUID.fromString(rs.getString(1)), rs.getString(2), rs.getInt(3)))
+                        : Optional.empty();
+            }
+        }
+    }
+
+    /** The live season's ledger (one player's, or everyone's) as CSV. Returns the rows written. */
+    public int exportLedger(Path file, String playerName) throws SQLException {
+        String where = playerName == null ? "" : " WHERE player_name = ? COLLATE NOCASE";
+        try (PreparedStatement ps = conn.prepareStatement("""
+                SELECT id, event_id, at, player_name, player_uuid, cause, hearts_before, hearts_after, other_name, actor, note
+                FROM heart_ledger""" + where + " ORDER BY id")) {
+            if (playerName != null) ps.setString(1, playerName);
+            try (ResultSet rs = ps.executeQuery()) {
+                return writeCsv(file, List.of("id", "event", "time", "player", "uuid", "cause", "before", "after", "other",
+                        "actor", "note"), rs);
+            }
+        }
+    }
+
+    public int exportAudit(Path file) throws SQLException {
+        try (Statement st = conn.createStatement();
+             ResultSet rs = st.executeQuery("SELECT id, at, actor, action, detail FROM audit ORDER BY id")) {
+            return writeCsv(file, List.of("id", "time", "actor", "action", "detail"), rs);
+        }
+    }
+
+    /** Writes the rows as CSV under {@code header}; the "at" column (epoch millis) is written as a date. */
+    private static int writeCsv(Path file, List<String> header, ResultSet rs) throws SQLException {
+        try {
+            java.nio.file.Files.createDirectories(file.getParent());
+            try (var out = java.nio.file.Files.newBufferedWriter(file)) {
+                out.write(String.join(",", header));
+                out.newLine();
+                int columns = rs.getMetaData().getColumnCount();
+                int rows = 0;
+                while (rs.next()) {
+                    List<String> cells = new ArrayList<>();
+                    for (int c = 1; c <= columns; c++) {
+                        String name = rs.getMetaData().getColumnLabel(c);
+                        String value = name.equals("at") ? Instant.ofEpochMilli(rs.getLong(c)).toString() : rs.getString(c);
+                        cells.add(csv(value));
+                    }
+                    out.write(String.join(",", cells));
+                    out.newLine();
+                    rows++;
+                }
+                return rows;
+            }
+        } catch (java.io.IOException e) {
+            throw new SQLException("Couldn't write " + file, e);
+        }
+    }
+
+    private static String csv(String value) {
+        if (value == null) return "";
+        // A cell starting like a formula is neutralised, so a spreadsheet can't be tricked into running it.
+        boolean formula = !value.isEmpty() && "=+@".indexOf(value.charAt(0)) >= 0;
+        if (!formula && value.chars().noneMatch(ch -> ch == '"' || ch == ',' || ch == '\n' || ch == '\r')) return value;
+        String safe = formula ? "'" + value : value;
+        return "\"" + safe.replace("\"", "\"\"") + "\"";
+    }
+
+    public void addAudit(String actor, String action, String detail) throws SQLException {
+        try (PreparedStatement ps = conn.prepareStatement("INSERT INTO audit (at, actor, action, detail) VALUES (?, ?, ?, ?)")) {
+            ps.setLong(1, clock.millis());
+            ps.setString(2, actor);
+            ps.setString(3, action);
+            ps.setString(4, detail);
+            ps.executeUpdate();
+        }
+    }
+
+    /** Admin actions, newest first; {@code limit} 0 for all of them. */
+    public List<AuditEntry> audit(int limit, int offset) throws SQLException {
+        try (PreparedStatement ps = conn.prepareStatement(
+                "SELECT at, actor, action, detail FROM audit ORDER BY id DESC LIMIT ? OFFSET ?")) {
+            ps.setInt(1, limit <= 0 ? Integer.MAX_VALUE : limit);
+            ps.setInt(2, offset);
+            List<AuditEntry> out = new ArrayList<>();
+            try (ResultSet rs = ps.executeQuery()) {
+                while (rs.next()) {
+                    out.add(new AuditEntry(Instant.ofEpochMilli(rs.getLong(1)), rs.getString(2), rs.getString(3), rs.getString(4)));
+                }
+            }
+            return out;
+        }
+    }
+
+    public int auditSize() throws SQLException {
+        try (Statement st = conn.createStatement(); ResultSet rs = st.executeQuery("SELECT COUNT(*) FROM audit")) {
+            return rs.next() ? rs.getInt(1) : 0;
         }
     }
 

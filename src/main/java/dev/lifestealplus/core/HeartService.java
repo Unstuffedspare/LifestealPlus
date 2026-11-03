@@ -178,6 +178,40 @@ public final class HeartService implements AutoCloseable {
         return submit(() -> store.addPlaytime(player, played, every));
     }
 
+    public CompletableFuture<Void> backUpTo(java.nio.file.Path file) {
+        return submit(() -> {
+            store.backUpTo(file);
+            return null;
+        });
+    }
+
+    public CompletableFuture<Optional<PlayerHearts>> heartsInBackup(java.nio.file.Path file, String name) {
+        return submit(() -> store.heartsInBackup(file, name));
+    }
+
+    public CompletableFuture<Integer> exportLedger(java.nio.file.Path file, String playerName) {
+        return submit(() -> store.exportLedger(file, playerName));
+    }
+
+    public CompletableFuture<Integer> exportAudit(java.nio.file.Path file) {
+        return submit(() -> store.exportAudit(file));
+    }
+
+    public CompletableFuture<Void> addAudit(String actor, String action, String detail) {
+        return submit(() -> {
+            store.addAudit(actor, action, detail);
+            return null;
+        });
+    }
+
+    public CompletableFuture<List<AuditEntry>> audit(int limit, int offset) {
+        return submit(() -> store.audit(limit, offset));
+    }
+
+    public CompletableFuture<Integer> auditSize() {
+        return submit(store::auditSize);
+    }
+
     public CompletableFuture<Void> setPersonalCap(UUID player, Integer cap) {
         return submit(() -> {
             store.setPersonalCap(player, cap);

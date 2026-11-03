@@ -1,0 +1,53 @@
+# How the plugin's menus look. Item names, titles and wording are in messages.yml.
+# Items are Minecraft item names, like lime_dye. Sounds are Minecraft sound names, like
+# ui.button.click, or none for silence. /lifesteal reload applies changes.
+
+sounds:
+  # A menu opens.
+  open: item.book.page_turn
+  # Any click on a button.
+  click: ui.button.click
+  # A setting or preset was changed.
+  changed: block.note_block.chime
+  # A change was refused (a value the plugin can't use).
+  refused: block.note_block.bass
+
+# /lifesteal settings
+settings-menu:
+  feature-on: lime_dye
+  feature-off: gray_dye
+  # A feature without an on/off switch.
+  feature: book
+  switch-on: lime_dye
+  switch-off: gray_dye
+  number: clock
+  list: paper
+  text: name_tag
+  close: barrier
+  back: arrow
+  presets: nether_star
+  # Fills the empty slots; none leaves them empty.
+  filler: none
+
+# The presets page of /lifesteal settings.
+presets-menu:
+  # 3 to 6 rows; the presets fill the rows between the top and the bottom.
+  rows: 4
+  filler: none
+  icons:
+    casual: poppy
+    smp: oak_sapling
+    team: shield
+    standard: iron_sword
+    competitive: golden_sword
+    hardcore: wither_skeleton_skull
+    ultra-hardcore: dragon_head
+    anarchy: tnt
+  # For a preset not listed above.
+  other: paper
+
+# The menu a Revival Charm opens.
+revival-menu:
+  # 1 to 6 rows of eliminated players' heads.
+  rows: 6
+  filler: none

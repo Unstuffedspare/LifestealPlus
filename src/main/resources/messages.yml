@@ -702,6 +702,32 @@ revival:
   # Told to everyone. <player>, <target>
   charm-used: "<aqua>✦ <player> used a Revival Charm to bring <target> back."
 
+# ---- Audit log, backups and exports ------------------------------------------
+audit:
+  # <page>, <pages>
+  header: "<gold>Admin actions</gold> <gray>(page <page> of <pages>, newest first)"
+  empty: "<gray>Nothing recorded yet."
+  # <ago>, <actor>, <action>, <detail>
+  line: "<dark_gray><ago> ago</dark_gray> <white><actor></white> <gray><detail>"
+backup:
+  # <file>
+  made: "<green>Backed up the heart database to backups/<file>."
+  none: "<gray>No backups yet. /lifesteal backup now makes one."
+  # <n>
+  header: "<gold>Backups</gold> <gray>(<n>, newest first). /lifesteal backup restore <file> [player]"
+  # <file>
+  line: " <click:suggest_command:'/lifesteal backup restore <file> '><white><file></white></click>"
+  # <file>
+  unknown: "<red>There's no backup called <file>. /lifesteal backup lists them."
+  # <file>
+  restore-staged: "<gold>Restart the server to restore everything from <file>.</gold> <gray>The current database is kept in backups/ too, in case."
+  # <player>, <file>
+  player-not-in: "<red><player> isn't in <file>."
+  # <player>, <before>, <after>, <file>
+  player-restored: "<green><player> is back to <after> hearts (was <before>), as in <file>."
+  # <n>, <file>
+  exported: "<green>Exported <n> row(s) to <file>."
+
 # ---- Updates -----------------------------------------------------------------
 update:
   # To admins when they join. <version>, <current>, <url>

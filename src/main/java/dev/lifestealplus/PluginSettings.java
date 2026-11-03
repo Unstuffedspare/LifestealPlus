@@ -26,7 +26,7 @@ public record PluginSettings(HeartRules rules, int naturalDeathLoss, String data
                              SocialSettings social, Extras extras, StreakRules streaks, RecapSettings recap,
                              Set<String> excludedWorlds, HeartRecipe heartRecipe, CombatItemRules combatItems,
                              String discordWebhook, RewardSettings rewards, RevivalSettings revival,
-                             EconomySettings economy) {
+                             EconomySettings economy, BackupSettings backups) {
 
     /** Whether dying and killing in this world move hearts (false for the worlds listed in worlds.excluded). */
     public boolean lifestealIn(World world) {
@@ -132,6 +132,10 @@ public record PluginSettings(HeartRules rules, int naturalDeathLoss, String data
      * @param dailyLimit most items one player can buy per day; 0 for no limit
      */
     public record Shop(boolean enabled, double heartPrice, double fragmentPrice, double charmPrice, int dailyLimit) {
+    }
+
+    /** @param every an automatic backup this often; zero for none (before a season reset there's always one) */
+    public record BackupSettings(Duration every, int keep) {
     }
 
     /** The settings, plus anything in the file that had to be replaced by a default. */
@@ -240,7 +244,9 @@ public record PluginSettings(HeartRules rules, int naturalDeathLoss, String data
                         in.whole("heart-items.withdraw.tax-percent", 0, 0, 100),
                         new Shop(in.flag("heart-shop.enabled", false), in.number("heart-shop.heart-price", 5000, 0, 1e12),
                                 in.number("heart-shop.fragment-price", 1000, 0, 1e12), in.number("heart-shop.charm-price", 20000, 0, 1e12),
-                                in.whole("heart-shop.daily-limit", 2, 0, 1000))));
+                                in.whole("heart-shop.daily-limit", 2, 0, 1000))),
+                new BackupSettings(in.flag("backups.enabled", true) ? hours(in.number("backups.every-hours", 24, 1, 24 * 30)) : Duration.ZERO,
+                        in.whole("backups.keep", 7, 1, 1000)));
         return new Loaded(settings, List.copyOf(in.warnings()));
     }
 

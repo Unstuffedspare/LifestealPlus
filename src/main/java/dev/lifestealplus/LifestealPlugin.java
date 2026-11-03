@@ -25,6 +25,7 @@ import dev.lifestealplus.purgatory.TrialManager;
 import io.papermc.paper.plugin.lifecycle.event.types.LifecycleEvents;
 import java.io.InputStreamReader;
 import java.nio.charset.StandardCharsets;
+import java.nio.file.Path;
 import java.time.Clock;
 import java.util.ArrayList;
 import java.util.List;
@@ -48,6 +49,7 @@ public final class LifestealPlugin extends JavaPlugin {
     private BloodMoon bloodMoon;
     private Airdrops airdrops;
     private TimedEvents timedEvents;
+    private MenuLook menuLook;
     private KingOfTheHill koth;
     private Finale finale;
     private Purgatory purgatory;
@@ -90,7 +92,9 @@ public final class LifestealPlugin extends JavaPlugin {
         if (regionRules != null) getLogger().info("WorldGuard found: the lifesteal region flags are ready.");
         try {
             getDataFolder().mkdirs();
-            HeartStore store = new HeartStore(getDataFolder().toPath().resolve(settings.databaseFile()), Clock.systemUTC());
+            Path database = getDataFolder().toPath().resolve(settings.databaseFile());
+            Backups.restorePending(getDataFolder().toPath(), database, getLogger());
+            HeartStore store = new HeartStore(database, Clock.systemUTC());
             hearts = new HeartService(store, settings.rules());
             applyStoreSwitches();
         } catch (Exception e) {
@@ -117,7 +121,8 @@ public final class LifestealPlugin extends JavaPlugin {
         timedEvents = new TimedEvents(this, hearts, heartItems);
         getServer().getPluginManager().registerEvents(new Rewards(this, hearts, tracker, heartItems), this);
         koth = new KingOfTheHill(this, hearts, tracker);
-        getServer().getPluginManager().registerEvents(new RevivalMenu(this, hearts, tracker, heartItems, finale), this);
+        menuLook = new MenuLook(this);
+        getServer().getPluginManager().registerEvents(new RevivalMenu(this, hearts, tracker, heartItems, finale, menuLook), this);
         for (var listener : List.of(heartItems, bloodMoon, airdrops, finale, new LifestealZItems(this, heartItems),
                 new CombatItems(this), timedEvents, koth)) {
             getServer().getPluginManager().registerEvents(listener, this);
@@ -131,8 +136,12 @@ public final class LifestealPlugin extends JavaPlugin {
         } catch (Exception e) {
             getLogger().log(Level.SEVERE, "Couldn't start alt-account tracking; logins won't be recorded", e);
         }
+        Backups backups = new Backups(this, hearts, tracker);
+        AuditLog audit = new AuditLog(this, hearts, tracker);
+        getServer().getPluginManager().registerEvents(audit, this);
         AdminCommands admin = new AdminCommands(this, hearts, tracker,
-                new SeasonReset(this, hearts, tracker, shield, bodies, finale, () -> capSchedule.seasonStarted()));
+                new SeasonReset(this, hearts, tracker, shield, bodies, finale, () -> capSchedule.seasonStarted(),
+                        () -> backups.backUp("before-season-reset", null)));
         YamlConfiguration shippedConfig = YamlConfiguration.loadConfiguration(
                 new InputStreamReader(getResource("config.yml"), StandardCharsets.UTF_8));
         Presets presets = new Presets(YamlConfiguration.loadConfiguration(
@@ -148,14 +157,15 @@ public final class LifestealPlugin extends JavaPlugin {
         getServer().getPluginManager().registerEvents(new UpdateChecker(this), this);
         new DiscordFeed(this, hearts);
         getServer().getPluginManager().registerEvents(caps, this);
-        SettingsMenu settingsMenu = new SettingsMenu(this, new SettingsCatalog(shippedConfig), presets);
+        SettingsMenu settingsMenu = new SettingsMenu(this, new SettingsCatalog(shippedConfig), presets, audit, menuLook);
         getServer().getPluginManager().registerEvents(settingsMenu, this);
         LifestealCommands commands = new LifestealCommands(this, hearts, tracker, mostWanted, shield,
                 new EventCommands(this, heartItems, bloodMoon, airdrops, finale, timedEvents, koth), admin, new FeaturesCommand(this),
                 new ImportCommand(this, hearts, tracker), settingsMenu, caps, id -> {
                     Player player = getServer().getPlayer(id);
                     return player != null && tagger.isTagged(player) || bodies.hasBody(id);
-                }, new Dashboard(this, hearts, tracker, bloodMoon, airdrops, finale));
+                }, new Dashboard(this, hearts, tracker, bloodMoon, airdrops, finale),
+                List.of(audit.node(), backups.backupNode(), backups.exportNode()));
         PurgatoryCommands purgatoryCommands = settings.purgatory().enabled() ? startPurgatory(tracker) : null;
         capSchedule = new CapSchedule(this, hearts);
         SocialCommands social = new SocialCommands(this, hearts, tracker, heartItems, finale, purgatory);
@@ -280,6 +290,7 @@ public final class LifestealPlugin extends JavaPlugin {
         bloodMoon.settingsChanged();
         airdrops.settingsChanged();
         timedEvents.settingsChanged();
+        menuLook.reload();
         return loaded.warnings();
     }
 

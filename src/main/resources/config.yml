@@ -373,6 +373,15 @@ lifestealz-import:
   # this plugin's Hearts whenever a player has one or opens a container holding one.
   convert-items: true
 
+backups:
+  # Copies of the heart database in plugins/LifestealPlus/backups: one every every-hours, and
+  # one before every season reset. /lifesteal backup lists them, /lifesteal backup restore
+  # <file> [player] puts one player (or, after a restart, everything) back.
+  enabled: true
+  every-hours: 24
+  # How many automatic and manual backups to keep; the oldest go first.
+  keep: 7
+
 updates:
   # Look for a newer version on GitHub when the server starts and twice a day, and tell
   # admins when they join. Only the public list of releases is fetched; nothing is sent.

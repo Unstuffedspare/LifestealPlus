@@ -37,7 +37,8 @@ class PresetsTest {
                 assertTrue(shipped.isSet(key), name + " sets " + key + ", which config.yml doesn't have");
             }
         }
-        assertEquals(List.of("casual", "standard", "hardcore"), presets.all().stream().map(Presets.Preset::name).toList());
+        assertEquals(List.of("casual", "smp", "team", "standard", "competitive", "hardcore", "ultra-hardcore", "anarchy"),
+                presets.all().stream().map(Presets.Preset::name).toList());
     }
 
     @Test

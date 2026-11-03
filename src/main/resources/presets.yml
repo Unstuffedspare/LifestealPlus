@@ -35,9 +35,69 @@ casual:
       decay:
         days: 7
 
+smp:
+  description: "For a group of friends. Fights matter, but the world is forgiving and there are plenty of ways back."
+  settings:
+    newbie-shield:
+      hours: 4
+    streaks:
+      shutdown-bonus-hearts: 0
+    most-wanted:
+      enabled: false
+    revival:
+      cooldown-minutes: 5
+    rifts:
+      cost: 5
+    rewards:
+      playtime-hours: 1
+
+team:
+  description: "For playing in pairs and groups. Blood Pacts last, gifts are free, and friends can vote each other back cheaply."
+  settings:
+    repeat-kills:
+      cooldown-hours: 12
+    most-wanted:
+      enabled: false
+    blood-pacts:
+      break-cooldown-hours: 72
+    trading:
+      tax-percent: 0
+    rifts:
+      cost: 4
+    revival-votes:
+      hearts-needed: 4
+      min-players: 2
+
 standard:
   description: "The defaults the plugin ships with. A fair fight with a way back."
   settings: {}
+
+competitive:
+  description: "For tournaments. Only PvP costs hearts, nobody can buy, craft or gift them, and there's no grinding for them."
+  settings:
+    hearts:
+      natural-death-loss: 0
+    repeat-kills:
+      cooldown-hours: 3
+    streaks:
+      shutdown-at: 3
+    newbie-shield:
+      hours: 1
+      expires-after-days: 1
+    combat-log:
+      tag-seconds: 20
+      body-seconds: 45
+    most-wanted:
+      interval-minutes: 60
+    heart-items:
+      recipe:
+        enabled: false
+    trading:
+      enabled: false
+    rewards:
+      enabled: false
+    revival-charm:
+      enabled: false
 
 hardcore:
   description: "Brutal. Fewer hearts, short protection, longer combat tags, no crafted Hearts, and a hard road back from elimination."
@@ -80,3 +140,53 @@ hardcore:
         days: 2
       recipe:
         enabled: false
+
+ultra-hardcore:
+  description: "One mistake and you're out. Five hearts, no protection, no totems, and Purgatory is the only way back."
+  settings:
+    hearts:
+      starting: 5
+      max: 10
+      revive: 1
+      natural-death-drops: false
+    newbie-shield:
+      enabled: false
+    last-stand:
+      enabled: false
+    rifts:
+      enabled: false
+    revival-votes:
+      enabled: false
+    revival-charm:
+      enabled: false
+    purgatory:
+      fragments-needed: 5
+      difficulty: 2.0
+    combat-items:
+      totems: false
+    heart-items:
+      recipe:
+        enabled: false
+    trading:
+      enabled: false
+    rewards:
+      enabled: false
+
+anarchy:
+  description: "No safety nets. No newbie shields, no farming protection, logging out mid-fight is fair game, and Blood Moons come every few days."
+  settings:
+    repeat-kills:
+      enabled: false
+    newbie-shield:
+      enabled: false
+    combat-log:
+      enabled: false
+    alt-detection:
+      enabled: false
+    most-wanted:
+      interval-minutes: 30
+      precision-blocks: 25
+      min-players-online: 2
+    blood-moon:
+      every-days: 3
+      kill-multiplier: 3

@@ -57,14 +57,17 @@ final class LifestealCommands {
     private final SettingsMenu settingsMenu;
     private final PersonalCaps caps;
     private final Dashboard dashboard;
+    /** More /lifesteal subcommands (audit, backup, export). */
+    private final List<com.mojang.brigadier.builder.LiteralArgumentBuilder<CommandSourceStack>> moreAdmin;
     /** Whether a player is in a fight right now: combat-tagged, or logged out with their body still standing. */
     private final Predicate<UUID> inFight;
 
     LifestealCommands(LifestealPlugin plugin, HeartService hearts, HeartTracker tracker, MostWanted mostWanted,
                       NewbieShield shield, EventCommands events, AdminCommands admin, FeaturesCommand features,
                       ImportCommand importer, SettingsMenu settingsMenu, PersonalCaps caps, Predicate<UUID> inFight,
-                      Dashboard dashboard) {
+                      Dashboard dashboard, List<com.mojang.brigadier.builder.LiteralArgumentBuilder<CommandSourceStack>> moreAdmin) {
         this.dashboard = dashboard;
+        this.moreAdmin = moreAdmin;
         this.caps = caps;
         this.inFight = inFight;
         this.importer = importer;
@@ -277,6 +280,12 @@ final class LifestealCommands {
     }
 
     private LiteralCommandNode<CommandSourceStack> adminCommand() {
+        var root = adminRoot();
+        moreAdmin.forEach(root::then);
+        return root.build();
+    }
+
+    private com.mojang.brigadier.builder.LiteralArgumentBuilder<CommandSourceStack> adminRoot() {
         return Commands.literal("lifesteal")
                 .requires(src -> src.getSender().hasPermission("lifestealplus.admin"))
                 .then(amountCommand("give", HeartCause.ADMIN_GIVE))
@@ -355,8 +364,7 @@ final class LifestealCommands {
                                     Msg.t("count", warnings.size()));
                             warnings.forEach(w -> Msg.send(sender, "admin.reload-warning", Msg.t("warning", w)));
                             return Command.SINGLE_SUCCESS;
-                        }))
-                .build();
+                        }));
     }
 
     private com.mojang.brigadier.builder.LiteralArgumentBuilder<CommandSourceStack> amountCommand(String name, HeartCause cause) {

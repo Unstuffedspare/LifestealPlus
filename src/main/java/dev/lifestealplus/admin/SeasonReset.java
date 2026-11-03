@@ -44,8 +44,13 @@ public final class SeasonReset {
     private final Runnable onNewSeason;
     private final Map<String, Pending> pending = new ConcurrentHashMap<>();
 
+    /** Makes a backup; the reset only goes ahead once it's safely written. */
+    private final java.util.function.Supplier<CompletableFuture<?>> backUp;
+
     public SeasonReset(LifestealPlugin plugin, HeartService hearts, HeartTracker tracker, NewbieShield shield,
-                       CombatBodies bodies, Finale finale, Runnable onNewSeason) {
+                       CombatBodies bodies, Finale finale, Runnable onNewSeason,
+                       java.util.function.Supplier<CompletableFuture<?>> backUp) {
+        this.backUp = backUp;
         this.onNewSeason = onNewSeason;
         this.plugin = plugin;
         this.hearts = hearts;
@@ -86,7 +91,7 @@ public final class SeasonReset {
         // Nobody should be able to kill a logged-out body whose owner is about to be wiped.
         bodies.shutdown();
         // Chained, never blocking: these callbacks run on the database thread itself.
-        currentName()
+        backUp.get().thenCompose(saved -> currentName())
                 .thenCompose(current -> hearts.archiveSeason(current, Map.of(CURRENT, request.nextName(),
                                 CapSchedule.SEASON_STARTED, String.valueOf(System.currentTimeMillis())))
                         .thenApply(standings -> new Archived(current, standings)))
