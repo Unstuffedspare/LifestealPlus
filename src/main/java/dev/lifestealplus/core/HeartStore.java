@@ -1131,6 +1131,14 @@ public final class HeartStore implements AutoCloseable {
         }
     }
 
+    /** Removes every state key starting with {@code prefix} (which mustn't contain % or _). */
+    public void clearStates(String prefix) throws SQLException {
+        try (PreparedStatement ps = conn.prepareStatement("DELETE FROM server_state WHERE key LIKE ?")) {
+            ps.setString(1, prefix + "%");
+            ps.executeUpdate();
+        }
+    }
+
     /** Players with at least one heart, online or not. */
     public int aliveCount() throws SQLException {
         try (Statement st = conn.createStatement(); ResultSet rs = st.executeQuery("SELECT COUNT(*) FROM players WHERE hearts > 0")) {

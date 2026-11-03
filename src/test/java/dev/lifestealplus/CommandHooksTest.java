@@ -21,6 +21,13 @@ class CommandHooksTest {
     }
 
     @Test
+    void namesCantBreakOutOfACommand() {
+        assertEquals("Alice_2", CommandHooks.name("Alice_2"));
+        assertEquals(".BedrockSteve", CommandHooks.name(".Bedrock Steve"));
+        assertEquals("evilopme", CommandHooks.name("evil;\nop me"));
+    }
+
+    @Test
     void theShippedFileHasEveryHookAndNoProblems() {
         YamlConfiguration shipped = YamlConfiguration.loadConfiguration(new InputStreamReader(
                 CommandHooksTest.class.getResourceAsStream("/hooks.yml"), StandardCharsets.UTF_8));

@@ -191,6 +191,10 @@ class SettingsTest {
         assertEquals(List.of(Duration.ofMinutes(30), Duration.ofHours(12), Duration.ofDays(14), Duration.ZERO),
                 List.of(bans.length(1), bans.length(2), bans.length(3), bans.length(4)));
         assertEquals("forever", bans.lengthText(5));
+        assertEquals("", bans.lengthOrNothing(5), "an optional-length ban command gets nothing for forever");
+        assertEquals("30m", bans.lengthOrNothing(1));
+        assertFalse(bans.useHooks());
+        assertTrue(load("eliminations:\n  ban:\n    use-hooks: true\n").settings().bans().useHooks());
     }
 
     @Test

@@ -110,6 +110,53 @@ async function main() {
   check('but not other bans', !!banned('Cara'), true)
   await rcon('pardon Cara')
   check('the season hook', saw('Alice', 'HOOK season') && saw('Alice', '-> Hooks '), true)
+  check('and no ban carries over into it', JSON.parse(sql("SELECT COUNT(*) FROM server_state WHERE key LIKE 'ban-mode.%'"))[0][0], 0)
+  check('Bob can join the new season', await tryEnter('Bob'), null)
+  await sleep(2500)
+  check('in survival', await gamemode('Bob'), 0)
+  // A new season shields everyone; take it off so the kills below count.
+  for (const n of ['Alice', 'Bob']) await rcon(`lifesteal shield ${n} 0`)
+
+  // Switching ban mode on mid-season leaves players already in Purgatory there.
+  await rcon('lifesteal config eliminations.ban.enabled false')
+  await rcon('lifesteal set Bob 1'); await sleep(1000)
+  await kill('Bob', 'Alice')
+  await rcon('lifesteal config eliminations.ban.enabled true')
+  await logOut('Bob'); await enterWatching('Bob'); await sleep(2500)
+  check('switching it on doesn\'t ban someone already in Purgatory', banned('Bob'), undefined)
+  check('they stay in Purgatory', await gamemode('Bob'), 2)
+  await rcon('lifesteal revive Bob'); await sleep(2000)
+  await rejoin('Bob')
+
+  // use-hooks: a ban plugin does the banning (here vanilla /ban stands in for one), and the
+  // plugin brings them back on their first join after it.
+  fs.writeFileSync(HOOKS, [
+    'elimination: ["ban {player} hooked[{ban-time}]"]',
+    'revival: ["pardon {player}"]', ''].join('\n'))
+  await rcon('lifesteal config eliminations.ban.use-hooks true')
+  // Bob's 2nd and 3rd eliminations this season (the Purgatory one was the 1st).
+  await rcon('lifesteal config eliminations.ban.lengths [3d, 3d, forever]')
+  await rcon('lifesteal reload')
+  await rcon('lifesteal set Bob 1'); await sleep(1000)
+  await kill('Bob', 'Alice'); await sleep(2000)
+  const hooked = banned('Bob')
+  check('the hook bans them, not the plugin', hooked && [hooked.source, hooked.reason], ['Server', 'hooked[3d]'])
+  await rcon('pardon Bob')
+  check('when that ban ends they can join', await tryEnter('Bob'), null)
+  await sleep(3000)
+  check('and are back with revive hearts', hearts('Bob'), 3)
+  check('in survival', await gamemode('Bob'), 0)
+  check('recorded as the ban being over', [lastLedger('Bob')[0], lastLedger('Bob')[4]], ['REVIVE', 'ban over'])
+
+  await rcon('lifesteal set Bob 1'); await sleep(1000)
+  await kill('Bob', 'Alice'); await sleep(2000)
+  check('a permanent ban gets no length', banned('Bob') && banned('Bob').reason, 'hooked[]')
+  await rcon('lifesteal revive Bob'); await sleep(2000)
+  check('a revive lifts it through the revival hook', banned('Bob'), undefined)
+  check('so they can join straight away', await tryEnter('Bob'), null)
+  await sleep(2500)
+  check('in survival with their hearts', [await gamemode('Bob'), hearts('Bob')], [0, 3])
+  await rcon('lifesteal config eliminations.ban.use-hooks false')
 
   // A broken hooks.yml is reported and the old hooks keep working.
   fs.writeFileSync(HOOKS, 'kill: [say {killer}]\non-kill: []\n')

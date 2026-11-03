@@ -86,9 +86,10 @@ final class CommandHooks implements Listener {
         if (hooks.getStringList("elimination").isEmpty()) return;
         hearts.eliminations(change.player()).thenAccept(count -> {
             Map<String, Object> fills = player(change);
-            fills.put("killer", change.otherName() == null ? "nobody" : change.otherName());
+            fills.put("killer", change.otherName() == null ? "nobody" : name(change.otherName()));
             fills.put("count", count);
             fills.put("ban-length", plugin.settings().bans().lengthText(count));
+            fills.put("ban-time", plugin.settings().bans().lengthOrNothing(count));
             run("elimination", fills);
         });
     }
@@ -102,7 +103,7 @@ final class CommandHooks implements Listener {
 
     private static Map<String, Object> player(HeartChange change) {
         Map<String, Object> fills = new LinkedHashMap<>();
-        fills.put("player", change.name());
+        fills.put("player", name(change.name()));
         fills.put("uuid", change.player());
         fills.put("cause", change.cause().name().toLowerCase(Locale.ROOT).replace('_', '-'));
         return fills;
@@ -111,8 +112,8 @@ final class CommandHooks implements Listener {
     /** Everything a kill can set off. */
     void kill(KillOutcome outcome) {
         Map<String, Object> fills = new LinkedHashMap<>();
-        fills.put("killer", outcome.killer().name());
-        fills.put("victim", outcome.victim().name());
+        fills.put("killer", name(outcome.killer().name()));
+        fills.put("victim", name(outcome.victim().name()));
         fills.put("killer-uuid", outcome.killer().player());
         fills.put("victim-uuid", outcome.victim().player());
         fills.put("killer-hearts", outcome.killer().after());
@@ -120,7 +121,7 @@ final class CommandHooks implements Listener {
         boolean tookHeart = !outcome.repeat() && !outcome.shielded() && outcome.victim().delta() < 0;
         if (tookHeart) run("kill", fills);
         if (tookHeart && outcome.killerStreak() > 0) {
-            run("streak." + outcome.killerStreak(), Map.of("player", outcome.killer().name(),
+            run("streak." + outcome.killerStreak(), Map.of("player", name(outcome.killer().name()),
                     "uuid", outcome.killer().player(), "streak", outcome.killerStreak()));
         }
         if (outcome.endedStreak() > 0) {
@@ -136,7 +137,7 @@ final class CommandHooks implements Listener {
     }
 
     void seasonEnded(String old, String next, String winner) {
-        run("season-reset", Map.of("old", old, "season", next, "winner", winner == null ? "nobody" : winner));
+        run("season-reset", Map.of("old", old, "season", next, "winner", winner == null ? "nobody" : name(winner)));
     }
 
     /** Runs a hook's commands from the console, on the server's own thread; one failing doesn't stop the rest. */
@@ -155,6 +156,15 @@ final class CommandHooks implements Listener {
                 }
             }
         });
+    }
+
+    /**
+     * A player's name made safe to put in a command. Paper only lets through names of letters,
+     * digits and _, but a proxy or a server with name checks off can pass others (Bedrock
+     * players' names often start with a dot), so anything else is dropped.
+     */
+    static String name(String name) {
+        return name.replaceAll("[^A-Za-z0-9_.-]", "");
     }
 
     /** The command with its fill-ins swapped in, and without a leading slash. */

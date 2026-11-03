@@ -120,7 +120,7 @@ Some things worth deciding before a season starts:
 - `trading.tax-percent` and `heart-items.withdraw.tax-percent` (both 0): a share of every gift or withdrawal that's lost, to slow hearts moving around.
 - `heart-shop`: off until you switch it on. Needs Vault (or VaultUnlocked) and an economy plugin such as EssentialsX. `daily-limit` (2) stops money buying a season, and what each player bought today is saved, so a restart doesn't reset it.
 - `eliminations`: everyone sees a title and hears a sound when someone loses their last heart. The chat message differs for a kill, a death to the world and an admin, and each is in `messages.yml`.
-- `eliminations.ban` (off): ban eliminated players from the server instead of sending them to Purgatory or spectating. `lengths` (`[1d, 3d, 7d]`) sets the ban for a player's first, second and third elimination this season, and the last one repeats; `forever` works too. When the ban ends (or an admin lifts it) they come back with `hearts.revive` hearts. A rift, a pledge or a Revival Charm lifts it early, and a new season lifts every one. The plugin only ever lifts bans it made.
+- `eliminations.ban` (off): ban eliminated players from the server instead of sending them to Purgatory or spectating. `lengths` (`[1d, 3d, 7d]`) sets the ban for a player's first, second and third elimination this season, and the last one repeats; `forever` works too. When the ban ends (or an admin lifts it) they come back with `hearts.revive` hearts. A rift, a pledge or a Revival Charm lifts it early, and a new season lifts every one. The plugin only ever lifts bans it made. Switching it on mid-season only affects new eliminations; anyone already in Purgatory stays there. On a network, see [Networks](#networks).
 - `combat-items`: switch off totems (`totems`), crystal PvP (`end-crystals`; crystals still break blocks and respawn the dragon) or bed and respawn-anchor bombing (`bed-and-anchor-explosions`).
 - Personal caps: give a player the permission `lifestealplus.max-hearts.<n>` (for example `lifestealplus.max-hearts.30`, with a permissions plugin such as LuckPerms) and their cap is n instead of `hearts.max`. The highest one counts, it's picked up within a minute, and losing it never takes hearts away.
 - `discord.webhook-url`: paste a Discord channel's webhook link (channel settings > Integrations > Webhooks) and the server's news (eliminations, comebacks, long streaks, bounties, events) is posted there within seconds. `none` turns it off.
@@ -262,12 +262,16 @@ Every player command has its own permission (listed with the commands above), al
 
 Set `database.type: mysql` and fill in `database.mysql` on every server, each with its own `server-name`, and they share one MySQL or MariaDB database: hearts, the ledger, bounties, seasons and everything else about players. Each server keeps its own Blood Moons, airdrops and other events. A player's hearts are kept up to date on the server they're on; a change made on another server reaches them within a minute.
 
-Command hooks run on the server where the thing happened. Ban mode (`eliminations.ban`) only bans from the server it's on, so on a network, leave it off and ban through your proxy's ban plugin in `hooks.yml`. `{ban-length}` gives the length `eliminations.ban.lengths` sets for that elimination, even with ban mode off:
+Command hooks run on the server where the thing happened. The plugin's own ban (`eliminations.ban`) only covers the server it's on, so on a network, turn on `eliminations.ban.use-hooks` too and ban through your proxy's ban plugin. The plugin then bans nobody itself, but still brings players back the first time they join after being eliminated, on whichever server that is. `{ban-time}` is the length `eliminations.ban.lengths` gives that elimination (empty for `forever`):
 
 ```yaml
 elimination:
-  - "tempban {player} {ban-length} Out of hearts"
+  - "ban {player} {ban-time} Out of hearts"
+revival:
+  - "unban {player}"
 ```
+
+The `unban` on revival lets a player brought back by a rift, a pledge or a Revival Charm in straight away.
 
 On MySQL, the plugin's own backups are off: back the database up with its own tools (`mysqldump`, `mariadb-backup`).
 

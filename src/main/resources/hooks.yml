@@ -6,7 +6,8 @@
 # the leading /. Leave a hook as [] to run nothing.
 #
 # Fill-ins like {player} are swapped for the real thing. Each hook lists the ones it has.
-# Player names are plain Minecraft names, so they're safe to put in a command.
+# Player names only ever contain letters, digits, _ . and - (anything else is dropped), so
+# they're safe to put in a command.
 #
 # Hooks run on the server where it happened. These are only set here, not in
 # /lifesteal settings, so a settings admin can't use them to run console commands.
@@ -17,11 +18,19 @@
 #   {killer}     who killed them, or nobody (a mob, a fall, an admin)
 #   {cause}      pvp-death, death (to the world), admin-take, admin-set, ...
 #   {count}      how many times they've been eliminated this season, this one included
-#   {ban-length} the length eliminations.ban.lengths gives this elimination, like 3d or forever,
-#                for a ban plugin even when eliminations.ban is off
-# For example:
+#   {ban-length} the length eliminations.ban.lengths gives this elimination, like 3d or forever
+#   {ban-time}   the same, but empty for forever, for ban commands where the length is optional
+#
+# To ban through your own ban plugin (on a network, one on the proxy), set eliminations.ban
+# enabled and use-hooks to true in config.yml. The plugin then bans nobody itself, but still
+# brings players back with hearts.revive hearts the first time they join after the ban. Pair
+# the ban with an unban on revival, so a rift, a pledge or a Revival Charm lets them back in:
 #   elimination:
-#     - "tempban {player} {ban-length} Out of hearts"
+#     - "ban {player} {ban-time} Out of hearts"
+#   revival:
+#     - "unban {player}"
+# (That's LiteBans: its /ban takes an optional length. For a plugin whose tempban needs one,
+# leave forever out of eliminations.ban.lengths.)
 elimination: []
 
 # Someone came back from being eliminated.

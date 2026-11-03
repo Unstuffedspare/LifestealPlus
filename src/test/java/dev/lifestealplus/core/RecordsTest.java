@@ -53,6 +53,17 @@ class RecordsTest {
     }
 
     @Test
+    void stateCanBeClearedByPrefix() throws SQLException {
+        store.putState("ban-mode.banned-at.a", "1");
+        store.putState("ban-mode.banned-at.b", "2");
+        store.putState("season.name", "Season 1");
+        store.clearStates("ban-mode.banned-at.");
+        assertTrue(store.state("ban-mode.banned-at.a").isEmpty());
+        assertTrue(store.state("ban-mode.banned-at.b").isEmpty());
+        assertEquals("Season 1", store.state("season.name").orElseThrow());
+    }
+
+    @Test
     void aBackupHoldsTheHeartsAsTheyWere() throws SQLException {
         TestStores.sqliteOnly();
         store.apply(List.of(HeartRequest.set(BOB, 7, HeartCause.ADMIN_SET, "op")), RULES);

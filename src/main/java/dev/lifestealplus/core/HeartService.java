@@ -407,6 +407,13 @@ public final class HeartService implements AutoCloseable {
         });
     }
 
+    public CompletableFuture<Void> clearStates(String prefix) {
+        return submit(() -> {
+            store.clearStates(prefix);
+            return null;
+        });
+    }
+
     public CompletableFuture<Void> clearState(String key) {
         return submit(() -> {
             store.clearState(key);

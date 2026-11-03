@@ -159,11 +159,16 @@ public record PluginSettings(HeartRules rules, int naturalDeathLoss, PurgatorySe
      *
      * @param lengths as written ("3d", "forever"), checked on load; one per elimination this season, the last repeating
      */
-    public record BanSettings(boolean enabled, List<String> lengths) {
+    public record BanSettings(boolean enabled, boolean useHooks, List<String> lengths) {
 
         /** As written, for a player's {@code elimination}th elimination this season (1 for the first). */
         public String lengthText(int elimination) {
             return lengths.get(Math.min(lengths.size(), Math.max(1, elimination)) - 1);
+        }
+
+        /** Like {@link #lengthText}, but empty for forever, for ban commands whose length is optional. */
+        public String lengthOrNothing(int elimination) {
+            return length(elimination).isZero() ? "" : lengthText(elimination);
         }
 
         /** How long that ban lasts; zero for forever. */
@@ -194,21 +199,22 @@ public record PluginSettings(HeartRules rules, int naturalDeathLoss, PurgatorySe
     private static BanSettings bans(ConfigReader in) {
         List<String> fallback = List.of("1d", "3d", "7d");
         boolean enabled = in.flag("eliminations.ban.enabled", false);
+        boolean useHooks = in.flag("eliminations.ban.use-hooks", false);
         List<String> lengths = in.texts("eliminations.ban.lengths");
         for (String length : lengths) {
             if (banLength(length) == null) {
                 in.warn("eliminations.ban.lengths has \"" + length + "\", which isn't a length like 30m, 12h, 3d, 2w or forever; using "
                         + fallback + ".");
-                return new BanSettings(enabled, fallback);
+                return new BanSettings(enabled, useHooks, fallback);
             }
         }
         if (lengths.isEmpty()) {
             if (in.raw("eliminations.ban.lengths", null) != null) {
                 in.warn("eliminations.ban.lengths needs at least one length; using " + fallback + ".");
             }
-            return new BanSettings(enabled, fallback);
+            return new BanSettings(enabled, useHooks, fallback);
         }
-        return new BanSettings(enabled, List.copyOf(lengths));
+        return new BanSettings(enabled, useHooks, List.copyOf(lengths));
     }
 
     /** The settings, plus anything in the file that had to be replaced by a default. */
