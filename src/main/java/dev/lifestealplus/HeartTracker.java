@@ -2,6 +2,7 @@ package dev.lifestealplus;
 
 import dev.lifestealplus.core.HeartChange;
 import dev.lifestealplus.core.PlayerHearts;
+import dev.lifestealplus.event.HeartsChangedEvent;
 import dev.lifestealplus.event.PlayerEliminatedEvent;
 import dev.lifestealplus.event.PlayerRevivedEvent;
 import java.util.List;
@@ -70,6 +71,7 @@ public final class HeartTracker {
     }
 
     private void applyChange(HeartChange change) {
+        plugin.getServer().getPluginManager().callEvent(new HeartsChangedEvent(change));
         Player player = plugin.getServer().getPlayer(change.player());
         if (player != null) {
             online.put(change.player(), change.after());

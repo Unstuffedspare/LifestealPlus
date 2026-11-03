@@ -3,6 +3,7 @@ package dev.lifestealplus.combat;
 import dev.lifestealplus.HeartTracker;
 import dev.lifestealplus.LifestealPlugin;
 import dev.lifestealplus.Msg;
+import dev.lifestealplus.Zones;
 import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
@@ -47,7 +48,7 @@ public final class CombatTagger implements Listener {
         if (!(event.getEntity() instanceof Player victim)) return;
         Player attacker = attacker(event.getDamager());
         if (attacker == null || attacker.equals(victim)) return;
-        if (!plugin.settings().lifestealIn(victim.getWorld())) return;
+        if (!plugin.zones().allows(victim.getLocation(), Zones.Rule.COMBAT_TAG)) return;
         if (!fighting(attacker) || !fighting(victim)) return;
         long tagMillis = plugin.settings().combat().tag().toMillis();
         if (tagMillis <= 0) return;

@@ -66,11 +66,13 @@ public record PluginSettings(HeartRules rules, int naturalDeathLoss, String data
      * @param bountyUndo how long after placing a bounty the placer can take it back; zero for never
      * @param eliminationTitle everyone sees a title when someone is eliminated
      * @param eliminationSound the sound everyone hears then (a Minecraft sound key), or null for none
+     * @param updateCheck look for newer releases and tell admins
      */
     public record Extras(boolean vengeanceTracker, int trackerRoundTo, boolean tabList, boolean pactsInTab,
                          boolean publicSeasons, boolean altDetection, boolean shieldsEnabled, Duration shieldExpiry,
                          boolean convertLifestealZItems, boolean naturalDeathDrops, Duration keepLogins,
-                         Duration bountyUndo, boolean eliminationTitle, String eliminationSound) {
+                         Duration bountyUndo, boolean eliminationTitle, String eliminationSound,
+                         boolean updateCheck) {
     }
 
     /**
@@ -166,7 +168,8 @@ public record PluginSettings(HeartRules rules, int naturalDeathLoss, String data
                 hours(24 * in.number("alt-detection.keep-days", 90, 1, 3650)),
                 minutes(in.number("bounties.undo-minutes", 5, 0, 60 * 24)),
                 in.flag("eliminations.title", true),
-                sound(in, "eliminations.sound", "entity.wither.spawn"));
+                sound(in, "eliminations.sound", "entity.wither.spawn"),
+                in.flag("updates.check", true));
         HeartRecipe heartRecipe = in.flag("heart-items.recipe.enabled", true)
                 ? new HeartRecipe(true, in.item("heart-items.recipe.corners", "diamond_block"),
                         in.item("heart-items.recipe.sides", "gold_block"),

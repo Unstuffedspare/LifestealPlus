@@ -81,7 +81,7 @@ final class PlayerListener implements Listener {
     @EventHandler(priority = EventPriority.MONITOR, ignoreCancelled = true)
     void onDeath(PlayerDeathEvent event) {
         Player victim = event.getPlayer();
-        if (!plugin.settings().lifestealIn(victim.getWorld())) return;
+        if (!plugin.zones().allows(victim.getLocation(), Zones.Rule.LIFESTEAL)) return;
         Integer current = tracker.cachedHearts(victim.getUniqueId());
         if (current != null && current <= 0) return;
 
@@ -89,7 +89,12 @@ final class PlayerListener implements Listener {
         if (killer != null && !killer.getUniqueId().equals(victim.getUniqueId())) {
             kills.pvpKill(victim.getUniqueId(), killer.getUniqueId());
         } else {
-            kills.naturalDeath(victim.getUniqueId(), event.getDamageSource().getDamageType().getTranslationKey(), victim.getLocation());
+            if (plugin.zones().allows(victim.getLocation(), Zones.Rule.NATURAL_LOSS)) {
+                kills.naturalDeath(victim.getUniqueId(), event.getDamageSource().getDamageType().getTranslationKey(), victim.getLocation());
+            } else {
+                // A region where falls and mobs cost nothing; dying still ends a streak.
+                hearts.endStreak(victim.getUniqueId());
+            }
         }
     }
 

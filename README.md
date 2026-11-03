@@ -171,6 +171,15 @@ Every player permission is allowed by default. Take one away with your permissio
 
 A season reset doesn't touch the world or inventories, so start the new season on a fresh map if you want one.
 
+## Works with
+
+All optional: LifestealPlus runs fine without any of them.
+
+- **[PlaceholderAPI](https://modrinth.com/plugin/placeholderapi):** `%lifestealplus_hearts%`, `%lifestealplus_max_hearts%`, `%lifestealplus_kills%`, `%lifestealplus_streak%`, `%lifestealplus_bounty%`, `%lifestealplus_eliminated%`, leaderboard placeholders (`%lifestealplus_top_1_name%`) and more, for scoreboards, TAB and holograms. The full list is in [docs/API.md](docs/API.md#placeholders).
+- **[WorldGuard](https://enginehub.org/worldguard):** region flags `lifesteal`, `lifesteal-natural-loss` and `lifesteal-combat-tag`. For example, `/rg flag spawn lifesteal deny` makes spawn a place where nothing lifesteal happens. See [docs/API.md](docs/API.md#worldguard-flags).
+- **LuckPerms** (or any permissions plugin): every command has its own permission, and `lifestealplus.max-hearts.<n>` gives a rank its own heart cap.
+- **Other plugins:** a developer API with heart-change events. See [docs/API.md](docs/API.md).
+
 ## Privacy
 
 Alt detection is the only feature that records anything about players' connections.
@@ -180,6 +189,8 @@ Alt detection is the only feature that records anything about players' connectio
 - **How long:** an address is forgotten `alt-detection.keep-days` (90) days after it was last used.
 - **False matches:** family members, housemates and players on the same school or public network share an address. That's why a match only alerts admins and never blocks or punishes anyone.
 - **Turning it off:** set `alt-detection.enabled` to false and nothing more is recorded. Existing records are forgotten as they reach the keep-days limit.
+
+The update check (`updates.check`) fetches the public list of releases from GitHub when the server starts and twice a day. It sends nothing about your server.
 
 ## Building from source
 

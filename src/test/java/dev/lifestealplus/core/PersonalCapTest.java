@@ -96,4 +96,14 @@ class PersonalCapTest {
         assertEquals(store.lastNewsId(), after.getLast().getKey());
         assertEquals(1, store.newsAfter(first, 1).size());
     }
+
+    @Test
+    void pluginsCanSetSomeoneBackButNotAddThemBack() throws SQLException {
+        store.apply(List.of(HeartRequest.set(BOB, 0, HeartCause.ADMIN_SET, "op")), RULES);
+        store.apply(List.of(HeartRequest.add(BOB, 2, HeartCause.PLUGIN_ADD, "MyQuests")), RULES);
+        assertEquals(0, hearts(BOB), "adding doesn't revive");
+        store.apply(List.of(HeartRequest.set(BOB, 4, HeartCause.PLUGIN_SET, "MyEvents")), RULES);
+        assertEquals(4, hearts(BOB));
+        assertEquals(HeartCause.PLUGIN_SET, store.ledger(BOB, 1, 0).getFirst().cause());
+    }
 }

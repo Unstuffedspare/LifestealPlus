@@ -3,6 +3,7 @@ version: '${version}'
 main: dev.lifestealplus.LifestealPlugin
 api-version: '26.3'
 description: Lifesteal SMP core with a full heart ledger.
+softdepend: [PlaceholderAPI, WorldGuard]
 libraries:
   - org.xerial:sqlite-jdbc:${sqliteVersion}
 

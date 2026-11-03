@@ -286,6 +286,11 @@ lifestealz-import:
   # this plugin's Hearts whenever a player has one or opens a container holding one.
   convert-items: true
 
+updates:
+  # Look for a newer version on GitHub when the server starts and twice a day, and tell
+  # admins when they join. Only the public list of releases is fetched; nothing is sent.
+  check: true
+
 database:
   # SQLite file inside the plugin folder. (restart)
   file: lifesteal.db

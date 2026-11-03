@@ -2,6 +2,7 @@ package dev.lifestealplus.combat;
 
 import dev.lifestealplus.LifestealPlugin;
 import dev.lifestealplus.Msg;
+import dev.lifestealplus.Zones;
 import dev.lifestealplus.core.HeartService;
 import java.time.Duration;
 import java.util.Map;
@@ -111,7 +112,7 @@ public final class NewbieShield implements Listener {
         Player attacker = attacker(event.getDamager());
         if (attacker == null || attacker.equals(victim)) return;
         // Nothing is at stake in a world without lifesteal, so the shield neither blocks nor breaks there.
-        if (!plugin.settings().lifestealIn(victim.getWorld())) return;
+        if (!plugin.zones().allows(victim.getLocation(), Zones.Rule.LIFESTEAL)) return;
 
         if (isShielded(victim)) {
             event.setCancelled(true);
@@ -141,7 +142,7 @@ public final class NewbieShield implements Listener {
                 left.remove(id);
                 continue;
             }
-            if (!plugin.settings().lifestealIn(player.getWorld())) continue;
+            if (!plugin.zones().allows(player.getLocation(), Zones.Rule.LIFESTEAL)) continue;
             hearts.spendShield(id, TICK).whenComplete((remaining, error) -> {
                 if (error != null) {
                     plugin.getLogger().log(Level.SEVERE, "Couldn't update the newbie shield for " + player.getName(), error);

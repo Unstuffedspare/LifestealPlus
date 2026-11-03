@@ -22,7 +22,10 @@ public enum HeartCause {
     REVIVAL_PLEDGE(false),
     REVIVAL_REFUND(false),
     PACT_SHARE(false),
-    IMPORT(true);
+    IMPORT(true),
+    /** Another plugin through the API: adding can't revive, setting can. */
+    PLUGIN_ADD(false),
+    PLUGIN_SET(true);
 
     private final boolean canRevive;
 

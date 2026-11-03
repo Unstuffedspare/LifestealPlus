@@ -14,6 +14,8 @@ java {
 repositories {
     mavenCentral()
     maven("https://repo.papermc.io/repository/maven-public/")
+    maven("https://repo.extendedclip.com/releases/")
+    maven("https://maven.enginehub.org/repo/")
 }
 
 val sqliteVersion = "3.54.1.0"
@@ -22,6 +24,9 @@ dependencies {
     compileOnly("io.papermc.paper:paper-api:26.3.build.235-stable")
     // Not shaded: Paper downloads it at startup from the plugin.yml `libraries` list.
     compileOnly("org.xerial:sqlite-jdbc:$sqliteVersion")
+    // Optional hooks: used only when the server has these plugins installed.
+    compileOnly("me.clip:placeholderapi:2.12.3")
+    compileOnly("com.sk89q.worldguard:worldguard-bukkit:7.0.20")
 
     testImplementation(platform("org.junit:junit-bom:6.1.3"))
     testImplementation("org.junit.jupiter:junit-jupiter")

@@ -602,6 +602,11 @@ dashboard:
   switched-off: "off"
   happening: "happening now"
 
+# ---- Updates -----------------------------------------------------------------
+update:
+  # To admins when they join. <version>, <current>, <url>
+  available: "<gold>LifestealPlus <version> is out</gold> <gray>(you have <current>).</gray> <click:open_url:'<url>'><aqua><u>[What's new]</u></aqua></click>"
+
 # ---- /stats -----------------------------------------------------------------
 stats:
   # <player>, <season>

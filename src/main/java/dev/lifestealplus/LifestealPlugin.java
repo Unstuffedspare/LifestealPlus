@@ -52,6 +52,23 @@ public final class LifestealPlugin extends JavaPlugin {
     private NewsFeed news;
     private HeartItems heartItems;
 
+    /** WorldGuard's region flags, when WorldGuard is installed. */
+    private Zones.RegionRules regionRules;
+    private Zones zones;
+
+    /** WorldGuard only accepts new flags while plugins load. */
+    @Override
+    public void onLoad() {
+        if (getServer().getPluginManager().getPlugin("WorldGuard") != null) {
+            regionRules = WorldGuardRules.register(getLogger());
+        }
+    }
+
+    /** Where lifesteal applies: excluded worlds and WorldGuard regions. */
+    public Zones zones() {
+        return zones;
+    }
+
     @Override
     public void onEnable() {
         saveDefaultConfig();
@@ -65,6 +82,8 @@ public final class LifestealPlugin extends JavaPlugin {
         PluginSettings.Loaded loaded = PluginSettings.load(getConfig());
         settings = loaded.settings();
         logWarnings(loaded.warnings());
+        zones = new Zones(this, regionRules);
+        if (regionRules != null) getLogger().info("WorldGuard found: the lifesteal region flags are ready.");
         try {
             getDataFolder().mkdirs();
             HeartStore store = new HeartStore(getDataFolder().toPath().resolve(settings.databaseFile()), Clock.systemUTC());
@@ -111,6 +130,14 @@ public final class LifestealPlugin extends JavaPlugin {
         Presets presets = new Presets(YamlConfiguration.loadConfiguration(
                 new InputStreamReader(getResource("presets.yml"), StandardCharsets.UTF_8)), shippedConfig);
         PersonalCaps caps = new PersonalCaps(this, hearts);
+        PlaceholderData placeholders = new PlaceholderData(this, hearts, tracker, shield, caps);
+        getServer().getPluginManager().registerEvents(placeholders, this);
+        if (getServer().getPluginManager().isPluginEnabled("PlaceholderAPI") && PlaceholderHook.hook(this, placeholders)) {
+            getLogger().info("PlaceholderAPI found: %lifestealplus_...% placeholders are ready.");
+        }
+        getServer().getServicesManager().register(dev.lifestealplus.api.LifestealAPI.class,
+                new ApiService(this, hearts, tracker, caps), this, org.bukkit.plugin.ServicePriority.Normal);
+        getServer().getPluginManager().registerEvents(new UpdateChecker(this), this);
         new DiscordFeed(this, hearts);
         getServer().getPluginManager().registerEvents(caps, this);
         SettingsMenu settingsMenu = new SettingsMenu(this, new SettingsCatalog(shippedConfig), presets);
