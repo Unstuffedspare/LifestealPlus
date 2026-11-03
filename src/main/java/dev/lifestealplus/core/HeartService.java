@@ -127,6 +127,10 @@ public final class HeartService implements AutoCloseable {
         return submit(() -> store.latestNews(limit));
     }
 
+    public CompletableFuture<Integer> pruneLogins(java.time.Duration keep) {
+        return submit(() -> store.pruneLogins(keep));
+    }
+
     public CompletableFuture<Void> setPersonalCap(UUID player, Integer cap) {
         return submit(() -> {
             store.setPersonalCap(player, cap);
@@ -244,8 +248,8 @@ public final class HeartService implements AutoCloseable {
         return submit(() -> store.altFlags(limit));
     }
 
-    public CompletableFuture<List<SeasonStanding>> archiveSeason(String name) {
-        return submit(() -> store.archiveSeason(name));
+    public CompletableFuture<List<SeasonStanding>> archiveSeason(String name, java.util.Map<String, String> nextState) {
+        return submit(() -> store.archiveSeason(name, nextState));
     }
 
     public CompletableFuture<List<SeasonStanding>> seasonStandings(String season) {
@@ -363,7 +367,14 @@ public final class HeartService implements AutoCloseable {
     @Override
     public void close() throws SQLException, InterruptedException {
         db.shutdown();
-        if (!db.awaitTermination(10, TimeUnit.SECONDS)) db.shutdownNow();
+        if (!db.awaitTermination(10, TimeUnit.SECONDS)) {
+            // Something is stuck: interrupt it, and give it a moment to let go of the connection.
+            db.shutdownNow();
+            if (!db.awaitTermination(5, TimeUnit.SECONDS)) {
+                throw new IllegalStateException("The database worker didn't stop; leaving the database open rather than "
+                        + "closing it under a running write. SQLite rolls back whatever didn't finish.");
+            }
+        }
         store.close();
     }
 }

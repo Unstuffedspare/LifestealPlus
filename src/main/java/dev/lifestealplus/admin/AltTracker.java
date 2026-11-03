@@ -17,8 +17,9 @@ import org.bukkit.event.player.AsyncPlayerPreLoginEvent;
 
 /**
  * Notes which address each account logs in from, as a salted hash: enough to tell two
- * accounts share one, never enough to recover the IP. The salt is made once per server
- * and kept in the database.
+ * accounts share one without the address itself ever being written down. The salt is made
+ * once per server and kept in the same database, so the hashes keep addresses out of sight
+ * rather than locked away. Addresses are forgotten alt-detection.keep-days after last use.
  */
 public final class AltTracker implements Listener {
 
@@ -42,6 +43,16 @@ public final class AltTracker implements Listener {
             hearts.putState(SALT, saved).get(10, TimeUnit.SECONDS);
         }
         this.salt = saved;
+        // At startup and every six hours; also while switched off, so old records still age out.
+        plugin.getServer().getScheduler().runTaskTimer(plugin, this::forgetOld, 20 * 60, 20 * 60 * 60 * 6);
+    }
+
+    private void forgetOld() {
+        hearts.pruneLogins(plugin.settings().extras().keepLogins()).whenComplete((removed, error) -> {
+            if (error != null) log.log(Level.WARNING, "Couldn't forget old logins", error);
+            else if (removed > 0) log.info("Forgot " + removed + " login address(es) unused for over "
+                    + plugin.settings().extras().keepLogins().toDays() + " days.");
+        });
     }
 
     @EventHandler(priority = EventPriority.MONITOR)

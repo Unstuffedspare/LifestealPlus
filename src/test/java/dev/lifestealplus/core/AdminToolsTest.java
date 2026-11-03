@@ -116,4 +116,30 @@ class AdminToolsTest {
         List<PlayerHearts> top = store.topHearts(2);
         assertEquals(List.of("Alice", "Cara"), top.stream().map(PlayerHearts::name).toList());
     }
+
+    @Test
+    void theNewSeasonBeginsInTheSameStepAsTheOldOneIsArchived() throws SQLException {
+        store.archiveSeason("Season 1", java.util.Map.of("season.name", "Season 2", "season.started", "123"));
+        assertEquals("Season 2", store.state("season.name").orElseThrow());
+        assertEquals("123", store.state("season.started").orElseThrow());
+
+        // A reset that fails part way changes nothing at all, the new name included.
+        store.touch(ALICE, "Alice", RULES);
+        store.putState("season.name", "Season 2");
+        assertThrows(IllegalArgumentException.class,
+                () -> store.archiveSeason("Season 1", java.util.Map.of("season.name", "Season 3")));
+        assertEquals("Season 2", store.state("season.name").orElseThrow());
+        assertTrue(store.find(ALICE).isPresent());
+    }
+
+    @Test
+    void addressesAreForgottenAfterTheyStopBeingUsed() throws SQLException {
+        store.recordLogin(ALICE, "hash-1");
+        store.recordLogin(BOB, "hash-1");
+        clock.advance(Duration.ofDays(60));
+        store.recordLogin(BOB, "hash-1");
+        clock.advance(Duration.ofDays(40));
+        assertEquals(1, store.pruneLogins(Duration.ofDays(90)), "only Alice's, unused for 100 days");
+        assertEquals(List.of(), store.linkedAccounts(BOB));
+    }
 }

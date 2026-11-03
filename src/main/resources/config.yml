@@ -223,9 +223,13 @@ finale:
   damage-per-block: 1.0
 
 alt-detection:
-  # Notice accounts logging in from the same address (stored only as a scrambled hash)
-  # and alert admins when they kill each other.
+  # Notice accounts logging in from the same address and alert admins when they kill each
+  # other (it never blocks anything, since family and friends often share a network).
+  # Addresses are stored as a salted hash, not as text. That keeps them out of sight, but
+  # anyone with the database file could still work out an address by trying them all.
   enabled: true
+  # Forget an address this many days after it was last used.
+  keep-days: 90
 
 tab-list:
   # Show hearts (and pacts) next to names in the tab list. The look is set in messages.yml.

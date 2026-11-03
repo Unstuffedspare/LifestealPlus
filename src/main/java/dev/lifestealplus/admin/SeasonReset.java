@@ -1,5 +1,6 @@
 package dev.lifestealplus.admin;
 
+import dev.lifestealplus.CapSchedule;
 import dev.lifestealplus.HeartTracker;
 import dev.lifestealplus.LifestealPlugin;
 import dev.lifestealplus.Msg;
@@ -86,9 +87,9 @@ public final class SeasonReset {
         bodies.shutdown();
         // Chained, never blocking: these callbacks run on the database thread itself.
         currentName()
-                .thenCompose(current -> hearts.archiveSeason(current)
-                        .thenCompose(standings -> hearts.putState(CURRENT, request.nextName())
-                                .thenApply(saved -> new Archived(current, standings))))
+                .thenCompose(current -> hearts.archiveSeason(current, Map.of(CURRENT, request.nextName(),
+                                CapSchedule.SEASON_STARTED, String.valueOf(System.currentTimeMillis())))
+                        .thenApply(standings -> new Archived(current, standings)))
                 .whenCompleteAsync((archived, error) -> {
                     if (error != null) {
                         fail(sender, error);

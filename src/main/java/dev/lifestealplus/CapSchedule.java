@@ -54,12 +54,9 @@ public final class CapSchedule {
         }));
     }
 
-    /** The new season starts counting weeks now. */
+    /** The new season counts weeks from its start, which the season reset saved along with everything else. */
     void seasonStarted() {
-        hearts.putState(SEASON_STARTED, String.valueOf(Instant.now().toEpochMilli()))
-                .whenComplete((ok, error) -> plugin.getServer().getScheduler().runTask(plugin, () -> {
-                    announced = null;
-                    refresh();
-                }));
+        announced = null;
+        refresh();
     }
 }

@@ -40,7 +40,9 @@ public final class HeartStore implements AutoCloseable {
         this.conn = ds.getConnection();
         try (Statement st = conn.createStatement()) {
             st.execute("PRAGMA journal_mode=WAL");
-            st.execute("PRAGMA synchronous=NORMAL");
+            // FULL: a commit is on disk before it counts, even through a power cut. Heart changes are
+            // few enough that the extra sync costs nothing noticeable.
+            st.execute("PRAGMA synchronous=FULL");
         }
         migrate();
     }
@@ -687,6 +689,15 @@ public final class HeartStore implements AutoCloseable {
      * join starts fresh. Logins and alt flags are kept; links matter across seasons.
      */
     public List<SeasonStanding> archiveSeason(String name) throws SQLException {
+        return archiveSeason(name, Map.of());
+    }
+
+    /**
+     * Archives the season and clears the live tables, and saves {@code nextState} (the new
+     * season's name and start), all in one transaction: a crash part way leaves either the old
+     * season untouched or the new one fully begun, never an archived season still in use.
+     */
+    public List<SeasonStanding> archiveSeason(String name, Map<String, String> nextState) throws SQLException {
         return inTransaction(() -> {
             try (PreparedStatement ps = conn.prepareStatement("SELECT 1 FROM seasons WHERE name = ?")) {
                 ps.setString(1, name);
@@ -742,6 +753,7 @@ public final class HeartStore implements AutoCloseable {
                     st.execute("DELETE FROM " + table);
                 }
             }
+            for (Map.Entry<String, String> state : nextState.entrySet()) putState(state.getKey(), state.getValue());
             return standings;
         });
     }
@@ -801,6 +813,14 @@ public final class HeartStore implements AutoCloseable {
             try (ResultSet rs = ps.executeQuery()) {
                 return rs.next() ? Optional.of(rs.getString(1)) : Optional.empty();
             }
+        }
+    }
+
+    /** Forgets which addresses players used, for logins not seen in {@code keep}. Returns how many were removed. */
+    public int pruneLogins(Duration keep) throws SQLException {
+        try (PreparedStatement ps = conn.prepareStatement("DELETE FROM logins WHERE last_seen < ?")) {
+            ps.setLong(1, clock.millis() - keep.toMillis());
+            return ps.executeUpdate();
         }
     }
 

@@ -27,7 +27,7 @@ Everything is switchable and every message is editable. A typo in the config nev
 | Blood Moon | A long random night where kills take extra hearts. | `blood-moon` |
 | Airdrops | Heart crates land at announced coordinates. | `airdrops` |
 | Finale | An admin-started season ending: the border closes, last one standing wins. | `finale` |
-| Alt detection | Flags kills between accounts that log in from the same address (stored only as a scrambled hash). | `alt-detection` |
+| Alt detection | Flags kills between accounts that log in from the same address. It only alerts admins, never blocks. See [Privacy](#privacy). | `alt-detection` |
 | While you were away | Players coming back get a short summary of what they missed; `/news` shows the latest. | `recap` |
 | Tab list | Hearts (and pacts) next to names in the tab list. | `tab-list` |
 | Seasons | Archive a season's standings and start fresh; past seasons stay viewable. | `seasons` |
@@ -165,6 +165,16 @@ Every player permission is allowed by default. Take one away with your permissio
 | `import lifestealz [file]`, `import confirm [unban]` | Bring players' hearts over from LifeStealZ (see above) |
 
 A season reset doesn't touch the world or inventories, so start the new season on a fresh map if you want one.
+
+## Privacy
+
+Alt detection is the only feature that records anything about players' connections.
+
+- **What's stored:** for each account, a salted SHA-256 hash of each address it logged in from, with when it was first and last seen. The address itself is never written down.
+- **What that protects against:** the hashes keep addresses out of sight in the database and in admin commands. They aren't a lock: the salt is kept in the same database, so anyone with the database file could work out an address by trying every possible one.
+- **How long:** an address is forgotten `alt-detection.keep-days` (90) days after it was last used.
+- **False matches:** family members, housemates and players on the same school or public network share an address. That's why a match only alerts admins and never blocks or punishes anyone.
+- **Turning it off:** set `alt-detection.enabled` to false and nothing more is recorded. Existing records are forgotten as they reach the keep-days limit.
 
 ## Building from source
 
