@@ -47,6 +47,7 @@ public final class Airdrops implements Listener {
     private final HeartService hearts;
     private final HeartItems items;
     private Instant next;
+    private Object timing;
     /** Where an announced drop will land, or has landed; null when there's none. */
     private Location target;
     private Block crate;
@@ -64,7 +65,8 @@ public final class Airdrops implements Listener {
                         saved.crate().ifPresent(this::clearLeftoverCrate);
                         next = saved.next().map(v -> Instant.ofEpochMilli(Long.parseLong(v))).orElse(null);
                     }
-                    if (next == null) scheduleNext();
+                    timing = timing();
+                    if (next == null || !settings().schedule().isEmpty()) scheduleNext();
                     plugin.getServer().getScheduler().runTaskTimer(plugin, this::tick, 20 * 30, 20 * 30);
                 }));
     }
@@ -76,16 +78,32 @@ public final class Airdrops implements Listener {
         return plugin.settings().events().airdrops();
     }
 
+    /** At the next scheduled landing (announced warning-minutes before), or about every-minutes from now. */
     private void scheduleNext() {
+        timing = timing();
         Duration every = settings().every();
         if (every.isZero()) {
             next = null;
             hearts.clearState(NEXT);
             return;
         }
-        double factor = 0.75 + ThreadLocalRandom.current().nextDouble() * 0.5;
-        next = Instant.now().plusMillis((long) (every.toMillis() * factor));
+        if (!settings().schedule().isEmpty()) {
+            Duration warning = settings().warning();
+            next = settings().schedule().next(Instant.now().plus(warning)).minus(warning);
+        } else {
+            double factor = 0.75 + ThreadLocalRandom.current().nextDouble() * 0.5;
+            next = Instant.now().plusMillis((long) (every.toMillis() * factor));
+        }
         hearts.putState(NEXT, String.valueOf(next.toEpochMilli()));
+    }
+
+    private Object timing() {
+        return java.util.List.of(settings().every(), settings().schedule(), settings().warning());
+    }
+
+    /** After a settings change: a new schedule (or a switch off or on) moves the next drop at once. */
+    public void settingsChanged() {
+        if (target == null && !timing().equals(timing)) scheduleNext();
     }
 
     private void tick() {

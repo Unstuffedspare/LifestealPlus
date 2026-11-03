@@ -11,6 +11,7 @@ import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.Executor;
 import java.util.logging.Level;
+import net.kyori.adventure.title.Title;
 import org.bukkit.Location;
 import org.bukkit.NamespacedKey;
 import org.bukkit.attribute.Attribute;
@@ -76,11 +77,32 @@ public final class HeartTracker {
         }
         if (change.eliminatedNow()) {
             plugin.getServer().getPluginManager().callEvent(new PlayerEliminatedEvent(change));
-            Msg.broadcast("elimination.eliminated", Msg.t("player", change.name()));
+            announceElimination(change);
         }
         if (change.revivedNow()) {
             plugin.getServer().getPluginManager().callEvent(new PlayerRevivedEvent(change));
             Msg.broadcast("elimination.revived", Msg.t("player", change.name()), Msg.t("hearts", change.after()));
+        }
+    }
+
+    /** Said differently for a kill, a death to the world, or an admin; with a title and a sound for everyone. */
+    private void announceElimination(HeartChange change) {
+        String key = switch (change.cause()) {
+            case PVP_DEATH -> change.otherName() == null ? "elimination.eliminated" : "elimination.by-player";
+            case DEATH -> "elimination.by-world";
+            case ADMIN_SET, ADMIN_TAKE -> "elimination.by-admin";
+            default -> "elimination.eliminated";
+        };
+        String killer = change.otherName() == null ? "" : change.otherName();
+        Msg.broadcast(key, Msg.t("player", change.name()), Msg.t("killer", killer));
+        PluginSettings.Extras extras = plugin.settings().extras();
+        if (extras.eliminationTitle()) {
+            plugin.getServer().showTitle(Title.title(Msg.get("elimination.title", Msg.t("player", change.name())),
+                    Msg.get("elimination.subtitle", Msg.t("player", change.name()), Msg.t("killer", killer))));
+        }
+        if (extras.eliminationSound() != null) {
+            plugin.getServer().playSound(net.kyori.adventure.sound.Sound.sound(
+                    net.kyori.adventure.key.Key.key(extras.eliminationSound()), net.kyori.adventure.sound.Sound.Source.MASTER, 1f, 1f));
         }
     }
 

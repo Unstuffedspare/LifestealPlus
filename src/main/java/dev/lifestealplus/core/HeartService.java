@@ -131,6 +131,14 @@ public final class HeartService implements AutoCloseable {
         return submit(() -> store.pruneLogins(keep));
     }
 
+    public CompletableFuture<EconomyReport> economy(java.time.Duration window) {
+        return submit(() -> store.economy(window));
+    }
+
+    public CompletableFuture<Optional<PlayerStats>> stats(String name, String season) {
+        return submit(() -> store.stats(name, season));
+    }
+
     public CompletableFuture<Void> setPersonalCap(UUID player, Integer cap) {
         return submit(() -> {
             store.setPersonalCap(player, cap);

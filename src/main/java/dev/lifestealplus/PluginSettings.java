@@ -64,11 +64,13 @@ public record PluginSettings(HeartRules rules, int naturalDeathLoss, String data
      * @param naturalDeathDrops hearts lost to a non-player death drop as Heart items where the player died
      * @param keepLogins how long alt detection remembers an address after its last use
      * @param bountyUndo how long after placing a bounty the placer can take it back; zero for never
+     * @param eliminationTitle everyone sees a title when someone is eliminated
+     * @param eliminationSound the sound everyone hears then (a Minecraft sound key), or null for none
      */
     public record Extras(boolean vengeanceTracker, int trackerRoundTo, boolean tabList, boolean pactsInTab,
                          boolean publicSeasons, boolean altDetection, boolean shieldsEnabled, Duration shieldExpiry,
                          boolean convertLifestealZItems, boolean naturalDeathDrops, Duration keepLogins,
-                         Duration bountyUndo) {
+                         Duration bountyUndo, boolean eliminationTitle, String eliminationSound) {
     }
 
     /**
@@ -162,7 +164,9 @@ public record PluginSettings(HeartRules rules, int naturalDeathLoss, String data
                 in.flag("lifestealz-import.convert-items", true),
                 in.flag("hearts.natural-death-drops", true),
                 hours(24 * in.number("alt-detection.keep-days", 90, 1, 3650)),
-                minutes(in.number("bounties.undo-minutes", 5, 0, 60 * 24)));
+                minutes(in.number("bounties.undo-minutes", 5, 0, 60 * 24)),
+                in.flag("eliminations.title", true),
+                sound(in, "eliminations.sound", "entity.wither.spawn"));
         HeartRecipe heartRecipe = in.flag("heart-items.recipe.enabled", true)
                 ? new HeartRecipe(true, in.item("heart-items.recipe.corners", "diamond_block"),
                         in.item("heart-items.recipe.sides", "gold_block"),
@@ -188,6 +192,15 @@ public record PluginSettings(HeartRules rules, int naturalDeathLoss, String data
                         in.flag("combat-items.bed-and-anchor-explosions", true)),
                 webhook(in));
         return new Loaded(settings, List.copyOf(in.warnings()));
+    }
+
+    /** A Minecraft sound name like entity.wither.spawn, or null for none. */
+    private static String sound(ConfigReader in, String key, String fallback) {
+        String name = in.text(key, fallback).strip().toLowerCase(Locale.ROOT);
+        if (name.equals("none") || name.equals("off")) return null;
+        if (name.matches("([a-z0-9_.-]+:)?[a-z0-9_./-]+")) return name;
+        in.warn(key + " is \"" + name + "\", which isn't a sound name like entity.wither.spawn; using " + fallback + ".");
+        return fallback;
     }
 
     /** The Discord webhook link, or null for none. */

@@ -114,13 +114,17 @@ final class SettingsCatalog {
                 }
             }
             case LIST -> {
-                // Numbers if every entry is one ([15, 20, 25]), otherwise names ([creative, events]);
-                // a list wanting the other kind is refused when the change is checked.
+                // Numbers if every entry is one ([15, 20 25]), otherwise entries split at commas
+                // ([creative, events], [saturday 20:00, daily 18:00]); a list wanting the other
+                // kind is refused when the change is checked.
                 String inside = text.replace("[", "").replace("]", "").strip();
                 if (inside.isEmpty() || inside.equalsIgnoreCase("none")) yield new ArrayList<>();
                 List<String> parts = List.of(inside.split("[,\\s]+"));
-                if (!parts.stream().allMatch(part -> part.matches("-?\\d{1,9}"))) yield new ArrayList<Object>(parts);
-                yield new ArrayList<Object>(parts.stream().map(Integer::parseInt).toList());
+                if (parts.stream().allMatch(part -> part.matches("-?\\d{1,9}"))) {
+                    yield new ArrayList<Object>(parts.stream().map(Integer::parseInt).toList());
+                }
+                yield new ArrayList<Object>(java.util.Arrays.stream(inside.split(",")).map(String::strip)
+                        .filter(part -> !part.isEmpty()).toList());
             }
             case TEXT -> {
                 if (text.isEmpty()) throw new IllegalArgumentException("some text");

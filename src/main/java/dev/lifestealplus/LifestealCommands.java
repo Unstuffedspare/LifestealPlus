@@ -56,12 +56,15 @@ final class LifestealCommands {
     private final ImportCommand importer;
     private final SettingsMenu settingsMenu;
     private final PersonalCaps caps;
+    private final Dashboard dashboard;
     /** Whether a player is in a fight right now: combat-tagged, or logged out with their body still standing. */
     private final Predicate<UUID> inFight;
 
     LifestealCommands(LifestealPlugin plugin, HeartService hearts, HeartTracker tracker, MostWanted mostWanted,
                       NewbieShield shield, EventCommands events, AdminCommands admin, FeaturesCommand features,
-                      ImportCommand importer, SettingsMenu settingsMenu, PersonalCaps caps, Predicate<UUID> inFight) {
+                      ImportCommand importer, SettingsMenu settingsMenu, PersonalCaps caps, Predicate<UUID> inFight,
+                      Dashboard dashboard) {
+        this.dashboard = dashboard;
         this.caps = caps;
         this.inFight = inFight;
         this.importer = importer;
@@ -329,6 +332,7 @@ final class LifestealCommands {
                 .then(settingsMenu.settingsNode())
                 .then(settingsMenu.configNode())
                 .then(settingsMenu.presetNode())
+                .then(dashboard.node())
                 .then(importer.node())
                 .then(admin.altsNode())
                 .then(admin.flagsNode())

@@ -102,6 +102,14 @@ combat-log:
   tag-seconds: 15
   body-seconds: 30
 
+eliminations:
+  # When someone loses their last heart, everyone sees it on screen as well as in chat.
+  # (The chat messages, one for each way of going out, are in messages.yml.)
+  title: true
+  # And hears this: a Minecraft sound name like entity.wither.spawn or
+  # ui.toast.challenge_complete. none = silent.
+  sound: entity.wither.spawn
+
 combat-items:
   # Switches for the items lifesteal servers argue about most. Switched off, an item
   # stops working against players but still works otherwise.
@@ -202,6 +210,11 @@ blood-moon:
   enabled: true
   # Roughly how often, in real days. The exact time is random.
   every-days: 7
+  # Or fixed times instead, e.g. [saturday 20:00] or [daily 21:00, sunday 15:00].
+  # The time zone is set under schedules. Empty = random, using every-days.
+  schedule: []
+  # Warn everyone this many minutes before a Blood Moon rises.
+  warn-minutes: [10]
   minutes: 20
   kill-multiplier: 2
   # Chance (0 to 1) that a monster killed by a player drops a Heart Fragment.
@@ -212,6 +225,8 @@ airdrops:
   # Heart crates fall at announced coordinates.
   enabled: true
   every-minutes: 90
+  # Or fixed landing times instead, e.g. [daily 18:00, saturday 15:00]. Empty = every-minutes.
+  schedule: []
   # Crates land within this many blocks of the overworld spawn.
   radius: 1500
   # The landing spot is announced this many minutes ahead.
@@ -219,6 +234,11 @@ airdrops:
   # A crate disappears this long after landing, opened or not.
   despawn-minutes: 20
   min-players-online: 3
+
+schedules:
+  # Time zone for blood-moon.schedule and airdrops.schedule, like Europe/London or
+  # America/New_York. server = the server's own clock.
+  time-zone: server
 
 finale:
   # Started by an admin with /lifesteal finale start <minutes> [final size]. The border

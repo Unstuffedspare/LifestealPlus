@@ -102,6 +102,8 @@ Some things worth deciding before a season starts:
 - `newbie-shield.expires-after-days` (3): the shield also ends this many days after a player first joins, however little they've played, so nobody keeps it forever.
 - `hearts.max-by-week`, e.g. `[15, 20, 25]`, makes the cap rise through the season. Leave it empty for a fixed cap.
 - `bounties.undo-minutes` (5): how long after placing a bounty you can take it back with `/bounty undo`, refunded in full. Not while the target is in a fight, and everyone sees the bounty shrink. 0 turns undo off.
+- `blood-moon.schedule` and `airdrops.schedule`, e.g. `[saturday 20:00]` or `[daily 18:00, sunday 15:00]`: fixed times instead of random ones, so everyone can plan around them. `blood-moon.warn-minutes` warns everyone beforehand, and `schedules.time-zone` sets the clock (for example `Europe/London`).
+- `eliminations`: everyone sees a title and hears a sound when someone loses their last heart. The chat message differs for a kill, a death to the world and an admin, and each is in `messages.yml`.
 - `combat-items`: switch off totems (`totems`), crystal PvP (`end-crystals`; crystals still break blocks and respawn the dragon) or bed and respawn-anchor bombing (`bed-and-anchor-explosions`).
 - Personal caps: give a player the permission `lifestealplus.max-hearts.<n>` (for example `lifestealplus.max-hearts.30`, with a permissions plugin such as LuckPerms) and their cap is n instead of `hearts.max`. The highest one counts, it's picked up within a minute, and losing it never takes hearts away.
 - `discord.webhook-url`: paste a Discord channel's webhook link (channel settings > Integrations > Webhooks) and the server's news (eliminations, comebacks, long streaks, bounties, events) is posted there within seconds. `none` turns it off.
@@ -128,6 +130,7 @@ Every message players see is in `plugins/LifestealPlus/messages.yml`.
 | `/shield` | How long your newbie shield lasts | `lifestealplus.shield` |
 | `/streak [player]` | Kills in a row right now, and the best this season | `lifestealplus.streak` |
 | `/news` | The latest eliminations, comebacks, streaks, bounties and events | `lifestealplus.news` |
+| `/stats [player] [season]` | Kills, deaths, hearts won and lost, bounties and comebacks, this season or a past one | `lifestealplus.stats` |
 | `/vengeance` | Who you can take vengeance on, and who can on you | `lifestealplus.vengeance` |
 | `/bounty [list]`, `/bounty check <player>`, `/bounty place <player> <hearts>`, `/bounty undo <player>` | See, place and take back bounties | `lifestealplus.bounty` |
 | `/withdraw [hearts]` | Turn your hearts into Heart items | `lifestealplus.withdraw` |
@@ -163,6 +166,7 @@ Every player permission is allowed by default. Take one away with your permissio
 | `finale start <minutes> [final size]`, `finale stop` | Start or call off the season finale |
 | `item <player> heart\|fragment [amount]` | Hand out heart items |
 | `mostwanted` | Announce the Most Wanted now |
+| `dashboard` | The server at a glance: the season, hearts in play and where this week's came from, upcoming events, latest eliminations |
 | `import lifestealz [file]`, `import confirm [unban]` | Bring players' hearts over from LifeStealZ (see above) |
 
 A season reset doesn't touch the world or inventories, so start the new season on a fresh map if you want one.

@@ -120,7 +120,7 @@ public final class LifestealPlugin extends JavaPlugin {
                 new ImportCommand(this, hearts, tracker), settingsMenu, caps, id -> {
                     Player player = getServer().getPlayer(id);
                     return player != null && tagger.isTagged(player) || bodies.hasBody(id);
-                });
+                }, new Dashboard(this, hearts, tracker, bloodMoon, airdrops, finale));
         PurgatoryCommands purgatoryCommands = settings.purgatory().enabled() ? startPurgatory(tracker) : null;
         capSchedule = new CapSchedule(this, hearts);
         SocialCommands social = new SocialCommands(this, hearts, tracker, heartItems, finale, purgatory);
@@ -236,6 +236,8 @@ public final class LifestealPlugin extends JavaPlugin {
         applyStoreSwitches();
         shield.refresh();
         heartItems.syncRecipe();
+        bloodMoon.settingsChanged();
+        airdrops.settingsChanged();
         return loaded.warnings();
     }
 

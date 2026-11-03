@@ -8,6 +8,7 @@ import dev.lifestealplus.core.NewsItem;
 import dev.lifestealplus.items.HeartItems;
 import java.time.Duration;
 import java.time.Instant;
+import java.util.List;
 import java.util.concurrent.ThreadLocalRandom;
 import java.util.logging.Level;
 import net.kyori.adventure.bossbar.BossBar;
@@ -39,6 +40,8 @@ public final class BloodMoon implements Listener {
     private final HeartItems items;
     private Instant next;
     private Instant ends;
+    private Object timing;
+    private final java.util.Set<Integer> warned = new java.util.HashSet<>();
     private Duration length;
     private BossBar bar;
 
@@ -54,9 +57,11 @@ public final class BloodMoon implements Listener {
                     if (error != null) plugin.getLogger().log(Level.SEVERE, "Couldn't load Blood Moon timing", error);
                     Instant savedEnd = saved == null ? null : saved.ends();
                     next = saved == null ? null : saved.next();
+                    timing = timing();
                     if (savedEnd != null && savedEnd.isAfter(Instant.now())) {
                         start(Duration.between(Instant.now(), savedEnd));
-                    } else if (next == null) {
+                    } else if (next == null || !settings().schedule().isEmpty()) {
+                        // A schedule is worked out afresh, in case it changed while the server was off.
                         scheduleNext();
                     }
                     plugin.getServer().getScheduler().runTaskTimer(plugin, this::tick, 20, 20);
@@ -74,17 +79,42 @@ public final class BloodMoon implements Listener {
         return ends != null;
     }
 
-    /** Somewhere between half and one-and-a-half times the average gap from now. */
+    /** At the next scheduled time, or somewhere between half and one-and-a-half times the average gap from now. */
     private void scheduleNext() {
-        Duration every = settings().every();
-        if (every.isZero()) {
+        warned.clear();
+        timing = timing();
+        if (!settings().enabled()) {
             next = null;
             hearts.clearState(NEXT);
             return;
         }
-        double factor = 0.5 + ThreadLocalRandom.current().nextDouble();
-        next = Instant.now().plusMillis((long) (every.toMillis() * factor));
+        if (!settings().schedule().isEmpty()) {
+            next = settings().schedule().next(Instant.now());
+        } else {
+            double factor = 0.5 + ThreadLocalRandom.current().nextDouble();
+            next = Instant.now().plusMillis((long) (settings().every().toMillis() * factor));
+        }
         hearts.putState(NEXT, String.valueOf(next.toEpochMilli()));
+    }
+
+    /** What decides when the next one comes; a change to it in the settings picks a new time. */
+    private Object timing() {
+        return List.of(settings().every(), settings().schedule());
+    }
+
+    /** After a settings change: a new schedule (or a switch off or on) moves the next rising at once. */
+    public void settingsChanged() {
+        if (!isActive() && !timing().equals(timing)) scheduleNext();
+    }
+
+    /** Says "a Blood Moon rises in 10 minutes", once for the closest warning time passed. */
+    private void warn(Instant now) {
+        long left = Duration.between(now, next).toMinutes() + 1;
+        Integer due = null;
+        for (int minutes : settings().warnMinutes()) {
+            if (minutes >= left && warned.add(minutes) && (due == null || minutes < due)) due = minutes;
+        }
+        if (due != null) Msg.broadcast("blood-moon.warning", Msg.t("time", Msg.duration(Duration.between(now, next))));
     }
 
     private void tick() {
@@ -101,7 +131,11 @@ public final class BloodMoon implements Listener {
             }
             return;
         }
-        if (next == null || now.isBefore(next)) return;
+        if (next == null) return;
+        if (now.isBefore(next)) {
+            warn(now);
+            return;
+        }
         if (plugin.getServer().getOnlinePlayers().size() >= settings().minPlayers()) {
             start(settings().length());
         } else {

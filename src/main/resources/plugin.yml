@@ -46,6 +46,9 @@ permissions:
   lifestealplus.purgatory:
     description: Use /purgatory to see your progress and call or join trials while eliminated.
     default: true
+  lifestealplus.stats:
+    description: See season records with /stats.
+    default: true
   lifestealplus.streak:
     description: See kill streaks with /streak.
     default: true

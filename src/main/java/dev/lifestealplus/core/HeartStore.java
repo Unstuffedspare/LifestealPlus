@@ -1630,6 +1630,108 @@ public final class HeartStore implements AutoCloseable {
     }
 
     /** Case-insensitive; if two records share a name (after renames), the most recently seen wins. */
+    /**
+     * A player's record for the live season ({@code season} null) or an archived one, found by
+     * name. Empty if there's no such season, or the player has no history in it.
+     */
+    public Optional<PlayerStats> stats(String name, String season) throws SQLException {
+        String table = season == null ? "heart_ledger" : "heart_ledger_archive";
+        String inSeason = season == null ? "" : " AND season = ?2 COLLATE NOCASE";
+        String uuid = null;
+        String shownName = name;
+        int bestStreak = -1;
+        if (season == null) {
+            Optional<PlayerHearts> live = findByName(name);
+            if (live.isEmpty()) return Optional.empty();
+            uuid = live.get().uuid().toString();
+            shownName = live.get().name();
+            bestStreak = streak(live.get().uuid()).map(PlayerStreak::best).orElse(0);
+        } else {
+            try (PreparedStatement ps = conn.prepareStatement("""
+                    SELECT player_uuid, player_name FROM heart_ledger_archive
+                    WHERE season = ? COLLATE NOCASE AND player_name = ? COLLATE NOCASE LIMIT 1""")) {
+                ps.setString(1, season);
+                ps.setString(2, name);
+                try (ResultSet rs = ps.executeQuery()) {
+                    if (!rs.next()) return Optional.empty();
+                    uuid = rs.getString(1);
+                    shownName = rs.getString(2);
+                }
+            }
+        }
+        try (PreparedStatement ps = conn.prepareStatement("""
+                SELECT
+                  COALESCE(SUM(CASE WHEN cause = 'PVP_DEATH' AND other_uuid = ?1 AND hearts_after < hearts_before THEN 1 END), 0),
+                  COALESCE(SUM(CASE WHEN player_uuid = ?1 AND cause IN ('PVP_DEATH', 'DEATH') AND hearts_after < hearts_before
+                                    THEN 1 END), 0),
+                  COALESCE(SUM(CASE WHEN player_uuid = ?1 AND cause = 'PVP_KILL' AND hearts_after > hearts_before
+                                    THEN hearts_after - hearts_before END), 0),
+                  COALESCE(SUM(CASE WHEN player_uuid = ?1 AND cause IN ('PVP_DEATH', 'DEATH') AND hearts_after < hearts_before
+                                    THEN hearts_before - hearts_after END), 0),
+                  COALESCE(SUM(CASE WHEN player_uuid = ?1 AND cause = 'BOUNTY_CLAIM' THEN hearts_after - hearts_before END), 0),
+                  COALESCE(SUM(CASE WHEN player_uuid = ?1 AND hearts_before > 0 AND hearts_after <= 0 THEN 1 END), 0),
+                  COALESCE(SUM(CASE WHEN player_uuid = ?1 AND hearts_before <= 0 AND hearts_after > 0
+                                    AND cause NOT IN ('FIRST_JOIN', 'IMPORT') THEN 1 END), 0)
+                FROM %s WHERE (player_uuid = ?1 OR other_uuid = ?1)%s""".formatted(table, inSeason))) {
+            ps.setString(1, uuid);
+            if (season != null) ps.setString(2, season);
+            try (ResultSet rs = ps.executeQuery()) {
+                rs.next();
+                String seasonName = season != null ? season : state("season.name").orElse("Season 1");
+                return Optional.of(new PlayerStats(shownName, seasonName, rs.getInt(1), rs.getInt(2), rs.getInt(3),
+                        rs.getInt(4), rs.getInt(5), rs.getInt(6), rs.getInt(7), bestStreak));
+            }
+        }
+    }
+
+    /** The heart economy now, and where hearts came from and went over the last {@code window}. */
+    public EconomyReport economy(Duration window) throws SQLException {
+        int alive = 0, eliminated = 0, inPlay = 0;
+        try (Statement st = conn.createStatement(); ResultSet rs = st.executeQuery("""
+                SELECT COALESCE(SUM(CASE WHEN hearts > 0 THEN 1 END), 0), COALESCE(SUM(CASE WHEN hearts <= 0 THEN 1 END), 0),
+                       COALESCE(SUM(CASE WHEN hearts > 0 THEN hearts END), 0)
+                FROM players""")) {
+            if (rs.next()) {
+                alive = rs.getInt(1);
+                eliminated = rs.getInt(2);
+                inPlay = rs.getInt(3);
+            }
+        }
+        int bounties;
+        try (Statement st = conn.createStatement();
+             ResultSet rs = st.executeQuery("SELECT COALESCE(SUM(hearts), 0) FROM bounties WHERE closed_at IS NULL")) {
+            bounties = rs.next() ? rs.getInt(1) : 0;
+        }
+        Map<HeartCause, Integer> gained = new java.util.LinkedHashMap<>();
+        Map<HeartCause, Integer> lost = new java.util.LinkedHashMap<>();
+        try (PreparedStatement ps = conn.prepareStatement("""
+                SELECT cause, SUM(CASE WHEN hearts_after > hearts_before THEN hearts_after - hearts_before ELSE 0 END) AS up,
+                       SUM(CASE WHEN hearts_after < hearts_before THEN hearts_before - hearts_after ELSE 0 END) AS down
+                FROM heart_ledger WHERE at >= ? GROUP BY cause""")) {
+            ps.setLong(1, clock.millis() - window.toMillis());
+            try (ResultSet rs = ps.executeQuery()) {
+                while (rs.next()) {
+                    HeartCause cause;
+                    try {
+                        cause = HeartCause.valueOf(rs.getString(1));
+                    } catch (IllegalArgumentException e) {
+                        continue;
+                    }
+                    if (rs.getInt(2) > 0) gained.put(cause, rs.getInt(2));
+                    if (rs.getInt(3) > 0) lost.put(cause, rs.getInt(3));
+                }
+            }
+        }
+        return new EconomyReport(alive, eliminated, inPlay, bounties, biggestFirst(gained), biggestFirst(lost));
+    }
+
+    private static Map<HeartCause, Integer> biggestFirst(Map<HeartCause, Integer> byCause) {
+        Map<HeartCause, Integer> sorted = new java.util.LinkedHashMap<>();
+        byCause.entrySet().stream().sorted(Map.Entry.<HeartCause, Integer>comparingByValue().reversed())
+                .forEach(entry -> sorted.put(entry.getKey(), entry.getValue()));
+        return sorted;
+    }
+
     public Optional<PlayerHearts> findByName(String name) throws SQLException {
         try (PreparedStatement ps = conn.prepareStatement(
                 "SELECT uuid, name, hearts FROM players WHERE name = ? COLLATE NOCASE ORDER BY last_seen DESC LIMIT 1")) {

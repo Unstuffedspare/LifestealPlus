@@ -5,6 +5,7 @@ import com.mojang.brigadier.arguments.StringArgumentType;
 import com.mojang.brigadier.tree.LiteralCommandNode;
 import dev.lifestealplus.core.HeartService;
 import dev.lifestealplus.core.NewsItem;
+import dev.lifestealplus.core.PlayerStats;
 import dev.lifestealplus.core.PlayerStreak;
 import dev.lifestealplus.core.Recap;
 import io.papermc.paper.command.brigadier.CommandSourceStack;
@@ -51,6 +52,7 @@ final class NewsFeed implements Listener {
     void register(Commands commands) {
         commands.register(newsCommand(), "What's been happening on the server");
         commands.register(streakCommand(), "Your kill streak, or another player's");
+        commands.register(statsCommand(), "Your season record, or another player's");
     }
 
     private PluginSettings.RecapSettings settings() {
@@ -149,6 +151,60 @@ final class NewsFeed implements Listener {
     }
 
     // ---- /streak ----
+
+    /** /stats [player] [season]: kills, deaths, hearts won and lost, bounties, comebacks. */
+    private LiteralCommandNode<CommandSourceStack> statsCommand() {
+        return Commands.literal("stats")
+                .requires(src -> src.getSender().hasPermission("lifestealplus.stats"))
+                .executes(ctx -> {
+                    CommandSender sender = ctx.getSource().getSender();
+                    if (sender instanceof Player) showStats(sender, sender.getName(), null);
+                    else Msg.send(sender, "common.players-only");
+                    return Command.SINGLE_SUCCESS;
+                })
+                .then(Commands.argument("player", StringArgumentType.word())
+                        .suggests((ctx, builder) -> {
+                            plugin.getServer().getOnlinePlayers().forEach(p -> builder.suggest(p.getName()));
+                            return builder.buildFuture();
+                        })
+                        .executes(ctx -> {
+                            showStats(ctx.getSource().getSender(), StringArgumentType.getString(ctx, "player"), null);
+                            return Command.SINGLE_SUCCESS;
+                        })
+                        .then(Commands.argument("season", StringArgumentType.greedyString())
+                                .executes(ctx -> {
+                                    showStats(ctx.getSource().getSender(), StringArgumentType.getString(ctx, "player"),
+                                            StringArgumentType.getString(ctx, "season"));
+                                    return Command.SINGLE_SUCCESS;
+                                })))
+                .build();
+    }
+
+    private void showStats(CommandSender sender, String name, String season) {
+        if (season != null && !plugin.settings().extras().publicSeasons() && !sender.hasPermission("lifestealplus.admin")) {
+            Msg.send(sender, "stats.history-private");
+            return;
+        }
+        hearts.stats(name, season).whenCompleteAsync((found, error) -> {
+            if (error != null) {
+                plugin.getLogger().log(java.util.logging.Level.SEVERE, "Couldn't read stats for " + name, error);
+                Msg.send(sender, "common.error");
+                return;
+            }
+            if (found.isEmpty()) {
+                Msg.send(sender, season == null ? "stats.unknown" : "stats.unknown-in-season",
+                        Msg.t("player", name), Msg.t("season", season == null ? "" : season));
+                return;
+            }
+            PlayerStats s = found.get();
+            Msg.send(sender, "stats.header", Msg.t("player", s.name()), Msg.t("season", s.season()));
+            Msg.send(sender, "stats.fights", Msg.t("kills", s.kills()), Msg.t("deaths", s.deaths()),
+                    Msg.t("streak", s.bestStreak() < 0 ? "-" : String.valueOf(s.bestStreak())));
+            Msg.send(sender, "stats.hearts", Msg.t("taken", s.heartsTaken()), Msg.t("lost", s.heartsLost()),
+                    Msg.t("bounty", s.bountyHearts()));
+            Msg.send(sender, "stats.comebacks", Msg.t("eliminated", s.eliminations()), Msg.t("comebacks", s.comebacks()));
+        }, tracker.mainThread());
+    }
 
     private LiteralCommandNode<CommandSourceStack> streakCommand() {
         return Commands.literal("streak")

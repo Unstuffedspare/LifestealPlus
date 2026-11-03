@@ -59,6 +59,15 @@ hearts:
 elimination:
   # Told to everyone. <player>
   eliminated: "<dark_red><bold><player></bold> has lost their last heart and is eliminated."
+  # Killed by another player. <player>, <killer>
+  by-player: "<dark_red><bold><player></bold> lost their last heart to <killer> and is eliminated."
+  # Died to a mob, a fall, lava and so on. <player>
+  by-world: "<dark_red><bold><player></bold> lost their last heart to the world and is eliminated."
+  # An admin took their last heart. <player>
+  by-admin: "<dark_red><bold><player></bold> was eliminated by an admin."
+  # On everyone's screen (eliminations.title). <player>, <killer>
+  title: "<dark_red><player>"
+  subtitle: "<gray>has lost their last heart"
   # Told to everyone. <player>, <hearts>
   revived: "<green><bold><player></bold> has been revived with <hearts> hearts."
   # Only used when Purgatory is turned off.
@@ -316,6 +325,8 @@ items:
 blood-moon:
   # Blood Moon.
   bar: "<dark_red>Blood Moon"
+  # Shortly before one rises (blood-moon.warn-minutes). <time>
+  warning: "<dark_red>🌑 A Blood Moon rises in <time>. Kills will take extra hearts."
   title: "<dark_red>Blood Moon"
   # <multiplier>
   subtitle: "<red>Kills take <multiplier>× hearts"
@@ -572,6 +583,40 @@ preset:
 combat-items:
   # A player died holding a totem while totems are switched off.
   totem-off: "<gray>Totems of Undying are switched off on this server."
+
+# ---- /lifesteal dashboard ---------------------------------------------------
+dashboard:
+  header: "<gold>━━ LifestealPlus dashboard ━━"
+  # <season>, <week>, <online>, <alive>, <eliminated>
+  season: "<gray><white><season></white>, week <white><week></white> · <white><online></white> online · <white><alive></white> in, <white><eliminated></white> eliminated"
+  # <hearts>, <average>, <bounties>
+  hearts: "<gray>Hearts in play <white><hearts></white> (average <white><average></white>) · held in bounties <white><bounties></white>"
+  # The last 7 days, by cause. <gained>, <lost>, <net>
+  week: "<gray>Last 7 days: gained <white><gained></white> · lost <white><lost></white> · net <white><net></white>"
+  # <blood-moon>, <airdrop>, <finale>
+  events: "<gray>Next Blood Moon <white><blood-moon></white> · next airdrop <white><airdrop></white> · finale <white><finale></white>"
+  # <eliminations>
+  recent: "<gray>Latest eliminations: <white><eliminations></white>"
+  none: "none"
+  switched-on: "on"
+  switched-off: "off"
+  happening: "happening now"
+
+# ---- /stats -----------------------------------------------------------------
+stats:
+  # <player>, <season>
+  header: "<gold>📊 <player></gold> <gray>in <season>"
+  # <kills>, <deaths>, <streak>
+  fights: "<gray>Kills <white><kills></white> · Deaths <white><deaths></white> · Best streak <white><streak></white>"
+  # <taken>, <lost>, <bounty>
+  hearts: "<gray>Hearts won <white><taken></white> · lost <white><lost></white> · from bounties <white><bounty></white>"
+  # <eliminated>, <comebacks>
+  comebacks: "<gray>Eliminated <white><eliminated></white> time(s) · came back <white><comebacks></white> time(s)"
+  # <player>
+  unknown: "<red>There's no player called <player> this season."
+  # <player>, <season>
+  unknown-in-season: "<red>There's no record of <player> in a season called <season>. /seasons lists them."
+  history-private: "<gray>Past seasons are only visible to admins on this server."
 
 # ---- Kill streaks ----------------------------------------------------------
 streak:
