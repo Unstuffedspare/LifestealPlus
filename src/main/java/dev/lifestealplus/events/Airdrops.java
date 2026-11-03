@@ -50,6 +50,8 @@ public final class Airdrops implements Listener {
     private Object timing;
     /** Where an announced drop will land, or has landed; null when there's none. */
     private Location target;
+    /** The crate on its way is a golden one: twice the loot and an extra Heart. */
+    private boolean golden;
     private Block crate;
     private boolean opened;
     private final List<BukkitTask> pending = new ArrayList<>();
@@ -120,9 +122,11 @@ public final class Airdrops implements Listener {
     public boolean announce(Location where, Duration warning) {
         if (target != null) return false;
         target = where;
+        golden = ThreadLocalRandom.current().nextDouble() < settings().goldenChance();
         next = null;
         hearts.clearState(NEXT);
-        broadcast("airdrops.incoming", Msg.t("x", where.getBlockX()), Msg.t("z", where.getBlockZ()), Msg.t("time", Msg.duration(warning)));
+        broadcast(golden ? "airdrops.incoming-golden" : "airdrops.incoming", Msg.t("x", where.getBlockX()),
+                Msg.t("z", where.getBlockZ()), Msg.t("time", Msg.duration(warning)));
         plugin.getServer().getOnlinePlayers().forEach(p -> p.playSound(p, Sound.BLOCK_NOTE_BLOCK_BELL, 1f, 0.7f));
         pending.add(plugin.getServer().getScheduler().runTaskLater(plugin, this::land, Math.max(1, warning.toSeconds() * 20)));
         return true;
@@ -166,12 +170,14 @@ public final class Airdrops implements Listener {
 
     /** One heart, a couple of fragments, and supplies for the fight over it. */
     private void fill(Inventory inv) {
+        int times = golden ? 2 : 1;
         List<ItemStack> loot = new ArrayList<>(List.of(
-                items.heart(1),
-                items.fragment(2),
-                new ItemStack(Material.GOLDEN_APPLE, 2),
-                new ItemStack(Material.ENDER_PEARL, 4),
-                new ItemStack(Material.ARROW, 16)));
+                items.heart(times + (golden ? 1 : 0)),
+                items.fragment(2 * times),
+                new ItemStack(Material.GOLDEN_APPLE, 2 * times),
+                new ItemStack(Material.ENDER_PEARL, 4 * times),
+                new ItemStack(Material.ARROW, 16 * times)));
+        if (golden) loot.add(new ItemStack(Material.ENCHANTED_GOLDEN_APPLE, 1));
         List<Integer> slots = new ArrayList<>();
         for (int i = 0; i < inv.getSize(); i++) slots.add(i);
         Collections.shuffle(slots);

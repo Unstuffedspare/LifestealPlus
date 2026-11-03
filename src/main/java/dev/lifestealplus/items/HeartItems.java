@@ -47,15 +47,19 @@ import org.bukkit.persistence.PersistentDataType;
  */
 public final class HeartItems implements Listener {
 
-    private enum Kind { HEART, FRAGMENT }
+    private enum Kind { HEART, FRAGMENT, REVIVAL_CHARM }
 
     private final LifestealPlugin plugin;
     private final HeartService hearts;
     private final HeartTracker tracker;
     private final NamespacedKey kindKey;
     private final NamespacedKey recipeKey;
-    /** The recipe as last registered, so a settings reload only touches it when it changed. */
+    private final NamespacedKey charmKey;
+    /** The recipes as last registered, so a settings reload only touches them when they changed. */
     private PluginSettings.HeartRecipe registered = PluginSettings.HeartRecipe.OFF;
+    private PluginSettings.HeartRecipe registeredCharm = PluginSettings.HeartRecipe.OFF;
+    /** What right-clicking a Revival Charm does (opens the menu of eliminated players). */
+    private java.util.function.Consumer<Player> charmUse = player -> { };
 
     public HeartItems(LifestealPlugin plugin, HeartService hearts, HeartTracker tracker) {
         this.plugin = plugin;
@@ -63,6 +67,7 @@ public final class HeartItems implements Listener {
         this.tracker = tracker;
         this.kindKey = new NamespacedKey(plugin, "heart_item");
         this.recipeKey = new NamespacedKey(plugin, "heart");
+        this.charmKey = new NamespacedKey(plugin, "revival_charm");
         this.mintedKey = new NamespacedKey(plugin, "heart_minted");
     }
 
@@ -101,6 +106,19 @@ public final class HeartItems implements Listener {
         if (decayDays <= 0 || minted == null) return decayDays <= 0 ? 1 : decayDays;
         long age = Duration.between(Instant.ofEpochMilli(minted), Instant.now()).toDays();
         return (int) Math.max(0, decayDays - age);
+    }
+
+    /** Right-click to bring an eliminated player back. */
+    public ItemStack revivalCharm(int amount) {
+        return make(Kind.REVIVAL_CHARM, Material.HEART_OF_THE_SEA, amount, Msg.get("items.charm-name"), Msg.get("items.charm-hint"));
+    }
+
+    public boolean isRevivalCharm(ItemStack item) {
+        return kind(item) == Kind.REVIVAL_CHARM;
+    }
+
+    public void onCharmUse(java.util.function.Consumer<Player> use) {
+        this.charmUse = use;
     }
 
     public ItemStack fragment(int amount) {
@@ -143,8 +161,11 @@ public final class HeartItems implements Listener {
         }
         Player player = event.getPlayer();
         EquipmentSlot hand = event.getHand();
-        if (kind == Kind.HEART) useHeart(player, hand);
-        else combineFragments(player, hand);
+        switch (kind) {
+            case HEART -> useHeart(player, hand);
+            case FRAGMENT -> combineFragments(player, hand);
+            case REVIVAL_CHARM -> charmUse.accept(player);
+        }
     }
 
     private void useHeart(Player player, EquipmentSlot hand) {
@@ -221,23 +242,36 @@ public final class HeartItems implements Listener {
         if (isHeartRecipe(event.getRecipe())) event.getInventory().setResult(heart(1));
     }
 
-    /** Adds, changes or removes the Heart recipe to match the settings. */
+    /** Adds, changes or removes the Heart and Revival Charm recipes to match the settings. */
     public void syncRecipe() {
-        PluginSettings.HeartRecipe wanted = plugin.settings().heartRecipe();
-        if (wanted.equals(registered)) return;
-        Server server = plugin.getServer();
-        server.removeRecipe(recipeKey);
-        if (wanted.enabled()) {
-            ShapedRecipe recipe = new ShapedRecipe(recipeKey, heart(1));
-            recipe.shape("CSC", "SMS", "CSC");
-            recipe.setIngredient('C', Material.matchMaterial(wanted.corners()));
-            recipe.setIngredient('S', Material.matchMaterial(wanted.sides()));
-            recipe.setIngredient('M', Material.matchMaterial(wanted.middle()));
-            server.addRecipe(recipe);
-            server.getOnlinePlayers().forEach(player -> player.discoverRecipe(recipeKey));
+        PluginSettings.HeartRecipe heart = plugin.settings().heartRecipe();
+        PluginSettings.HeartRecipe charm = plugin.settings().revival().charm();
+        boolean changed = false;
+        if (!heart.equals(registered)) {
+            register(recipeKey, heart, heart(1));
+            registered = heart;
+            changed = true;
         }
-        registered = wanted;
-        if (!server.getOnlinePlayers().isEmpty()) server.updateRecipes();
+        if (!charm.equals(registeredCharm)) {
+            register(charmKey, charm, revivalCharm(1));
+            registeredCharm = charm;
+            changed = true;
+        }
+        if (changed && !plugin.getServer().getOnlinePlayers().isEmpty()) plugin.getServer().updateRecipes();
+    }
+
+    /** One item in the corners, one on the sides, one in the middle. */
+    private void register(NamespacedKey key, PluginSettings.HeartRecipe wanted, ItemStack result) {
+        Server server = plugin.getServer();
+        server.removeRecipe(key);
+        if (!wanted.enabled()) return;
+        ShapedRecipe recipe = new ShapedRecipe(key, result);
+        recipe.shape("CSC", "SMS", "CSC");
+        recipe.setIngredient('C', Material.matchMaterial(wanted.corners()));
+        recipe.setIngredient('S', Material.matchMaterial(wanted.sides()));
+        recipe.setIngredient('M', Material.matchMaterial(wanted.middle()));
+        server.addRecipe(recipe);
+        server.getOnlinePlayers().forEach(player -> player.discoverRecipe(key));
     }
 
     private boolean isHeartRecipe(Recipe recipe) {
@@ -248,6 +282,7 @@ public final class HeartItems implements Listener {
     @EventHandler
     void onJoin(PlayerJoinEvent event) {
         if (registered.enabled()) event.getPlayer().discoverRecipe(recipeKey);
+        if (registeredCharm.enabled()) event.getPlayer().discoverRecipe(charmKey);
     }
 
     /** Looms, anvils, smithing tables and the rest. */

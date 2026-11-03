@@ -25,7 +25,8 @@ public record PluginSettings(HeartRules rules, int naturalDeathLoss, String data
                              MostWantedSettings mostWanted, CombatSettings combat, EventSettings events,
                              SocialSettings social, Extras extras, StreakRules streaks, RecapSettings recap,
                              Set<String> excludedWorlds, HeartRecipe heartRecipe, CombatItemRules combatItems,
-                             String discordWebhook) {
+                             String discordWebhook, RewardSettings rewards, RevivalSettings revival,
+                             EconomySettings economy) {
 
     /** Whether dying and killing in this world move hearts (false for the worlds listed in worlds.excluded). */
     public boolean lifestealIn(World world) {
@@ -97,6 +98,40 @@ public record PluginSettings(HeartRules rules, int naturalDeathLoss, String data
      * @param keep how long news is kept
      */
     public record RecapSettings(boolean enabled, Duration minAway, int lines, Duration keep) {
+    }
+
+    /**
+     * Heart Fragments for milestones.
+     *
+     * @param advancements advancement id (like minecraft:end/kill_dragon) to fragments
+     * @param playtimeEvery a playtime reward every this long played this season; zero for none
+     */
+    public record RewardSettings(java.util.Map<String, Integer> advancements, Duration playtimeEvery, int playtimeFragments) {
+    }
+
+    /**
+     * @param cooldown how long after an elimination before a rift, pledge or Revival Charm can bring a player back
+     * @param extraPerElimination each earlier elimination this season makes rifts and pledges this many hearts dearer
+     * @param charm the Revival Charm's recipe
+     */
+    public record RevivalSettings(Duration cooldown, int extraPerElimination, HeartRecipe charm) {
+    }
+
+    /**
+     * Hearts changing hands.
+     *
+     * @param tradeTax percent of every /giveheart lost on the way
+     * @param withdrawTax percent of every /withdraw lost on the way
+     * @param shop buying heart items with money (needs Vault)
+     */
+    public record EconomySettings(boolean trading, int tradeTax, int withdrawTax, Shop shop) {
+    }
+
+    /**
+     * @param charmPrice 0 means charms aren't sold
+     * @param dailyLimit most items one player can buy per day; 0 for no limit
+     */
+    public record Shop(boolean enabled, double heartPrice, double fragmentPrice, double charmPrice, int dailyLimit) {
     }
 
     /** The settings, plus anything in the file that had to be replaced by a default. */
@@ -193,7 +228,19 @@ public record PluginSettings(HeartRules rules, int naturalDeathLoss, String data
                 heartRecipe,
                 new CombatItemRules(in.flag("combat-items.totems", true), in.flag("combat-items.end-crystals", true),
                         in.flag("combat-items.bed-and-anchor-explosions", true)),
-                webhook(in));
+                webhook(in),
+                rewards(in),
+                new RevivalSettings(minutes(in.number("revival.cooldown-minutes", 10, 0, 60 * 24 * 30)),
+                        in.whole("revival.extra-cost-per-elimination", 1, 0, 1000),
+                        in.flag("revival-charm.enabled", true)
+                                ? new HeartRecipe(true, in.item("revival-charm.corners", "totem_of_undying"),
+                                        in.item("revival-charm.sides", "diamond_block"), in.item("revival-charm.middle", "nether_star"))
+                                : HeartRecipe.OFF),
+                new EconomySettings(in.flag("trading.enabled", true), in.whole("trading.tax-percent", 0, 0, 100),
+                        in.whole("heart-items.withdraw.tax-percent", 0, 0, 100),
+                        new Shop(in.flag("heart-shop.enabled", false), in.number("heart-shop.heart-price", 5000, 0, 1e12),
+                                in.number("heart-shop.fragment-price", 1000, 0, 1e12), in.number("heart-shop.charm-price", 20000, 0, 1e12),
+                                in.whole("heart-shop.daily-limit", 2, 0, 1000))));
         return new Loaded(settings, List.copyOf(in.warnings()));
     }
 
@@ -204,6 +251,18 @@ public record PluginSettings(HeartRules rules, int naturalDeathLoss, String data
         if (name.matches("([a-z0-9_.-]+:)?[a-z0-9_./-]+")) return name;
         in.warn(key + " is \"" + name + "\", which isn't a sound name like entity.wither.spawn; using " + fallback + ".");
         return fallback;
+    }
+
+    private static RewardSettings rewards(ConfigReader in) {
+        if (!in.flag("rewards.enabled", true)) return new RewardSettings(java.util.Map.of(), Duration.ZERO, 0);
+        java.util.Map<String, Integer> advancements = new java.util.LinkedHashMap<>();
+        for (String id : in.keys("rewards.advancements")) {
+            int fragments = in.whole("rewards.advancements." + id, 0, 0, 64);
+            if (fragments > 0) advancements.put(id.contains(":") ? id : "minecraft:" + id, fragments);
+        }
+        return new RewardSettings(java.util.Map.copyOf(advancements),
+                hours(in.number("rewards.playtime-hours", 2, 0, 24 * 30)),
+                in.whole("rewards.playtime-fragments", 1, 0, 64));
     }
 
     /** The Discord webhook link, or null for none. */

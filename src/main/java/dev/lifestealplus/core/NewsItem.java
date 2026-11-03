@@ -21,4 +21,5 @@ public record NewsItem(Instant at, String kind, String player, String other, int
     public static final String AIRDROP = "airdrop";
     public static final String FINALE = "finale";
     public static final String FINALE_WINNER = "finale-winner";
+    public static final String KOTH_WON = "koth-won";
 }

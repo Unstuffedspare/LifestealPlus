@@ -16,6 +16,7 @@ repositories {
     maven("https://repo.papermc.io/repository/maven-public/")
     maven("https://repo.extendedclip.com/releases/")
     maven("https://maven.enginehub.org/repo/")
+    maven("https://jitpack.io")
 }
 
 val sqliteVersion = "3.54.1.0"
@@ -27,6 +28,7 @@ dependencies {
     // Optional hooks: used only when the server has these plugins installed.
     compileOnly("me.clip:placeholderapi:2.12.3")
     compileOnly("com.sk89q.worldguard:worldguard-bukkit:7.0.20")
+    compileOnly("com.github.MilkBowl:VaultAPI:1.7.1") { isTransitive = false }
 
     testImplementation(platform("org.junit:junit-bom:6.1.3"))
     testImplementation("org.junit.jupiter:junit-jupiter")

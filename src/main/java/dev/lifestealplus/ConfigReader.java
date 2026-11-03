@@ -104,6 +104,12 @@ final class ConfigReader {
         return fallback;
     }
 
+    /** The keys directly under a section, in file order; none if it isn't a section. */
+    List<String> keys(String section) {
+        ConfigurationSection inside = config.getConfigurationSection(section);
+        return inside == null ? List.of() : List.copyOf(inside.getKeys(false));
+    }
+
     /** A list of names, like world names; an empty list if it isn't set. */
     List<String> texts(String key) {
         if (!config.isSet(key)) return List.of();

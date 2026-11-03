@@ -297,12 +297,43 @@ pact:
 withdraw:
   # <n>, <left>
   done: "<red>❤</red> <gray>You drew <n> heart(s) out into Heart items. You have <left> left. Held Hearts fade over time, so don't sit on them."
+  # With heart-items.withdraw.tax-percent. <n>, <left>, <tax>
+  done-taxed: "<red>❤</red> <gray>You drew out <n> Heart item(s); <tax> heart(s) were lost to tax. You have <left> left."
+
+shop:
+  header: "<gold>Heart shop</gold> <gray>(/heartshop buy <item> [amount])"
+  # <item>, <price>
+  line: " <click:suggest_command:'/heartshop buy <item> 1'><white><item></white></click> <gray>- <price> each"
+  # <n>
+  limit: "<gray>You can buy up to <n> item(s) a day."
+  # <n>, <item>, <price>
+  bought: "<green>You bought <n> <item>(s) for <price>."
+  # <price>
+  too-poor: "<red>That costs <price>, and you don't have enough."
+  # <n>, <left>
+  over-limit: "<red>You can buy <n> item(s) a day; <left> left today."
+  # <item>
+  not-sold: "<gray><item>s aren't for sale here."
+  no-economy: "<red>The heart shop needs Vault and an economy plugin installed."
+
+giveheart:
+  # <player>, <n>, <arriving>, <tax>
+  confirm: "<red>❤</red> <gray>Give <white><player></white> <n> of your hearts? Hearts given can't be taken back. Run <white>/giveheart confirm</white> within 30 seconds."
+  # <player>, <n>, <arriving>, <tax>
+  confirm-taxed: "<red>❤</red> <gray>Give <white><player></white> <n> of your hearts? <tax> are lost to tax, so they get <arriving>. Hearts given can't be taken back. Run <white>/giveheart confirm</white> within 30 seconds."
+  nothing-to-confirm: "<gray>Nothing to confirm. Start with /giveheart <player> <hearts>."
+  # <player>, <n>, <left>
+  sent: "<red>❤</red> <gray>You gave <white><player></white> <n> heart(s). You have <left> left."
+  # <player>, <n>
+  received: "<red>❤</red> <white><player></white> <gray>gave you <n> heart(s)."
 
 # ---- Heart items -----------------------------------------------------------
 items:
   # Heart items.
   heart-name: "<red>Heart"
   heart-hint: "<gray>Right-click the air (or sneak-click a block) to gain a heart."
+  charm-name: "<aqua>Revival Charm"
+  charm-hint: "<gray>Right-click to bring an eliminated player back."
   # Tooltip line when heart-items.decay is on. <starts>, <gone>
   heart-fading: "<dark_gray>Starts fading <starts>, gone by <gone>."
   fragment-name: "<light_purple>Heart Fragment"
@@ -338,6 +369,8 @@ blood-moon:
 airdrops:
   # Told to everyone. <x>, <z>, <time>
   incoming: "<gold>📦 A heart crate will land at <white>x <x>, z <z></white> in <time>."
+  # A golden crate (airdrops.golden-chance). <x>, <z>, <time>
+  incoming-golden: "<yellow>✨ A golden heart crate will land at <white>x <x>, z <z></white> in <time>. Twice the loot, and an extra Heart."
   # <x>, <y>, <z>
   landed: "<gold>📦 The heart crate has landed at <white>x <x>, y <y>, z <z></white>."
   # <player>
@@ -417,6 +450,8 @@ leaderboard:
 alts:
   # Admins only. <killer>, <victim>
   linked-kill: "<gold>⚠ <killer> killed <victim>, and they've logged in from the same address.</gold> <gray>Could be farming, could be housemates: /lifesteal alts <killer>"
+  # Admins only. <giver>, <taker>, <n>
+  linked-trade: "<gold>⚠ <giver> gave <taker> <n> heart(s), and they've logged in from the same address.</gold> <gray>/lifesteal alts <giver>"
   # /lifesteal alts. <player>
   none: "<gray><player> shares no address with any other account."
   # <player>
@@ -480,6 +515,18 @@ admin:
   status-airdrop: "<gold>Next airdrop:</gold> <state>"
   # <state>
   status-finale: "<gold>Finale:</gold> <state>"
+  # <state>
+  status-double-hearts: "<gold>Double Hearts:</gold> <state>"
+  # <state>
+  status-heart-frenzy: "<gold>Heart Frenzy:</gold> <state>"
+  # <state>
+  status-cap-boost: "<gold>Cap Boost:</gold> <state>"
+  # <state>
+  status-koth: "<gold>King of the Hill:</gold> <state>"
+  # <time>
+  state-ends-in: "<white>on, ends in <time>"
+  event-running: "<red>That event is already running."
+  event-not-running: "<gray>That event isn't running."
   state-now: "up now"
   # <time>
   state-in: "in <time>"
@@ -602,6 +649,59 @@ dashboard:
   switched-off: "off"
   happening: "happening now"
 
+# ---- Double Hearts, Heart Frenzy, Cap Boost, King of the Hill -------------
+double-hearts:
+  # <n>
+  bar: "<red>Double Hearts: kills take <n>× hearts"
+  # <time>, <n>
+  started: "<red>❤❤ Double Hearts! For the next <time>, every kill takes <n>× the hearts."
+  ended: "<gray>Double Hearts is over."
+heart-frenzy:
+  bar: "<light_purple>Heart Frenzy: monsters drop Heart Fragments"
+  # <time>
+  started: "<light_purple>💗 Heart Frenzy! For the next <time>, monsters you kill often drop Heart Fragments."
+  ended: "<gray>The Heart Frenzy is over."
+cap-boost:
+  # <n>
+  bar: "<yellow>Cap Boost: +<n> hearts on the cap"
+  # <time>, <n>
+  started: "<yellow>⬆ Cap Boost! For the next <time>, you can hold <n> more hearts than usual. Whatever you gain, you keep."
+  ended: "<gray>The Cap Boost is over. Hearts above the usual cap are yours to keep."
+koth:
+  # <x>, <y>, <z>, <time>, <hearts>
+  started: "<gold>👑 King of the Hill at <white>x <x>, y <y>, z <z></white>! Hold it alone the longest in the next <time> to win <hearts> hearts."
+  # <player>, <seconds>
+  bar: "<gold>King of the Hill: <player> leads with <seconds>s"
+  bar-contested: "<red>King of the Hill: contested!"
+  bar-empty: "<gray>King of the Hill: nobody holds it"
+  # <player>, <seconds>, <hearts>
+  won: "<gold>👑 <player> is King of the Hill with <seconds> seconds, and wins <hearts> hearts!"
+  no-winner: "<gray>King of the Hill is over. Nobody held the hill."
+  called-off: "<gray>King of the Hill was called off."
+
+# ---- Milestone rewards -------------------------------------------------------
+rewards:
+  # <n>, <advancement>
+  advancement: "<light_purple>💗 <advancement> earned you <n> Heart Fragment(s)."
+  # <n>, <time>
+  playtime: "<light_purple>💗 Another <time> played this season: here's <n> Heart Fragment(s)."
+
+# ---- Revival Charm -----------------------------------------------------------
+revival:
+  menu-title: "Bring someone back"
+  # <player>
+  head: "<white><player>"
+  # <player>, <hearts>
+  click: "<gray>Click to bring <player> back with <hearts> hearts"
+  # <player>, <hearts>
+  click-again: "<gold>Click again to spend your charm on <player>"
+  nobody: "<gray>Nobody is eliminated right now."
+  no-charm: "<red>You need a Revival Charm in your inventory."
+  charm-eliminated: "<gray>You can't use a Revival Charm while you're eliminated."
+  sealed: "<red>Nobody comes back during the finale."
+  # Told to everyone. <player>, <target>
+  charm-used: "<aqua>✦ <player> used a Revival Charm to bring <target> back."
+
 # ---- Updates -----------------------------------------------------------------
 update:
   # To admins when they join. <version>, <current>, <url>
@@ -670,6 +770,7 @@ news:
   finale: "<gold>The season finale began."
   # <player>
   finale-winner: "<gold><player> won the season finale!"
+  koth-won: "<gold><player> won King of the Hill (<n> hearts)."
 
 # ---- Importing from LifeStealZ (admins) ------------------------------------
 import:

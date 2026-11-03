@@ -62,6 +62,7 @@ final class SocialCommands {
 
     void register(Commands commands) {
         commands.register(withdrawCommand(), "Turn some of your hearts into Heart items");
+        commands.register(giveHeartCommand(), "Hand some of your hearts to another player");
         commands.register(riftCommand(), "Pay hearts to pull an eliminated player out of Purgatory");
         commands.register(pledgeCommand(), "Pledge hearts toward bringing an eliminated player back");
         commands.register(pactCommand(), "Bind your fate to another player's");
@@ -92,10 +93,75 @@ final class SocialCommands {
                 return;
             }
             tracker.track(CompletableFuture.completedFuture(List.of(change)));
-            player.getInventory().addItem(items.heart(amount)).values()
-                    .forEach(left -> player.getWorld().dropItem(player.getLocation(), left));
-            Msg.send(player, "withdraw.done", Msg.t("n", amount), Msg.t("left", change.after()));
+            int tax = amount * plugin.settings().economy().withdrawTax() / 100;
+            if (amount - tax > 0) {
+                player.getInventory().addItem(items.heart(amount - tax)).values()
+                        .forEach(left -> player.getWorld().dropItem(player.getLocation(), left));
+            }
+            Msg.send(player, tax > 0 ? "withdraw.done-taxed" : "withdraw.done", Msg.t("n", amount - tax),
+                    Msg.t("left", change.after()), Msg.t("tax", tax));
         }, tracker.mainThread());
+    }
+
+    // ---- /giveheart ----
+
+    private record Gift(UUID to, String toName, int hearts, Instant expires) {
+    }
+
+    private final Map<UUID, Gift> gifts = new ConcurrentHashMap<>();
+
+    private LiteralCommandNode<CommandSourceStack> giveHeartCommand() {
+        BooleanSupplier on = () -> plugin.settings().economy().trading();
+        return Commands.literal("giveheart")
+                .requires(src -> src.getSender().hasPermission("lifestealplus.giveheart"))
+                .then(Commands.literal("confirm").executes(ctx -> asPlayer(ctx.getSource(), on, this::confirmGift)))
+                .then(Commands.argument("player", StringArgumentType.word())
+                        .then(Commands.argument("hearts", IntegerArgumentType.integer(1))
+                                .executes(ctx -> asPlayer(ctx.getSource(), on, p -> requestGift(p,
+                                        StringArgumentType.getString(ctx, "player"), IntegerArgumentType.getInteger(ctx, "hearts"))))))
+                .build();
+    }
+
+    /** Says what will happen (with any tax) and waits for /giveheart confirm: hearts given can't be taken back. */
+    private void requestGift(Player giver, String name, int amount) {
+        withPlayer(giver, name, target -> {
+            int tax = amount * plugin.settings().economy().tradeTax() / 100;
+            gifts.put(giver.getUniqueId(), new Gift(target.uuid(), target.name(), amount, Instant.now().plus(CONFIRM_WINDOW)));
+            Msg.send(giver, tax > 0 ? "giveheart.confirm-taxed" : "giveheart.confirm", Msg.t("player", target.name()),
+                    Msg.t("n", amount), Msg.t("arriving", amount - tax), Msg.t("tax", tax));
+        });
+    }
+
+    private void confirmGift(Player giver) {
+        Gift gift = gifts.remove(giver.getUniqueId());
+        if (gift == null || Instant.now().isAfter(gift.expires())) {
+            Msg.send(giver, "giveheart.nothing-to-confirm");
+            return;
+        }
+        hearts.giveHearts(giver.getUniqueId(), gift.to(), gift.hearts(), plugin.settings().economy().tradeTax())
+                .whenCompleteAsync((outcome, error) -> {
+                    if (error != null) {
+                        refuse(giver, error);
+                        return;
+                    }
+                    tracker.track(CompletableFuture.completedFuture(List.of(outcome.sent(), outcome.received())));
+                    Msg.send(giver, "giveheart.sent", Msg.t("player", gift.toName()), Msg.t("n", outcome.received().delta()),
+                            Msg.t("left", outcome.sent().after()));
+                    Player taker = plugin.getServer().getPlayer(gift.to());
+                    if (taker != null) {
+                        Msg.send(taker, "giveheart.received", Msg.t("player", giver.getName()), Msg.t("n", outcome.received().delta()));
+                    }
+                    if (outcome.linked()) {
+                        for (Player admin : plugin.getServer().getOnlinePlayers()) {
+                            if (admin.hasPermission("lifestealplus.admin")) {
+                                Msg.send(admin, "alts.linked-trade", Msg.t("giver", giver.getName()), Msg.t("taker", gift.toName()),
+                                        Msg.t("n", gift.hearts()));
+                            }
+                        }
+                        plugin.getLogger().info("Linked accounts traded hearts: " + giver.getName() + " gave " + gift.toName()
+                                + " " + gift.hearts());
+                    }
+                }, tracker.mainThread());
     }
 
     // ---- /rift ----
@@ -117,9 +183,15 @@ final class SocialCommands {
                 Msg.send(rescuer, "rift.not-eliminated", Msg.t("player", target.name()));
                 return;
             }
-            riftRequests.put(rescuer.getUniqueId(), new Pending(target.uuid(), target.name(), Instant.now().plus(CONFIRM_WINDOW)));
-            Msg.send(rescuer, "rift.confirm", Msg.t("player", target.name()), Msg.t("cost", settings().riftCost()),
-                    Msg.t("revive", hearts.rules().reviveHearts()));
+            hearts.revivalCost(target.uuid(), settings().riftCost()).whenCompleteAsync((cost, error) -> {
+                if (error != null) {
+                    refuse(rescuer, error);
+                    return;
+                }
+                riftRequests.put(rescuer.getUniqueId(), new Pending(target.uuid(), target.name(), Instant.now().plus(CONFIRM_WINDOW)));
+                Msg.send(rescuer, "rift.confirm", Msg.t("player", target.name()), Msg.t("cost", cost),
+                        Msg.t("revive", hearts.rules().reviveHearts()));
+            }, tracker.mainThread());
         });
     }
 
@@ -177,7 +249,7 @@ final class SocialCommands {
             } else {
                 Msg.broadcast("pledge.progress", Msg.t("pledger", pledger.getName()), Msg.t("n", amount),
                         Msg.t("target", target.name()), Msg.t("hearts", total.hearts()),
-                        Msg.t("needed", settings().pledgeHeartsNeeded()), Msg.t("voters", total.voters()),
+                        Msg.t("needed", outcome.needed()), Msg.t("voters", total.voters()),
                         Msg.t("min", settings().pledgeMinVoters()));
             }
         }, tracker.mainThread()));

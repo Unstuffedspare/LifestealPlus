@@ -3,7 +3,7 @@ version: '${version}'
 main: dev.lifestealplus.LifestealPlugin
 api-version: '26.3'
 description: Lifesteal SMP core with a full heart ledger.
-softdepend: [PlaceholderAPI, WorldGuard]
+softdepend: [PlaceholderAPI, WorldGuard, Vault]
 libraries:
   - org.xerial:sqlite-jdbc:${sqliteVersion}
 
@@ -46,6 +46,12 @@ permissions:
     default: true
   lifestealplus.purgatory:
     description: Use /purgatory to see your progress and call or join trials while eliminated.
+    default: true
+  lifestealplus.giveheart:
+    description: Give some of your hearts to another player with /giveheart.
+    default: true
+  lifestealplus.heartshop:
+    description: Buy heart items with money through /heartshop.
     default: true
   lifestealplus.stats:
     description: See season records with /stats.

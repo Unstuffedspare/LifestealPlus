@@ -153,7 +153,7 @@ public final class BloodMoon implements Listener {
         next = null;
         hearts.clearState(NEXT);
         hearts.putState(ENDS, String.valueOf(ends.toEpochMilli()));
-        hearts.setKillMultiplier(settings().killMultiplier());
+        hearts.setKillMultiplier("blood-moon", settings().killMultiplier());
 
         World world = overworld();
         world.setGameRule(GameRules.ADVANCE_TIME, false);
@@ -175,7 +175,7 @@ public final class BloodMoon implements Listener {
         if (!isActive()) return false;
         ends = null;
         hearts.clearState(ENDS);
-        hearts.setKillMultiplier(1);
+        hearts.setKillMultiplier("blood-moon", 1);
         World world = overworld();
         world.setGameRule(GameRules.ADVANCE_TIME, true);
         world.setTime(DAWN);
@@ -206,7 +206,7 @@ public final class BloodMoon implements Listener {
     /** On disable: put the sky back but keep the saved end time, so a restart picks the night back up. */
     public void shutdown() {
         if (!isActive()) return;
-        hearts.setKillMultiplier(1);
+        hearts.setKillMultiplier("blood-moon", 1);
         overworld().setGameRule(GameRules.ADVANCE_TIME, true);
         if (bar != null) plugin.getServer().getOnlinePlayers().forEach(p -> p.hideBossBar(bar));
     }

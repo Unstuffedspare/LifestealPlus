@@ -26,7 +26,7 @@ import org.sqlite.SQLiteDataSource;
  */
 public final class HeartStore implements AutoCloseable {
 
-    private static final int SCHEMA_VERSION = 11;
+    private static final int SCHEMA_VERSION = 12;
 
     private final Connection conn;
     private final Clock clock;
@@ -301,6 +301,16 @@ public final class HeartStore implements AutoCloseable {
                 return null;
             });
         }
+        if (version < 12) {
+            inTransaction(() -> {
+                try (Statement st = conn.createStatement()) {
+                    // Time played this season, for playtime rewards (cleared with the rest at a season reset).
+                    st.execute("ALTER TABLE players ADD COLUMN played_ms INTEGER NOT NULL DEFAULT 0");
+                    st.execute("PRAGMA user_version = 12");
+                }
+                return null;
+            });
+        }
     }
 
     /**
@@ -352,16 +362,122 @@ public final class HeartStore implements AutoCloseable {
         });
     }
 
+    private volatile Duration revivalCooldown = Duration.ZERO;
+    private volatile int extraPerElimination;
+
     /**
-     * One living player pays {@code cost} of their own hearts to bring an eliminated player
-     * back with reviveHearts. Returns the rescuer's change, then the revival.
+     * @param cooldown how long after an elimination before a rift, pledge or Revival Charm can bring them back
+     * @param extraPerElimination each earlier elimination this season adds this many hearts to a rift and to pledges
      */
-    public List<HeartChange> openRift(UUID rescuer, UUID target, int cost, HeartRules rules) throws SQLException {
+    public void setRevivalRules(Duration cooldown, int extraPerElimination) {
+        this.revivalCooldown = cooldown;
+        this.extraPerElimination = Math.max(0, extraPerElimination);
+    }
+
+    /** How many times a player has been eliminated this season. */
+    public int eliminations(UUID player) throws SQLException {
+        try (PreparedStatement ps = conn.prepareStatement(
+                "SELECT COUNT(*) FROM heart_ledger WHERE player_uuid = ? AND hearts_before > 0 AND hearts_after <= 0")) {
+            ps.setString(1, player.toString());
+            try (ResultSet rs = ps.executeQuery()) {
+                return rs.next() ? rs.getInt(1) : 0;
+            }
+        }
+    }
+
+    /** {@code base} plus the extra for every elimination before the current one. */
+    public int revivalCost(UUID target, int base) throws SQLException {
+        return base + extraPerElimination * Math.max(0, eliminations(target) - 1);
+    }
+
+    /** Refuses while the target's elimination is more recent than the revival cooldown. */
+    private void checkRevivalCooldown(PlayerHearts target) throws SQLException {
+        if (revivalCooldown.isZero()) return;
+        try (PreparedStatement ps = conn.prepareStatement(
+                "SELECT MAX(at) FROM heart_ledger WHERE player_uuid = ? AND hearts_before > 0 AND hearts_after <= 0")) {
+            ps.setString(1, target.uuid().toString());
+            try (ResultSet rs = ps.executeQuery()) {
+                if (!rs.next()) return;
+                long at = rs.getLong(1);
+                if (rs.wasNull()) return;
+                long left = at + revivalCooldown.toMillis() - clock.millis();
+                if (left > 0) {
+                    throw new RuleException(target.name() + " was eliminated too recently. They can be brought back in "
+                            + Math.max(1, (left + 59_999) / 60_000) + " minute(s).");
+                }
+            }
+        }
+    }
+
+    /** Eliminated players, most recently active first: who a Revival Charm can bring back. */
+    public List<PlayerHearts> eliminatedPlayers(int limit) throws SQLException {
+        try (PreparedStatement ps = conn.prepareStatement(
+                "SELECT uuid, name, hearts FROM players WHERE hearts <= 0 ORDER BY last_seen DESC LIMIT ?")) {
+            ps.setInt(1, limit);
+            List<PlayerHearts> out = new ArrayList<>();
+            try (ResultSet rs = ps.executeQuery()) {
+                while (rs.next()) out.add(new PlayerHearts(UUID.fromString(rs.getString(1)), rs.getString(2), rs.getInt(3)));
+            }
+            return out;
+        }
+    }
+
+    /**
+     * {@code from} hands {@code hearts} to {@code to}, less {@code taxPercent} (rounded down),
+     * which is lost. Both must be in the game, the giver keeps at least 1, and the receiver
+     * must have room under their cap for all of it, so nothing is lost to the cap by surprise.
+     */
+    public TradeOutcome giveHearts(UUID from, UUID to, int hearts, int taxPercent, HeartRules rules) throws SQLException {
+        return inTransaction(() -> {
+            if (hearts < 1) throw new RuleException("Give at least 1 heart.");
+            if (from.equals(to)) throw new RuleException("You can't give hearts to yourself.");
+            PlayerHearts giver = require(from);
+            PlayerHearts taker = require(to);
+            if (taker.eliminated()) throw new RuleException(taker.name() + " is eliminated; a rift or pledge can bring them back.");
+            if (giver.hearts() - hearts < 1) {
+                throw new RuleException("You have " + giver.hearts() + " hearts and must keep at least 1.");
+            }
+            int tax = hearts * Math.max(0, taxPercent) / 100;
+            int arriving = hearts - tax;
+            int cap = personalRules(to, rules).maxHearts();
+            if (taker.hearts() + arriving > cap) {
+                throw new RuleException(taker.name() + " can only take " + Math.max(0, cap - taker.hearts()) + " more heart(s).");
+            }
+            long eventId = nextEventId();
+            long now = clock.millis();
+            HeartChange sent = applyOne(HeartRequest.add(from, -hearts, HeartCause.TRADE_SENT, giver.name())
+                    .withOther(to, taker.name()).withNote(tax > 0 ? tax + " lost to tax" : null), rules, eventId, now);
+            HeartChange received = applyOne(HeartRequest.add(to, arriving, HeartCause.TRADE_RECEIVED, giver.name())
+                    .withOther(from, giver.name()), rules, eventId, now);
+            return new TradeOutcome(sent, received, tax, altFlagsOn && areLinked(from, to));
+        });
+    }
+
+    /** A Revival Charm brings {@code target} back with reviveHearts. */
+    public HeartChange reviveWithItem(UUID user, UUID target, HeartRules rules) throws SQLException {
+        return inTransaction(() -> {
+            PlayerHearts from = require(user);
+            PlayerHearts to = require(target);
+            if (!to.eliminated()) throw new RuleException(to.name() + " isn't eliminated.");
+            checkRevivalCooldown(to);
+            return applyOne(HeartRequest.set(target, rules.reviveHearts(), HeartCause.REVIVAL_ITEM, from.name())
+                    .withOther(user, from.name()).withNote("Revival Charm"), rules, nextEventId(), clock.millis());
+        });
+    }
+
+    /**
+     * One living player pays {@code baseCost} of their own hearts (more for a player eliminated
+     * before this season) to bring an eliminated player back with reviveHearts. Returns the
+     * rescuer's change, then the revival.
+     */
+    public List<HeartChange> openRift(UUID rescuer, UUID target, int baseCost, HeartRules rules) throws SQLException {
         return inTransaction(() -> {
             if (rescuer.equals(target)) throw new RuleException("You can't open a rift for yourself.");
             PlayerHearts from = require(rescuer);
             PlayerHearts to = require(target);
             if (!to.eliminated()) throw new RuleException(to.name() + " isn't eliminated.");
+            checkRevivalCooldown(to);
+            int cost = revivalCost(target, baseCost);
             if (from.hearts() - cost < 1) {
                 throw new RuleException("A rift costs " + cost + " hearts and you must keep at least 1 (you have " + from.hearts() + ").");
             }
@@ -380,7 +496,7 @@ public final class HeartStore implements AutoCloseable {
      * reach {@code needed} hearts from at least {@code minVoters} players, the target comes back
      * and the pledges are spent. Pledging again adds to your earlier pledge.
      */
-    public PledgeOutcome pledge(UUID pledger, UUID target, int hearts, int needed, int minVoters, HeartRules rules)
+    public PledgeOutcome pledge(UUID pledger, UUID target, int hearts, int baseNeeded, int minVoters, HeartRules rules)
             throws SQLException {
         return inTransaction(() -> {
             if (hearts < 1) throw new RuleException("Pledge at least 1 heart.");
@@ -388,6 +504,8 @@ public final class HeartStore implements AutoCloseable {
             PlayerHearts from = require(pledger);
             PlayerHearts to = require(target);
             if (!to.eliminated()) throw new RuleException(to.name() + " isn't eliminated.");
+            checkRevivalCooldown(to);
+            int needed = revivalCost(target, baseNeeded);
             if (from.hearts() - hearts < 1) {
                 throw new RuleException("You have " + from.hearts() + " hearts and must keep at least 1.");
             }
@@ -412,7 +530,7 @@ public final class HeartStore implements AutoCloseable {
                 revive = applyOne(HeartRequest.set(target, rules.reviveHearts(), HeartCause.REVIVE, "revival vote")
                         .withNote(total.voters() + " players pledged " + total.hearts() + " hearts"), rules, eventId, now);
             }
-            return new PledgeOutcome(paid, total, revive);
+            return new PledgeOutcome(paid, total, revive, needed);
         });
     }
 
@@ -1334,6 +1452,39 @@ public final class HeartStore implements AutoCloseable {
         return applyOne(request, rules, eventId, now, false);
     }
 
+    /**
+     * Adds {@code played} to a player's time this season. Returns how many multiples of
+     * {@code every} that crossed (usually 0 or 1): the playtime rewards now due. Zero
+     * {@code every} counts the time but rewards nothing.
+     */
+    public int addPlaytime(UUID player, Duration played, Duration every) throws SQLException {
+        return inTransaction(() -> {
+            long before;
+            try (PreparedStatement ps = conn.prepareStatement("SELECT played_ms FROM players WHERE uuid = ?")) {
+                ps.setString(1, player.toString());
+                try (ResultSet rs = ps.executeQuery()) {
+                    if (!rs.next()) return 0;
+                    before = rs.getLong(1);
+                }
+            }
+            long after = before + played.toMillis();
+            try (PreparedStatement ps = conn.prepareStatement("UPDATE players SET played_ms = ? WHERE uuid = ?")) {
+                ps.setLong(1, after);
+                ps.setString(2, player.toString());
+                ps.executeUpdate();
+            }
+            long step = every.toMillis();
+            return step <= 0 ? 0 : (int) (after / step - before / step);
+        });
+    }
+
+    /** Extra cap from a running event (a Cap Boost), added to personal caps as well. */
+    private volatile int capBonus;
+
+    public void setCapBonus(int extra) {
+        this.capBonus = Math.max(0, extra);
+    }
+
     /** The rules with the player's own cap, if a permission gave them one. */
     private HeartRules personalRules(UUID player, HeartRules rules) throws SQLException {
         try (PreparedStatement ps = conn.prepareStatement("SELECT max_hearts FROM players WHERE uuid = ?")) {
@@ -1341,7 +1492,7 @@ public final class HeartStore implements AutoCloseable {
             try (ResultSet rs = ps.executeQuery()) {
                 if (!rs.next()) return rules;
                 int cap = rs.getInt(1);
-                return rs.wasNull() ? rules : rules.personalCap(cap);
+                return rs.wasNull() ? rules : rules.personalCap(cap + capBonus);
             }
         }
     }

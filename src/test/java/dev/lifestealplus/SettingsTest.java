@@ -144,7 +144,8 @@ class SettingsTest {
         assertTrue(shippedSettings.extras().naturalDeathDrops());
 
         var before = ConfigReader.itemNames;
-        ConfigReader.itemNames = java.util.Set.of("diamond_block", "gold_block", "netherite_ingot", "totem_of_undying")::contains;
+        ConfigReader.itemNames = java.util.Set.of("diamond_block", "gold_block", "netherite_ingot", "totem_of_undying",
+                "nether_star")::contains;
         try {
             PluginSettings.Loaded custom = load("heart-items:" + NL + "  recipe:" + NL + "    middle: minecraft:Totem_Of_Undying"
                     + NL + "    sides: banana" + NL);

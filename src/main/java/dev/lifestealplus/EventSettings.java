@@ -5,7 +5,22 @@ import java.time.ZoneId;
 import java.util.List;
 
 /** Settings for heart items and the server events (Blood Moon, airdrops, finale). */
-public record EventSettings(int fragmentsPerHeart, BloodMoon bloodMoon, Airdrops airdrops, double finaleDamagePerBlock) {
+public record EventSettings(int fragmentsPerHeart, BloodMoon bloodMoon, Airdrops airdrops, double finaleDamagePerBlock,
+                            TimedEvent doubleHearts, TimedEvent frenzy, TimedEvent capBoost, Koth koth) {
+
+    /**
+     * Double Hearts, Heart Frenzy or Cap Boost.
+     *
+     * @param amount the kill multiplier (Double Hearts) or the extra hearts on the cap (Cap Boost)
+     * @param chance the chance a monster drops a Heart Fragment (Heart Frenzy)
+     * @param schedule times it starts by itself; empty for admin-started only
+     */
+    public record TimedEvent(Duration length, int amount, double chance, EventSchedule schedule) {
+    }
+
+    /** King of the Hill: how long, how wide the hill is, and the winner's prize. */
+    public record Koth(Duration length, int radius, int prizeHearts) {
+    }
 
     /**
      * @param every average time between Blood Moons (the exact time is random); zero means off
@@ -26,9 +41,10 @@ public record EventSettings(int fragmentsPerHeart, BloodMoon bloodMoon, Airdrops
     /**
      * @param every average time between drops; zero means off
      * @param schedule fixed landing times instead of every; empty for every
+     * @param goldenChance chance a crate is a golden one, with twice the loot and an extra Heart
      */
     public record Airdrops(Duration every, int radius, Duration warning, Duration despawn, int minPlayers,
-                           EventSchedule schedule) {
+                           EventSchedule schedule, double goldenChance) {
     }
 
     static EventSettings from(ConfigReader in) {
@@ -52,9 +68,19 @@ public record EventSettings(int fragmentsPerHeart, BloodMoon bloodMoon, Airdrops
                 PluginSettings.minutes(in.number("airdrops.warning-minutes", 5, 0, 120)),
                 PluginSettings.minutes(in.number("airdrops.despawn-minutes", 20, 0.1, 60 * 24)),
                 in.whole("airdrops.min-players-online", 3, 1, 1000),
-                EventSchedule.read(in, "airdrops.schedule", zone));
+                EventSchedule.read(in, "airdrops.schedule", zone),
+                in.number("airdrops.golden-chance", 0.1, 0, 1));
 
-        return new EventSettings(fragments, bloodMoon, airdrops, in.number("finale.damage-per-block", 1.0, 0, 100));
+        TimedEvent doubleHearts = new TimedEvent(PluginSettings.minutes(in.number("double-hearts.minutes", 30, 1, 60 * 24)),
+                in.whole("double-hearts.multiplier", 2, 2, 10), 0, EventSchedule.read(in, "double-hearts.schedule", zone));
+        TimedEvent frenzy = new TimedEvent(PluginSettings.minutes(in.number("heart-frenzy.minutes", 20, 1, 60 * 24)),
+                0, in.number("heart-frenzy.fragment-chance", 0.1, 0, 1), EventSchedule.read(in, "heart-frenzy.schedule", zone));
+        TimedEvent capBoost = new TimedEvent(PluginSettings.minutes(in.number("cap-boost.minutes", 60, 1, 60 * 24 * 7)),
+                in.whole("cap-boost.extra-hearts", 5, 1, 1000), 0, EventSchedule.read(in, "cap-boost.schedule", zone));
+        Koth koth = new Koth(PluginSettings.minutes(in.number("king-of-the-hill.minutes", 10, 1, 60 * 24)),
+                in.whole("king-of-the-hill.radius", 6, 1, 64), in.whole("king-of-the-hill.prize-hearts", 2, 0, 1000));
+        return new EventSettings(fragments, bloodMoon, airdrops, in.number("finale.damage-per-block", 1.0, 0, 100),
+                doubleHearts, frenzy, capBoost, koth);
     }
 
     private static ZoneId zone(ConfigReader in) {

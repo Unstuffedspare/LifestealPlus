@@ -25,7 +25,14 @@ public enum HeartCause {
     IMPORT(true),
     /** Another plugin through the API: adding can't revive, setting can. */
     PLUGIN_ADD(false),
-    PLUGIN_SET(true);
+    PLUGIN_SET(true),
+    /** A prize from an event, like King of the Hill. */
+    EVENT_PRIZE(false),
+    /** Brought back with a Revival Charm. */
+    REVIVAL_ITEM(true),
+    /** Hearts handed to another player with /giveheart, and received that way. */
+    TRADE_SENT(false),
+    TRADE_RECEIVED(false);
 
     private final boolean canRevive;
 

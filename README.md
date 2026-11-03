@@ -25,7 +25,12 @@ Everything is switchable and every message is editable. A typo in the config nev
 | Ghosts | Eliminated players can roam as spectators and whisper to the living once an hour. | `ghosts` |
 | Heart items | Hearts you can hold: from `/withdraw`, airdrops, Blood Moons and crafting, and dropped by players who die to mobs. They fade if hoarded. | `heart-items` |
 | Blood Moon | A long random night where kills take extra hearts. | `blood-moon` |
-| Airdrops | Heart crates land at announced coordinates. | `airdrops` |
+| Airdrops | Heart crates land at announced coordinates; now and then a golden one with twice the loot. | `airdrops` |
+| Double Hearts, Heart Frenzy, Cap Boost | Short server-wide events: kills take extra hearts; monsters drop Heart Fragments; the cap goes up. Started by an admin or on a schedule. | `double-hearts`, `heart-frenzy`, `cap-boost` |
+| King of the Hill | Hold a marked hill alone for longest to win hearts. | `king-of-the-hill` |
+| Milestone rewards | Heart Fragments for advancements and for every few hours played, so there's a way to earn hearts without fighting. | `rewards` |
+| Revival Charm | A craftable item that brings an eliminated player back. Comebacks get dearer with each elimination, and can wait out a cooldown. | `revival-charm`, `revival` |
+| Heart trading and shop | `/giveheart` hands hearts to a friend (with an optional tax); `/heartshop` sells heart items for money through Vault. | `trading`, `heart-shop` |
 | Finale | An admin-started season ending: the border closes, last one standing wins. | `finale` |
 | Alt detection | Flags kills between accounts that log in from the same address. It only alerts admins, never blocks. See [Privacy](#privacy). | `alt-detection` |
 | While you were away | Players coming back get a short summary of what they missed; `/news` shows the latest. | `recap` |
@@ -103,6 +108,10 @@ Some things worth deciding before a season starts:
 - `hearts.max-by-week`, e.g. `[15, 20, 25]`, makes the cap rise through the season. Leave it empty for a fixed cap.
 - `bounties.undo-minutes` (5): how long after placing a bounty you can take it back with `/bounty undo`, refunded in full. Not while the target is in a fight, and everyone sees the bounty shrink. 0 turns undo off.
 - `blood-moon.schedule` and `airdrops.schedule`, e.g. `[saturday 20:00]` or `[daily 18:00, sunday 15:00]`: fixed times instead of random ones, so everyone can plan around them. `blood-moon.warn-minutes` warns everyone beforehand, and `schedules.time-zone` sets the clock (for example `Europe/London`).
+- `revival.cooldown-minutes` (10) and `revival.extra-cost-per-elimination` (1): a fresh elimination can't be undone by a rift, pledge or Revival Charm straight away, and each earlier elimination this season makes the next comeback dearer.
+- `rewards.advancements`: the advancements that pay Heart Fragments, and how many. Add any advancement by its id; set one to 0 to give nothing.
+- `trading.tax-percent` and `heart-items.withdraw.tax-percent` (both 0): a share of every gift or withdrawal that's lost, to slow hearts moving around.
+- `heart-shop`: off until you switch it on. Needs Vault and an economy plugin. `daily-limit` (2) stops money buying a season.
 - `eliminations`: everyone sees a title and hears a sound when someone loses their last heart. The chat message differs for a kill, a death to the world and an admin, and each is in `messages.yml`.
 - `combat-items`: switch off totems (`totems`), crystal PvP (`end-crystals`; crystals still break blocks and respawn the dragon) or bed and respawn-anchor bombing (`bed-and-anchor-explosions`).
 - Personal caps: give a player the permission `lifestealplus.max-hearts.<n>` (for example `lifestealplus.max-hearts.30`, with a permissions plugin such as LuckPerms) and their cap is n instead of `hearts.max`. The highest one counts, it's picked up within a minute, and losing it never takes hearts away.
@@ -134,6 +143,8 @@ Every message players see is in `plugins/LifestealPlus/messages.yml`.
 | `/vengeance` | Who you can take vengeance on, and who can on you | `lifestealplus.vengeance` |
 | `/bounty [list]`, `/bounty check <player>`, `/bounty place <player> <hearts>`, `/bounty undo <player>` | See, place and take back bounties | `lifestealplus.bounty` |
 | `/withdraw [hearts]` | Turn your hearts into Heart items | `lifestealplus.withdraw` |
+| `/giveheart <player> <hearts>`, `/giveheart confirm` | Give some of your hearts to another player | `lifestealplus.giveheart` |
+| `/heartshop`, `/heartshop buy heart\|fragment\|charm [amount]` | Buy heart items with money (needs Vault and `heart-shop.enabled`) | `lifestealplus.heartshop` |
 | `/rift <player>`, then `/rift confirm` | Pay hearts to bring an eliminated player back | `lifestealplus.rift` |
 | `/pledge <player> <hearts>`, `/pledge cancel <player>`, `/pledge list` | Chip in toward reviving someone | `lifestealplus.pledge` |
 | `/pact <player>`, `/pact accept <player>`, `/pact break`, `/pact list` | Blood Pacts | `lifestealplus.pact` |
@@ -160,11 +171,13 @@ Every player permission is allowed by default. Take one away with your permissio
 | `alts <player>` | Accounts that share an address with this one |
 | `flags` | Recent kills between accounts that share an address |
 | `season`, `season reset <next name>`, `season confirm` | See the season; end it (archives standings, then wipes hearts) |
-| `event status` | When the next Blood Moon and airdrop are due |
+| `event status` | What's running, and when the next Blood Moon, airdrop and scheduled events are due |
+| `event doublehearts\|frenzy\|capboost start [minutes]`, `... stop` | Run or end Double Hearts, a Heart Frenzy or a Cap Boost |
+| `event koth start [minutes]`, `event koth stop` | King of the Hill where you stand (at spawn from the console) |
 | `event bloodmoon start [minutes]`, `event bloodmoon stop` | Run or end a Blood Moon now |
 | `event airdrop`, `event airdrop here` | Drop a heart crate now (at a random spot, or next to you) |
 | `finale start <minutes> [final size]`, `finale stop` | Start or call off the season finale |
-| `item <player> heart\|fragment [amount]` | Hand out heart items |
+| `item <player> heart\|fragment\|charm [amount]` | Hand out heart items and Revival Charms |
 | `mostwanted` | Announce the Most Wanted now |
 | `dashboard` | The server at a glance: the season, hearts in play and where this week's came from, upcoming events, latest eliminations |
 | `import lifestealz [file]`, `import confirm [unban]` | Bring players' hearts over from LifeStealZ (see above) |

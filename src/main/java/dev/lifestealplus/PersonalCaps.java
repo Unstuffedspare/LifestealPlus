@@ -55,7 +55,7 @@ final class PersonalCaps implements Listener {
     /** The cap that applies to an online player: their own, or everyone's. */
     int maxFor(UUID player, HeartRules rules) {
         int own = saved.getOrDefault(player, NONE);
-        return own == NONE ? rules.maxHearts() : rules.personalCap(own).maxHearts();
+        return own == NONE ? rules.maxHearts() : rules.personalCap(own + hearts.capBonus()).maxHearts();
     }
 
     /** Saved every time, not only on a change, so it's back within a minute after a season reset clears it. */

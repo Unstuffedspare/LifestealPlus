@@ -12,6 +12,8 @@ import dev.lifestealplus.core.HeartStore;
 import dev.lifestealplus.events.Airdrops;
 import dev.lifestealplus.events.BloodMoon;
 import dev.lifestealplus.events.Finale;
+import dev.lifestealplus.events.KingOfTheHill;
+import dev.lifestealplus.events.TimedEvents;
 import dev.lifestealplus.combat.CombatItems;
 import dev.lifestealplus.items.HeartItems;
 import dev.lifestealplus.items.LifestealZItems;
@@ -45,6 +47,8 @@ public final class LifestealPlugin extends JavaPlugin {
     private CombatBodies bodies;
     private BloodMoon bloodMoon;
     private Airdrops airdrops;
+    private TimedEvents timedEvents;
+    private KingOfTheHill koth;
     private Finale finale;
     private Purgatory purgatory;
     private CapSchedule capSchedule;
@@ -110,8 +114,12 @@ public final class LifestealPlugin extends JavaPlugin {
         bloodMoon = new BloodMoon(this, hearts, heartItems);
         airdrops = new Airdrops(this, hearts, heartItems);
         finale = new Finale(this, hearts);
+        timedEvents = new TimedEvents(this, hearts, heartItems);
+        getServer().getPluginManager().registerEvents(new Rewards(this, hearts, tracker, heartItems), this);
+        koth = new KingOfTheHill(this, hearts, tracker);
+        getServer().getPluginManager().registerEvents(new RevivalMenu(this, hearts, tracker, heartItems, finale), this);
         for (var listener : List.of(heartItems, bloodMoon, airdrops, finale, new LifestealZItems(this, heartItems),
-                new CombatItems(this))) {
+                new CombatItems(this), timedEvents, koth)) {
             getServer().getPluginManager().registerEvents(listener, this);
         }
         mostWanted = new MostWanted(this, tracker);
@@ -143,7 +151,7 @@ public final class LifestealPlugin extends JavaPlugin {
         SettingsMenu settingsMenu = new SettingsMenu(this, new SettingsCatalog(shippedConfig), presets);
         getServer().getPluginManager().registerEvents(settingsMenu, this);
         LifestealCommands commands = new LifestealCommands(this, hearts, tracker, mostWanted, shield,
-                new EventCommands(this, heartItems, bloodMoon, airdrops, finale), admin, new FeaturesCommand(this),
+                new EventCommands(this, heartItems, bloodMoon, airdrops, finale, timedEvents, koth), admin, new FeaturesCommand(this),
                 new ImportCommand(this, hearts, tracker), settingsMenu, caps, id -> {
                     Player player = getServer().getPlayer(id);
                     return player != null && tagger.isTagged(player) || bodies.hasBody(id);
@@ -152,6 +160,8 @@ public final class LifestealPlugin extends JavaPlugin {
         capSchedule = new CapSchedule(this, hearts);
         SocialCommands social = new SocialCommands(this, hearts, tracker, heartItems, finale, purgatory);
         news = new NewsFeed(this, hearts, tracker);
+        HeartShop shop = new HeartShop(this, heartItems,
+                () -> getServer().getPluginManager().isPluginEnabled("Vault") ? VaultWallet.find(this) : null);
         getServer().getPluginManager().registerEvents(news, this);
         getServer().getPluginManager().registerEvents(new GhostChat(this, tracker), this);
         // Pact shares and pledge refunds happen inside other changes; mirror them and tell the players.
@@ -163,6 +173,7 @@ public final class LifestealPlugin extends JavaPlugin {
             commands.register(event.registrar());
             social.register(event.registrar());
             news.register(event.registrar());
+            event.registrar().register(shop.command(), "Buy heart items with money");
             event.registrar().register(admin.seasonsCommand(), "Past seasons and who won them");
             if (purgatoryCommands != null) purgatoryCommands.register(event.registrar());
         });
@@ -202,6 +213,7 @@ public final class LifestealPlugin extends JavaPlugin {
         PluginSettings s = settings;
         hearts.setFeatures(s.extras().shieldsEnabled(), s.extras().shieldExpiry(), s.social().pactsEnabled(), s.extras().altDetection());
         hearts.setStreaks(s.streaks());
+        hearts.setRevivalRules(s.revival().cooldown(), s.revival().extraPerElimination());
     }
 
     private void logWarnings(List<String> warnings) {
@@ -231,6 +243,8 @@ public final class LifestealPlugin extends JavaPlugin {
         if (bodies != null) bodies.shutdown();
         if (bloodMoon != null) bloodMoon.shutdown();
         if (airdrops != null) airdrops.shutdown();
+        if (timedEvents != null) timedEvents.shutdown();
+        if (koth != null) koth.shutdown();
         if (hearts == null) return;
         if (news != null) news.shutdown();
         try {
@@ -265,6 +279,7 @@ public final class LifestealPlugin extends JavaPlugin {
         heartItems.syncRecipe();
         bloodMoon.settingsChanged();
         airdrops.settingsChanged();
+        timedEvents.settingsChanged();
         return loaded.warnings();
     }
 

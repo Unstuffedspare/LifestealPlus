@@ -29,18 +29,33 @@ public final class HeartService implements AutoCloseable {
     private volatile Integer capOverride;
     /** Gets heart changes that followed from another (pact shares, pledge refunds), on the database thread. */
     private volatile java.util.function.Consumer<List<HeartChange>> sideEffects = changes -> { };
-    /** Multiplies heartsPerKill while an event (a Blood Moon) is running. */
-    private volatile int killMultiplier = 1;
+    /** Multiplies heartsPerKill while events run, by event; the biggest applies. */
+    private final java.util.Map<String, Integer> killMultipliers = new java.util.concurrent.ConcurrentHashMap<>();
+    /** Extra hearts on the cap while events run, by event; they add up. */
+    private final java.util.Map<String, Integer> capBonuses = new java.util.concurrent.ConcurrentHashMap<>();
 
     public HeartService(HeartStore store, HeartRules rules) {
         this.store = store;
         this.rules = rules;
     }
 
-    /** The rules in force right now: the configured ones, with the scheduled cap if there is one. */
+    /** The rules in force right now: the configured ones, with the scheduled cap if there is one, plus any event's boost. */
     public HeartRules rules() {
         Integer cap = capOverride;
-        return cap == null ? rules : rules.withMaxHearts(cap);
+        int bonus = capBonus();
+        if (cap == null && bonus == 0) return rules;
+        return rules.withMaxHearts((cap == null ? rules.maxHearts() : cap) + bonus);
+    }
+
+    /** Raises the cap by {@code extra} while an event runs; 0 removes that event's boost. */
+    public void setCapBonus(String event, int extra) {
+        if (extra <= 0) capBonuses.remove(event);
+        else capBonuses.put(event, extra);
+        store.setCapBonus(capBonus());
+    }
+
+    public int capBonus() {
+        return capBonuses.values().stream().mapToInt(Integer::intValue).sum();
     }
 
     public void setCapOverride(Integer cap) {
@@ -57,6 +72,26 @@ public final class HeartService implements AutoCloseable {
 
     public CompletableFuture<List<HeartChange>> openRift(UUID rescuer, UUID target, int cost) {
         return submit(() -> store.openRift(rescuer, target, cost, rules()));
+    }
+
+    public CompletableFuture<TradeOutcome> giveHearts(UUID from, UUID to, int hearts, int taxPercent) {
+        return submit(() -> store.giveHearts(from, to, hearts, taxPercent, rules()));
+    }
+
+    public CompletableFuture<Integer> revivalCost(UUID target, int base) {
+        return submit(() -> store.revivalCost(target, base));
+    }
+
+    public CompletableFuture<List<PlayerHearts>> eliminatedPlayers(int limit) {
+        return submit(() -> store.eliminatedPlayers(limit));
+    }
+
+    public CompletableFuture<HeartChange> reviveWithItem(UUID user, UUID target) {
+        return submit(() -> store.reviveWithItem(user, target, rules()));
+    }
+
+    public void setRevivalRules(java.time.Duration cooldown, int extraPerElimination) {
+        store.setRevivalRules(cooldown, extraPerElimination);
     }
 
     public CompletableFuture<PledgeOutcome> pledge(UUID pledger, UUID target, int hearts, int needed, int minVoters) {
@@ -139,6 +174,10 @@ public final class HeartService implements AutoCloseable {
         return submit(() -> store.stats(name, season));
     }
 
+    public CompletableFuture<Integer> addPlaytime(UUID player, java.time.Duration played, java.time.Duration every) {
+        return submit(() -> store.addPlaytime(player, played, every));
+    }
+
     public CompletableFuture<Void> setPersonalCap(UUID player, Integer cap) {
         return submit(() -> {
             store.setPersonalCap(player, cap);
@@ -202,16 +241,20 @@ public final class HeartService implements AutoCloseable {
         return apply(List.of(request)).thenApply(List::getFirst);
     }
 
-    public void setKillMultiplier(int multiplier) {
-        this.killMultiplier = Math.max(1, multiplier);
+    /** Multiplies the hearts each kill takes while {@code event} runs; 1 removes it. */
+    public void setKillMultiplier(String event, int multiplier) {
+        if (multiplier <= 1) killMultipliers.remove(event);
+        else killMultipliers.put(event, multiplier);
     }
 
+    /** The biggest multiplier any running event gives (they don't stack). */
     public int killMultiplier() {
-        return killMultiplier;
+        return killMultipliers.values().stream().mapToInt(Integer::intValue).max().orElse(1);
     }
 
     public CompletableFuture<KillOutcome> kill(UUID victim, UUID killer) {
         HeartRules now = rules();
+        int killMultiplier = killMultiplier();
         HeartRules applied = killMultiplier == 1 ? now : now.withHeartsPerKill(now.heartsPerKill() * killMultiplier);
         return submit(() -> store.kill(victim, killer, applied));
     }

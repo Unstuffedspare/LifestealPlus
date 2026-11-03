@@ -110,6 +110,23 @@ eliminations:
   # ui.toast.challenge_complete. none = silent.
   sound: entity.wither.spawn
 
+rewards:
+  # Ways to earn hearts without fighting: Heart Fragments for milestones. (Fragments
+  # combine into Hearts; see heart-items.fragments-per-heart.)
+  enabled: true
+  # Advancements, by the id /advancement shows, and how many fragments each gives.
+  # Each player gets them once, the first time they earn the advancement. Add any
+  # advancement here; set one to 0 to give nothing for it.
+  advancements:
+    "minecraft:story/enter_the_nether": 1
+    "minecraft:nether/obtain_ancient_debris": 1
+    "minecraft:story/enter_the_end": 2
+    "minecraft:end/kill_dragon": 4
+    "minecraft:nether/create_full_beacon": 2
+  # Every this many hours played this season gives fragments. 0 = none.
+  playtime-hours: 2
+  playtime-fragments: 1
+
 combat-items:
   # Switches for the items lifesteal servers argue about most. Switched off, an item
   # stops working against players but still works otherwise.
@@ -164,6 +181,41 @@ revival-votes:
   hearts-needed: 6
   min-players: 3
 
+trading:
+  # /giveheart <player> <hearts>: hand some of your hearts straight to another player.
+  # Admins are alerted when accounts that share an address trade (alt-detection).
+  enabled: true
+  # Percent of every gift lost on the way (rounded down). 0 = none.
+  tax-percent: 0
+
+heart-shop:
+  # /heartshop: buy Hearts, Heart Fragments and Revival Charms with money. Needs Vault and
+  # an economy plugin (EssentialsX, CMI and so on). Off unless you switch it on.
+  enabled: false
+  heart-price: 5000
+  fragment-price: 1000
+  # 0 = charms aren't sold.
+  charm-price: 20000
+  # Most items one player can buy per day. 0 = no limit.
+  daily-limit: 2
+
+revival:
+  # How long after being eliminated before anyone can bring a player back with a rift, a
+  # pledge or a Revival Charm. Purgatory and admins aren't held back. 0 = straight away.
+  cooldown-minutes: 10
+  # Each time a player was already eliminated this season, bringing them back costs this
+  # many more hearts: on a rift, and on the pledges needed.
+  extra-cost-per-elimination: 1
+
+revival-charm:
+  # A craftable item: right-click it to pick an eliminated player and bring them back
+  # (with hearts.revive hearts). Crafted with one item in the corners, one on the sides
+  # and one in the middle.
+  enabled: true
+  corners: totem_of_undying
+  sides: diamond_block
+  middle: nether_star
+
 blood-pacts:
   # /pact <player>: two players share the hearts they win from kills and bounties,
   # and when either dies the other loses a heart too. Turning this off ends all pacts.
@@ -191,6 +243,8 @@ heart-items:
   withdraw:
     # /withdraw [hearts]: turn your own hearts into Heart items.
     enabled: true
+    # Percent of withdrawn hearts lost in the process (rounded down). 0 = none.
+    tax-percent: 0
   decay:
     # Heart items fade so nobody can hoard them: each loses an equal share of its value
     # per day and is gone after this many days. Old Hearts break into fragments when used.
@@ -233,10 +287,43 @@ airdrops:
   warning-minutes: 5
   # A crate disappears this long after landing, opened or not.
   despawn-minutes: 20
+  # Chance (0 to 1) that a crate is golden: twice the loot and an extra Heart.
+  golden-chance: 0.1
   min-players-online: 3
 
+double-hearts:
+  # A stretch where every kill takes extra hearts. Started by an admin with
+  # /lifesteal event doublehearts start [minutes], or at the times in schedule.
+  minutes: 30
+  multiplier: 2
+  # e.g. [saturday 19:00]. Empty = only when an admin starts it.
+  schedule: []
+
+heart-frenzy:
+  # A stretch where monsters killed by players often drop Heart Fragments, anywhere.
+  # /lifesteal event frenzy start [minutes], or at the times in schedule.
+  minutes: 20
+  # Chance (0 to 1) of a fragment per monster.
+  fragment-chance: 0.1
+  schedule: []
+
+cap-boost:
+  # The heart cap goes up for a while. Hearts gained above the usual cap are kept after.
+  # /lifesteal event capboost start [minutes], or at the times in schedule.
+  minutes: 60
+  extra-hearts: 5
+  schedule: []
+
+king-of-the-hill:
+  # /lifesteal event koth start [minutes] marks a hill where you stand. Each second exactly
+  # one player is on it, they score; whoever holds it longest wins hearts.
+  minutes: 10
+  # How far from the centre counts as on the hill, in blocks.
+  radius: 6
+  prize-hearts: 2
+
 schedules:
-  # Time zone for blood-moon.schedule and airdrops.schedule, like Europe/London or
+  # Time zone for every event schedule (Blood Moons, airdrops and the rest), like Europe/London or
   # America/New_York. server = the server's own clock.
   time-zone: server
 
