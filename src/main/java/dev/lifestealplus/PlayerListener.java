@@ -89,7 +89,7 @@ final class PlayerListener implements Listener {
         if (killer != null && !killer.getUniqueId().equals(victim.getUniqueId())) {
             kills.pvpKill(victim.getUniqueId(), killer.getUniqueId());
         } else {
-            kills.naturalDeath(victim.getUniqueId(), event.getDamageSource().getDamageType().getTranslationKey());
+            kills.naturalDeath(victim.getUniqueId(), event.getDamageSource().getDamageType().getTranslationKey(), victim.getLocation());
         }
     }
 

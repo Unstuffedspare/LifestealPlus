@@ -12,6 +12,7 @@ import java.time.Duration;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
 import org.sqlite.SQLiteDataSource;
@@ -25,7 +26,7 @@ import org.sqlite.SQLiteDataSource;
  */
 public final class HeartStore implements AutoCloseable {
 
-    private static final int SCHEMA_VERSION = 10;
+    private static final int SCHEMA_VERSION = 11;
 
     private final Connection conn;
     private final Clock clock;
@@ -284,6 +285,16 @@ public final class HeartStore implements AutoCloseable {
                             )""");
                     st.execute("CREATE INDEX news_at ON news (at)");
                     st.execute("PRAGMA user_version = 10");
+                }
+                return null;
+            });
+        }
+        if (version < 11) {
+            inTransaction(() -> {
+                try (Statement st = conn.createStatement()) {
+                    // A player's own cap, from a permission; null means the server's cap.
+                    st.execute("ALTER TABLE players ADD COLUMN max_hearts INTEGER");
+                    st.execute("PRAGMA user_version = 11");
                 }
                 return null;
             });
@@ -1263,6 +1274,28 @@ public final class HeartStore implements AutoCloseable {
         return applyOne(request, rules, eventId, now, false);
     }
 
+    /** The rules with the player's own cap, if a permission gave them one. */
+    private HeartRules personalRules(UUID player, HeartRules rules) throws SQLException {
+        try (PreparedStatement ps = conn.prepareStatement("SELECT max_hearts FROM players WHERE uuid = ?")) {
+            ps.setString(1, player.toString());
+            try (ResultSet rs = ps.executeQuery()) {
+                if (!rs.next()) return rules;
+                int cap = rs.getInt(1);
+                return rs.wasNull() ? rules : rules.personalCap(cap);
+            }
+        }
+    }
+
+    /** Sets (or with null clears) a player's own cap. Lowering it never takes hearts away. */
+    public void setPersonalCap(UUID player, Integer cap) throws SQLException {
+        try (PreparedStatement ps = conn.prepareStatement("UPDATE players SET max_hearts = ? WHERE uuid = ?")) {
+            if (cap == null) ps.setNull(1, java.sql.Types.INTEGER);
+            else ps.setInt(1, cap);
+            ps.setString(2, player.toString());
+            ps.executeUpdate();
+        }
+    }
+
     /** {@code blocked} logs the request without changing anything (a rule refused it). */
     private HeartChange applyOne(HeartRequest request, HeartRules rules, long eventId, long now, boolean blocked)
             throws SQLException {
@@ -1273,7 +1306,7 @@ public final class HeartStore implements AutoCloseable {
             blocked = true;
             note = NEWBIE_SHIELD;
         }
-        int after = blocked ? before : rules.resolve(before, request);
+        int after = blocked ? before : personalRules(request.player(), rules).resolve(before, request);
         if (note == null) note = autoNote(before, after, request);
 
         if (after != before) {
@@ -1381,6 +1414,30 @@ public final class HeartStore implements AutoCloseable {
     }
 
     /** The newest news first. */
+    /** The news written after row {@code afterId}, oldest first, each with its row id. */
+    public List<Map.Entry<Long, NewsItem>> newsAfter(long afterId, int limit) throws SQLException {
+        try (PreparedStatement ps = conn.prepareStatement(
+                "SELECT id, at, kind, player, other, amount FROM news WHERE id > ? ORDER BY id LIMIT ?")) {
+            ps.setLong(1, afterId);
+            ps.setInt(2, limit);
+            List<Map.Entry<Long, NewsItem>> items = new ArrayList<>();
+            try (ResultSet rs = ps.executeQuery()) {
+                while (rs.next()) {
+                    items.add(Map.entry(rs.getLong(1), new NewsItem(Instant.ofEpochMilli(rs.getLong(2)), rs.getString(3),
+                            rs.getString(4), rs.getString(5), rs.getInt(6))));
+                }
+            }
+            return items;
+        }
+    }
+
+    /** The newest news row's id, or 0 if there's none. */
+    public long lastNewsId() throws SQLException {
+        try (Statement st = conn.createStatement(); ResultSet rs = st.executeQuery("SELECT COALESCE(MAX(id), 0) FROM news")) {
+            return rs.next() ? rs.getLong(1) : 0;
+        }
+    }
+
     public List<NewsItem> latestNews(int limit) throws SQLException {
         return newsSince(0, limit);
     }

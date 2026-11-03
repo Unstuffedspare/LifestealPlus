@@ -115,8 +115,23 @@ public final class HeartService implements AutoCloseable {
         });
     }
 
+    public CompletableFuture<List<java.util.Map.Entry<Long, NewsItem>>> newsAfter(long afterId, int limit) {
+        return submit(() -> store.newsAfter(afterId, limit));
+    }
+
+    public CompletableFuture<Long> lastNewsId() {
+        return submit(store::lastNewsId);
+    }
+
     public CompletableFuture<List<NewsItem>> latestNews(int limit) {
         return submit(() -> store.latestNews(limit));
+    }
+
+    public CompletableFuture<Void> setPersonalCap(UUID player, Integer cap) {
+        return submit(() -> {
+            store.setPersonalCap(player, cap);
+            return null;
+        });
     }
 
     public CompletableFuture<Void> markLeft(UUID player) {

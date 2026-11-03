@@ -23,7 +23,7 @@ Everything is switchable and every message is editable. A typo in the config nev
 | Revival votes | Players chip in hearts together to bring someone back. | `revival-votes` |
 | Blood Pacts | Two players share kill rewards, and each other's deaths. | `blood-pacts` |
 | Ghosts | Eliminated players can roam as spectators and whisper to the living once an hour. | `ghosts` |
-| Heart items | Hearts you can hold: from `/withdraw`, airdrops and Blood Moons. They fade if hoarded. | `heart-items` |
+| Heart items | Hearts you can hold: from `/withdraw`, airdrops, Blood Moons and crafting, and dropped by players who die to mobs. They fade if hoarded. | `heart-items` |
 | Blood Moon | A long random night where kills take extra hearts. | `blood-moon` |
 | Airdrops | Heart crates land at announced coordinates. | `airdrops` |
 | Finale | An admin-started season ending: the border closes, last one standing wins. | `finale` |
@@ -77,7 +77,7 @@ Each setting shows the explanation from `config.yml`. Changes are saved to `conf
 | --- | --- |
 | Casual | Only other players cost you hearts, newcomers are protected for longer, and coming back from elimination is easier. |
 | Standard | The defaults the plugin ships with. |
-| Hardcore | Fewer hearts, short protection, longer combat tags, and a hard road back from elimination. |
+| Hardcore | Fewer hearts, short protection, longer combat tags, no crafted Hearts, and a hard road back from elimination. |
 
 A preset only touches the settings presets are about (heart amounts, protection, the way back from elimination and so on), and always gives the same result, whatever was set before. Anything else you've changed stays as it is. From the console: `/lifesteal preset` lists them, `/lifesteal preset hardcore` shows what it would change, and `/lifesteal preset hardcore confirm` applies it.
 
@@ -95,10 +95,15 @@ Some things worth deciding before a season starts:
 
 - `hearts.starting`, `hearts.max` and `hearts.per-kill` set the basic economy.
 - `hearts.natural-death-loss` (1): hearts lost dying to anything other than a player. Set it to 0 if only PvP should cost hearts.
+- `hearts.natural-death-drops` (on): those hearts drop as glowing Heart items where the player died. They can't burn or despawn, so the player can go back for them, if nobody else gets there first. Off, and the hearts are simply gone.
+- `heart-items.recipe` (on): Hearts can be crafted from diamond blocks in the corners, gold blocks on the sides and a netherite ingot in the middle. The three ingredients can be changed (`corners`, `sides`, `middle`), and the recipe appears in everyone's recipe book.
 - `worlds.excluded`, e.g. `[creative, events]`: worlds where nothing lifesteal happens. Dying there costs no hearts, kills take none, and combat tags, newbie shields and Most Wanted leave players alone. Use it for a creative, event or minigame world.
 - `newbie-shield.hours`: on a fresh season every player is new, so everyone starts shielded for these hours. That works as an opening grace period. Turn it off if you want PvP straight away.
 - `newbie-shield.expires-after-days` (3): the shield also ends this many days after a player first joins, however little they've played, so nobody keeps it forever.
 - `hearts.max-by-week`, e.g. `[15, 20, 25]`, makes the cap rise through the season. Leave it empty for a fixed cap.
+- `combat-items`: switch off totems (`totems`), crystal PvP (`end-crystals`; crystals still break blocks and respawn the dragon) or bed and respawn-anchor bombing (`bed-and-anchor-explosions`).
+- Personal caps: give a player the permission `lifestealplus.max-hearts.<n>` (for example `lifestealplus.max-hearts.30`, with a permissions plugin such as LuckPerms) and their cap is n instead of `hearts.max`. The highest one counts, it's picked up within a minute, and losing it never takes hearts away.
+- `discord.webhook-url`: paste a Discord channel's webhook link (channel settings > Integrations > Webhooks) and the server's news (eliminations, comebacks, long streaks, bounties, events) is posted there within seconds. `none` turns it off.
 - `ghosts.limit-chat` stops eliminated players talking freely to the living, so their hourly whisper matters. Turn it off for a more relaxed server.
 
 ### Messages

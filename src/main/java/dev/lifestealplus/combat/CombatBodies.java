@@ -134,7 +134,7 @@ public final class CombatBodies implements Listener {
             kills.pvpKill(owner, killer.getUniqueId());
             Msg.broadcast("combat-log.body-killed", Msg.t("killer", killer.getName()), Msg.t("player", name));
         } else {
-            kills.naturalDeath(owner, "body");
+            kills.naturalDeath(owner, "body", mannequin.getLocation());
             Msg.broadcast("combat-log.body-destroyed", Msg.t("player", name));
         }
     }

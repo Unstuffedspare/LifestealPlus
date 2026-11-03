@@ -4,6 +4,7 @@ import com.destroystokyo.paper.event.inventory.PrepareResultEvent;
 import dev.lifestealplus.HeartTracker;
 import dev.lifestealplus.LifestealPlugin;
 import dev.lifestealplus.Msg;
+import dev.lifestealplus.PluginSettings;
 import dev.lifestealplus.core.HeartCause;
 import dev.lifestealplus.core.HeartRequest;
 import dev.lifestealplus.core.HeartService;
@@ -16,8 +17,10 @@ import java.time.format.DateTimeFormatter;
 import java.util.List;
 import net.kyori.adventure.text.Component;
 import net.kyori.adventure.text.format.TextDecoration;
+import org.bukkit.Keyed;
 import org.bukkit.Material;
 import org.bukkit.NamespacedKey;
+import org.bukkit.Server;
 import org.bukkit.Sound;
 import org.bukkit.entity.Player;
 import org.bukkit.event.Event;
@@ -29,14 +32,18 @@ import org.bukkit.event.block.CrafterCraftEvent;
 import org.bukkit.event.inventory.PrepareItemCraftEvent;
 import org.bukkit.event.player.PlayerInteractEntityEvent;
 import org.bukkit.event.player.PlayerInteractEvent;
+import org.bukkit.event.player.PlayerJoinEvent;
 import org.bukkit.inventory.EquipmentSlot;
 import org.bukkit.inventory.ItemStack;
+import org.bukkit.inventory.Recipe;
+import org.bukkit.inventory.ShapedRecipe;
 import org.bukkit.persistence.PersistentDataType;
 
 /**
  * Hearts you can hold. A Heart adds one to whoever right-clicks it; Heart Fragments
  * combine into a Heart. They look like dyes but never act like them: no crafting, looms,
- * sheep or signs, so nobody loses one by accident.
+ * sheep or signs, so nobody loses one by accident. Hearts can also be crafted, when the
+ * recipe is switched on.
  */
 public final class HeartItems implements Listener {
 
@@ -46,12 +53,16 @@ public final class HeartItems implements Listener {
     private final HeartService hearts;
     private final HeartTracker tracker;
     private final NamespacedKey kindKey;
+    private final NamespacedKey recipeKey;
+    /** The recipe as last registered, so a settings reload only touches it when it changed. */
+    private PluginSettings.HeartRecipe registered = PluginSettings.HeartRecipe.OFF;
 
     public HeartItems(LifestealPlugin plugin, HeartService hearts, HeartTracker tracker) {
         this.plugin = plugin;
         this.hearts = hearts;
         this.tracker = tracker;
         this.kindKey = new NamespacedKey(plugin, "heart_item");
+        this.recipeKey = new NamespacedKey(plugin, "heart");
         this.mintedKey = new NamespacedKey(plugin, "heart_minted");
     }
 
@@ -206,6 +217,37 @@ public final class HeartItems implements Listener {
                 return;
             }
         }
+        // The registered result was made when the recipe was; a crafted Heart starts fading now.
+        if (isHeartRecipe(event.getRecipe())) event.getInventory().setResult(heart(1));
+    }
+
+    /** Adds, changes or removes the Heart recipe to match the settings. */
+    public void syncRecipe() {
+        PluginSettings.HeartRecipe wanted = plugin.settings().heartRecipe();
+        if (wanted.equals(registered)) return;
+        Server server = plugin.getServer();
+        server.removeRecipe(recipeKey);
+        if (wanted.enabled()) {
+            ShapedRecipe recipe = new ShapedRecipe(recipeKey, heart(1));
+            recipe.shape("CSC", "SMS", "CSC");
+            recipe.setIngredient('C', Material.matchMaterial(wanted.corners()));
+            recipe.setIngredient('S', Material.matchMaterial(wanted.sides()));
+            recipe.setIngredient('M', Material.matchMaterial(wanted.middle()));
+            server.addRecipe(recipe);
+            server.getOnlinePlayers().forEach(player -> player.discoverRecipe(recipeKey));
+        }
+        registered = wanted;
+        if (!server.getOnlinePlayers().isEmpty()) server.updateRecipes();
+    }
+
+    private boolean isHeartRecipe(Recipe recipe) {
+        return recipe instanceof Keyed keyed && keyed.getKey().equals(recipeKey);
+    }
+
+    /** So the recipe shows up in everyone's recipe book. */
+    @EventHandler
+    void onJoin(PlayerJoinEvent event) {
+        if (registered.enabled()) event.getPlayer().discoverRecipe(recipeKey);
     }
 
     /** Looms, anvils, smithing tables and the rest. */
@@ -229,5 +271,6 @@ public final class HeartItems implements Listener {
                 }
             }
         }
+        if (isHeartRecipe(event.getRecipe())) event.setResult(heart(1));
     }
 }

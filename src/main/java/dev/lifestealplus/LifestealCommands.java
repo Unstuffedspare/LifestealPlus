@@ -53,10 +53,12 @@ final class LifestealCommands {
     private final FeaturesCommand features;
     private final ImportCommand importer;
     private final SettingsMenu settingsMenu;
+    private final PersonalCaps caps;
 
     LifestealCommands(LifestealPlugin plugin, HeartService hearts, HeartTracker tracker, MostWanted mostWanted,
                       NewbieShield shield, EventCommands events, AdminCommands admin, FeaturesCommand features,
-                      ImportCommand importer, SettingsMenu settingsMenu) {
+                      ImportCommand importer, SettingsMenu settingsMenu, PersonalCaps caps) {
+        this.caps = caps;
         this.importer = importer;
         this.settingsMenu = settingsMenu;
         this.events = events;
@@ -393,7 +395,7 @@ final class LifestealCommands {
                 Msg.send(sender, "hearts.eliminated", Msg.t("player", target.name()));
             } else {
                 Msg.send(sender, "hearts.show", Msg.t("player", target.name()), Msg.t("hearts", target.hearts()),
-                        Msg.t("max", hearts.rules().maxHearts()));
+                        Msg.t("max", caps.maxFor(target.uuid(), hearts.rules())));
             }
         });
     }

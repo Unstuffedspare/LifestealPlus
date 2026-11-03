@@ -135,4 +135,50 @@ class SettingsTest {
         assertTrue(PluginSettings.load(shipped()).settings().excludedWorlds().isEmpty());
         assertEquals(1, load("worlds:\n  excluded: creative\n").warnings().size(), "a single name isn't a list");
     }
+
+    @Test
+    void theHeartRecipeIsReadAsItems() throws Exception {
+        PluginSettings shippedSettings = PluginSettings.load(shipped()).settings();
+        assertEquals(new PluginSettings.HeartRecipe(true, "diamond_block", "gold_block", "netherite_ingot"),
+                shippedSettings.heartRecipe());
+        assertTrue(shippedSettings.extras().naturalDeathDrops());
+
+        var before = ConfigReader.itemNames;
+        ConfigReader.itemNames = java.util.Set.of("diamond_block", "gold_block", "netherite_ingot", "totem_of_undying")::contains;
+        try {
+            PluginSettings.Loaded custom = load("heart-items:" + NL + "  recipe:" + NL + "    middle: minecraft:Totem_Of_Undying"
+                    + NL + "    sides: banana" + NL);
+            assertEquals("totem_of_undying", custom.settings().heartRecipe().middle());
+            assertEquals("gold_block", custom.settings().heartRecipe().sides());
+            assertEquals(List.of("heart-items.recipe.sides is \"banana\", which isn't an item name like diamond_block; using gold_block."),
+                    custom.warnings());
+        } finally {
+            ConfigReader.itemNames = before;
+        }
+        assertEquals(PluginSettings.HeartRecipe.OFF,
+                load("heart-items:" + NL + "  recipe:" + NL + "    enabled: false" + NL).settings().heartRecipe());
+    }
+
+    private static final String NL = "\n";
+
+    @Test
+    void combatItemsAndDiscord() throws Exception {
+        PluginSettings shippedSettings = PluginSettings.load(shipped()).settings();
+        assertEquals(new PluginSettings.CombatItemRules(true, true, true), shippedSettings.combatItems());
+        assertEquals(null, shippedSettings.discordWebhook());
+
+        PluginSettings.Loaded custom = load("combat-items:" + NL + "  totems: false" + NL + "  end-crystals: false" + NL
+                + "discord:" + NL + "  webhook-url: https://discord.com/api/webhooks/1/abc" + NL);
+        assertEquals(new PluginSettings.CombatItemRules(false, false, true), custom.settings().combatItems());
+        assertEquals("https://discord.com/api/webhooks/1/abc", custom.settings().discordWebhook());
+
+        PluginSettings.Loaded bad = load("discord:" + NL + "  webhook-url: discord.com/whatever" + NL);
+        assertEquals(null, bad.settings().discordWebhook());
+        assertEquals(1, bad.warnings().size());
+    }
+
+    @Test
+    void discordTextIsEscaped() {
+        assertEquals("\"a \\\"b\\\"\\nc\\\\d\"", DiscordFeed.json("a \"b\"\nc\\d"));
+    }
 }

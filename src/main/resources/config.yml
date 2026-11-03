@@ -19,6 +19,8 @@ hearts:
   starting: 10
   # Most hearts anyone can have. A killer at the cap still takes the victim's heart
   # but doesn't gain it. Lowering this never takes hearts from players above it.
+  # To give someone their own cap, give them the permission lifestealplus.max-hearts.<n>,
+  # e.g. lifestealplus.max-hearts.30 (with a permissions plugin such as LuckPerms).
   max: 20
   # Optional: a cap that rises through the season, one value per week from the
   # season's start, e.g. [15, 20, 25]. After the last week the last value holds.
@@ -30,6 +32,10 @@ hearts:
   per-kill: 1
   # Hearts lost dying to anything other than a player (mobs, falling, lava). 0 = none.
   natural-death-loss: 1
+  # Those hearts drop as Heart items where the player died, glowing so they're easy to
+  # find. They can't burn or despawn, so the player (or whoever gets there first) can
+  # pick them back up. Off = the hearts are simply gone.
+  natural-death-drops: true
 
 worlds:
   # Worlds where nothing lifesteal happens: dying costs no hearts, kills take none, and
@@ -91,6 +97,18 @@ combat-log:
   enabled: true
   tag-seconds: 15
   body-seconds: 30
+
+combat-items:
+  # Switches for the items lifesteal servers argue about most. Switched off, an item
+  # stops working against players but still works otherwise.
+  # Totems of Undying save players from death.
+  totems: true
+  # End crystal explosions hurt players. Off = no crystal PvP; crystals still break
+  # blocks and can respawn the dragon.
+  end-crystals: true
+  # Respawn anchors used outside the Nether, and beds used in the Nether or the End,
+  # explode and hurt players.
+  bed-and-anchor-explosions: true
 
 last-stand:
   # Players down to this many hearts get Strength I and Speed I until they recover.
@@ -154,7 +172,8 @@ ghosts:
   limit-chat: true
 
 heart-items:
-  # Hearts and Heart Fragments come from airdrops, Blood Moons and /withdraw.
+  # Hearts and Heart Fragments come from airdrops, Blood Moons, /withdraw, crafting
+  # (below) and players' deaths to mobs (hearts.natural-death-drops).
   # Holding this many fragments and right-clicking turns them into a Heart.
   fragments-per-heart: 4
   withdraw:
@@ -165,6 +184,13 @@ heart-items:
     # per day and is gone after this many days. Old Hearts break into fragments when used.
     enabled: true
     days: 4
+  recipe:
+    # Hearts can be crafted on a crafting table: one item in the four corners, another on
+    # the four sides, and a third in the middle. Use item names like diamond_block.
+    enabled: true
+    corners: diamond_block
+    sides: gold_block
+    middle: netherite_ingot
 
 blood-moon:
   # Now and then the overworld falls into a long night: kills take extra hearts and
@@ -215,6 +241,12 @@ recap:
   lines: 5
   # How long news is kept.
   keep-days: 14
+
+discord:
+  # Post the server's news (eliminations, comebacks, long streaks, bounties and events) to a
+  # Discord channel. Paste the channel's webhook link here, from the channel's settings >
+  # Integrations > Webhooks. none = don't post.
+  webhook-url: none
 
 seasons:
   # Let everyone see past seasons with /seasons and /leaderboard <season>.

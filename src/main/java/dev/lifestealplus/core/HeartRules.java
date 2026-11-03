@@ -41,6 +41,14 @@ public record HeartRules(int startingHearts, int maxHearts, int reviveHearts, in
         return schedule.get((int) Math.min(Math.max(week, 0), schedule.size() - 1));
     }
 
+    /**
+     * The same rules with a player's own cap (from a permission). It never goes below the
+     * hearts players start or come back with.
+     */
+    public HeartRules personalCap(int cap) {
+        return withMaxHearts(Math.max(cap, Math.max(startingHearts, reviveHearts)));
+    }
+
     /** The same rules with a different heartsPerKill (a Blood Moon doubles it). */
     public HeartRules withHeartsPerKill(int perKill) {
         return new HeartRules(startingHearts, maxHearts, reviveHearts, perKill, repeatKillWindow, vengeanceWindow,

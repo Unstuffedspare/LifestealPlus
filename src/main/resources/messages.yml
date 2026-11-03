@@ -290,6 +290,8 @@ items:
   fragment-name: "<light_purple>Heart Fragment"
   # <needed>
   fragment-hint: "<gray>Right-click the air with <needed> to make a Heart."
+  # Hearts lost to a non-player death drop where the player died. <n>, <x>, <y>, <z>
+  hearts-dropped: "<red>Your lost heart(s) dropped where you died, at <white><x> <y> <z></white>. Get back before someone else picks them up."
   cant-use-eliminated: "<gray>You can't use a Heart while eliminated."
   at-cap: "<gray>You're already at the most hearts you can have."
   # <hearts>
@@ -556,6 +558,11 @@ preset:
   in-use: "<gray>Your settings already match the <preset> preset."
   # <preset>
   unknown: "<red>There's no preset called <preset>. Try casual, standard or hardcore."
+
+# ---- Combat items ----------------------------------------------------------
+combat-items:
+  # A player died holding a totem while totems are switched off.
+  totem-off: "<gray>Totems of Undying are switched off on this server."
 
 # ---- Kill streaks ----------------------------------------------------------
 streak:

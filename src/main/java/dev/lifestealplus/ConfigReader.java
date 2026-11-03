@@ -2,6 +2,8 @@ package dev.lifestealplus;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Locale;
+import java.util.function.Predicate;
 import org.bukkit.configuration.ConfigurationSection;
 
 /**
@@ -83,6 +85,23 @@ final class ConfigReader {
             else warnings.add(key + " contains \"" + item + "\", which isn't a whole number; skipping it.");
         }
         return values;
+    }
+
+    /**
+     * Which names are items. Only a running server knows the full list, so the plugin sets this
+     * on start; until then any well-formed name passes.
+     */
+    static volatile Predicate<String> itemNames = name -> name.matches("[a-z0-9_]+");
+
+    /** An item, by its name ("diamond_block"), lower-cased; anything that isn't one falls back with a warning. */
+    String item(String key, String fallback) {
+        String name = config.getString(key);
+        if (name == null || name.isBlank()) return fallback;
+        String item = name.strip().toLowerCase(Locale.ROOT).replace(' ', '_');
+        if (item.startsWith("minecraft:")) item = item.substring("minecraft:".length());
+        if (itemNames.test(item)) return item;
+        warnings.add(key + " is \"" + name + "\", which isn't an item name like diamond_block; using " + fallback + ".");
+        return fallback;
     }
 
     /** A list of names, like world names; an empty list if it isn't set. */

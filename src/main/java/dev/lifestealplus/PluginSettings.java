@@ -24,7 +24,8 @@ public record PluginSettings(HeartRules rules, int naturalDeathLoss, String data
                              boolean bountiesEnabled, boolean bountyAnonymous, int lastStandHearts,
                              MostWantedSettings mostWanted, CombatSettings combat, EventSettings events,
                              SocialSettings social, Extras extras, StreakRules streaks, RecapSettings recap,
-                             Set<String> excludedWorlds) {
+                             Set<String> excludedWorlds, HeartRecipe heartRecipe, CombatItemRules combatItems,
+                             String discordWebhook) {
 
     /** Whether dying and killing in this world move hearts (false for the worlds listed in worlds.excluded). */
     public boolean lifestealIn(World world) {
@@ -60,10 +61,25 @@ public record PluginSettings(HeartRules rules, int naturalDeathLoss, String data
      * @param trackerRoundTo the vengeance tracker rounds distances to this many blocks
      * @param shieldsEnabled when false, existing newbie shields are suspended as well as new ones skipped
      * @param shieldExpiry a newbie shield ends this long after first join however little was played; zero for never
+     * @param naturalDeathDrops hearts lost to a non-player death drop as Heart items where the player died
      */
     public record Extras(boolean vengeanceTracker, int trackerRoundTo, boolean tabList, boolean pactsInTab,
                          boolean publicSeasons, boolean altDetection, boolean shieldsEnabled, Duration shieldExpiry,
-                         boolean convertLifestealZItems) {
+                         boolean convertLifestealZItems, boolean naturalDeathDrops) {
+    }
+
+    /**
+     * @param totems Totems of Undying save players
+     * @param endCrystals end crystal explosions hurt players
+     * @param respawnBombs respawn anchors and beds exploding outside their dimension hurt players
+     */
+    public record CombatItemRules(boolean totems, boolean endCrystals, boolean respawnBombs) {
+    }
+
+    /** The crafting recipe for a Heart: three item names in a 3x3 square. Null ingredients when it's off. */
+    public record HeartRecipe(boolean enabled, String corners, String sides, String middle) {
+
+        public static final HeartRecipe OFF = new HeartRecipe(false, null, null, null);
     }
 
     /**
@@ -78,6 +94,11 @@ public record PluginSettings(HeartRules rules, int naturalDeathLoss, String data
 
     /** The settings, plus anything in the file that had to be replaced by a default. */
     public record Loaded(PluginSettings settings, List<String> warnings) {
+    }
+
+    /** Tells the settings which names are items, which only a running server knows. */
+    static void itemNames(java.util.function.Predicate<String> isItem) {
+        ConfigReader.itemNames = isItem;
     }
 
     public static Loaded load(FileConfiguration config) {
@@ -135,7 +156,13 @@ public record PluginSettings(HeartRules rules, int naturalDeathLoss, String data
                 in.flag("alt-detection.enabled", true),
                 shields,
                 hours(24 * in.number("newbie-shield.expires-after-days", 3, 0, 365)),
-                in.flag("lifestealz-import.convert-items", true));
+                in.flag("lifestealz-import.convert-items", true),
+                in.flag("hearts.natural-death-drops", true));
+        HeartRecipe heartRecipe = in.flag("heart-items.recipe.enabled", true)
+                ? new HeartRecipe(true, in.item("heart-items.recipe.corners", "diamond_block"),
+                        in.item("heart-items.recipe.sides", "gold_block"),
+                        in.item("heart-items.recipe.middle", "netherite_ingot"))
+                : HeartRecipe.OFF;
 
         StreakRules streaks = in.flag("streaks.enabled", true)
                 ? new StreakRules(true, in.wholes("streaks.announce-at", List.of(3, 5, 10)),
@@ -150,8 +177,21 @@ public record PluginSettings(HeartRules rules, int naturalDeathLoss, String data
         PluginSettings settings = new PluginSettings(rules, naturalDeathLoss, in.text("database.file", "lifesteal.db"), purgatory,
                 in.flag("bounties.enabled", true), in.flag("bounties.anonymous", true), lastStand, mostWanted, combat,
                 EventSettings.from(in), SocialSettings.from(in, starting, revive), extras, streaks, recap,
-                in.texts("worlds.excluded").stream().map(name -> name.toLowerCase(Locale.ROOT)).collect(Collectors.toUnmodifiableSet()));
+                in.texts("worlds.excluded").stream().map(name -> name.toLowerCase(Locale.ROOT)).collect(Collectors.toUnmodifiableSet()),
+                heartRecipe,
+                new CombatItemRules(in.flag("combat-items.totems", true), in.flag("combat-items.end-crystals", true),
+                        in.flag("combat-items.bed-and-anchor-explosions", true)),
+                webhook(in));
         return new Loaded(settings, List.copyOf(in.warnings()));
+    }
+
+    /** The Discord webhook link, or null for none. */
+    private static String webhook(ConfigReader in) {
+        String url = in.text("discord.webhook-url", "none").strip();
+        if (url.equalsIgnoreCase("none") || url.equalsIgnoreCase("off")) return null;
+        if (url.startsWith("https://") || url.startsWith("http://")) return url;
+        in.warn("discord.webhook-url should be a link starting with https:// (or none); not posting to Discord.");
+        return null;
     }
 
     static Duration minutes(double value) {

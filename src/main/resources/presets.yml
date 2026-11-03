@@ -40,12 +40,13 @@ standard:
   settings: {}
 
 hardcore:
-  description: "Brutal. Fewer hearts, short protection, longer combat tags, and a hard road back from elimination."
+  description: "Brutal. Fewer hearts, short protection, longer combat tags, no crafted Hearts, and a hard road back from elimination."
   settings:
     hearts:
       starting: 8
       max: 15
       revive: 2
+      natural-death-drops: false
     repeat-kills:
       cooldown-hours: 2
     streaks:
@@ -77,3 +78,5 @@ hardcore:
     heart-items:
       decay:
         days: 2
+      recipe:
+        enabled: false

@@ -12,6 +12,7 @@ import dev.lifestealplus.core.HeartStore;
 import dev.lifestealplus.events.Airdrops;
 import dev.lifestealplus.events.BloodMoon;
 import dev.lifestealplus.events.Finale;
+import dev.lifestealplus.combat.CombatItems;
 import dev.lifestealplus.items.HeartItems;
 import dev.lifestealplus.items.LifestealZItems;
 import dev.lifestealplus.purgatory.Purgatory;
@@ -30,6 +31,7 @@ import java.util.concurrent.CompletableFuture;
 import java.util.logging.Level;
 import org.bukkit.configuration.Configuration;
 import org.bukkit.configuration.file.FileConfiguration;
+import org.bukkit.Material;
 import org.bukkit.configuration.file.YamlConfiguration;
 import org.bukkit.plugin.java.JavaPlugin;
 
@@ -47,6 +49,7 @@ public final class LifestealPlugin extends JavaPlugin {
     private CapSchedule capSchedule;
     private NewbieShield shield;
     private NewsFeed news;
+    private HeartItems heartItems;
 
     @Override
     public void onEnable() {
@@ -54,6 +57,10 @@ public final class LifestealPlugin extends JavaPlugin {
         addMissingSettings();
         List<String> newMessages = Msg.load(this);
         if (!newMessages.isEmpty()) getLogger().info("Added new messages to messages.yml: " + String.join(", ", newMessages));
+        PluginSettings.itemNames(name -> {
+            Material material = Material.matchMaterial(name);
+            return material != null && material.isItem() && !material.isAir();
+        });
         PluginSettings.Loaded loaded = PluginSettings.load(getConfig());
         settings = loaded.settings();
         logWarnings(loaded.warnings());
@@ -70,7 +77,9 @@ public final class LifestealPlugin extends JavaPlugin {
         }
 
         HeartTracker tracker = new HeartTracker(this);
-        KillHandler kills = new KillHandler(this, hearts, tracker);
+        heartItems = new HeartItems(this, hearts, tracker);
+        heartItems.syncRecipe();
+        KillHandler kills = new KillHandler(this, hearts, tracker, heartItems);
         CombatTagger tagger = new CombatTagger(this, tracker);
         bodies = new CombatBodies(this, hearts, kills, tagger);
         getServer().getPluginManager().registerEvents(tagger, this);
@@ -78,11 +87,11 @@ public final class LifestealPlugin extends JavaPlugin {
         shield = new NewbieShield(this, hearts);
         getServer().getPluginManager().registerEvents(shield, this);
         getServer().getPluginManager().registerEvents(new PlayerListener(this, hearts, tracker, kills, bodies), this);
-        HeartItems heartItems = new HeartItems(this, hearts, tracker);
         bloodMoon = new BloodMoon(this, hearts, heartItems);
         airdrops = new Airdrops(this, hearts, heartItems);
         finale = new Finale(this, hearts);
-        for (var listener : List.of(heartItems, bloodMoon, airdrops, finale, new LifestealZItems(this, heartItems))) {
+        for (var listener : List.of(heartItems, bloodMoon, airdrops, finale, new LifestealZItems(this, heartItems),
+                new CombatItems(this))) {
             getServer().getPluginManager().registerEvents(listener, this);
         }
         mostWanted = new MostWanted(this, tracker);
@@ -100,11 +109,14 @@ public final class LifestealPlugin extends JavaPlugin {
                 new InputStreamReader(getResource("config.yml"), StandardCharsets.UTF_8));
         Presets presets = new Presets(YamlConfiguration.loadConfiguration(
                 new InputStreamReader(getResource("presets.yml"), StandardCharsets.UTF_8)), shippedConfig);
+        PersonalCaps caps = new PersonalCaps(this, hearts);
+        new DiscordFeed(this, hearts);
+        getServer().getPluginManager().registerEvents(caps, this);
         SettingsMenu settingsMenu = new SettingsMenu(this, new SettingsCatalog(shippedConfig), presets);
         getServer().getPluginManager().registerEvents(settingsMenu, this);
         LifestealCommands commands = new LifestealCommands(this, hearts, tracker, mostWanted, shield,
                 new EventCommands(this, heartItems, bloodMoon, airdrops, finale), admin, new FeaturesCommand(this),
-                new ImportCommand(this, hearts, tracker), settingsMenu);
+                new ImportCommand(this, hearts, tracker), settingsMenu, caps);
         PurgatoryCommands purgatoryCommands = settings.purgatory().enabled() ? startPurgatory(tracker) : null;
         capSchedule = new CapSchedule(this, hearts);
         SocialCommands social = new SocialCommands(this, hearts, tracker, heartItems, finale, purgatory);
@@ -219,6 +231,7 @@ public final class LifestealPlugin extends JavaPlugin {
         if (wantedTimerChanged) mostWanted.schedule();
         applyStoreSwitches();
         shield.refresh();
+        heartItems.syncRecipe();
         return loaded.warnings();
     }
 

@@ -1,12 +1,18 @@
 package dev.lifestealplus;
 
 import dev.lifestealplus.core.HeartCause;
+import dev.lifestealplus.core.HeartChange;
 import dev.lifestealplus.core.HeartRequest;
 import dev.lifestealplus.core.HeartService;
 import dev.lifestealplus.core.KillOutcome;
 import java.time.Duration;
 import java.util.List;
+import dev.lifestealplus.items.HeartItems;
 import java.util.UUID;
+import org.bukkit.Location;
+import org.bukkit.World;
+import org.bukkit.block.Block;
+import org.bukkit.entity.Item;
 import org.bukkit.entity.Player;
 
 /**
@@ -18,11 +24,13 @@ public final class KillHandler {
     private final LifestealPlugin plugin;
     private final HeartService hearts;
     private final HeartTracker tracker;
+    private final HeartItems heartItems;
 
-    KillHandler(LifestealPlugin plugin, HeartService hearts, HeartTracker tracker) {
+    KillHandler(LifestealPlugin plugin, HeartService hearts, HeartTracker tracker, HeartItems heartItems) {
         this.plugin = plugin;
         this.hearts = hearts;
         this.tracker = tracker;
+        this.heartItems = heartItems;
     }
 
     public void pvpKill(UUID victim, UUID killer) {
@@ -32,14 +40,37 @@ public final class KillHandler {
     }
 
     /** A death with no player to blame. {@code note} goes in the ledger (the damage type, or "body"). */
-    public void naturalDeath(UUID victim, String note) {
+    /** @param where where they died, which is where any hearts they lose drop */
+    public void naturalDeath(UUID victim, String note, Location where) {
         int loss = plugin.settings().naturalDeathLoss();
         if (loss <= 0) {
             // Dying still ends a kill streak, even when it costs nothing.
             hearts.endStreak(victim);
             return;
         }
-        tracker.track(hearts.apply(List.of(HeartRequest.add(victim, -loss, HeartCause.DEATH, "server").withNote(note))));
+        tracker.track(hearts.apply(List.of(HeartRequest.add(victim, -loss, HeartCause.DEATH, "server").withNote(note))))
+                .thenAcceptAsync(changes -> dropLostHearts(changes.getFirst(), where.clone()), tracker.mainThread());
+    }
+
+    /** Hearts lost to the world land where their owner died, glowing, and safe from lava and despawning. */
+    private void dropLostHearts(HeartChange change, Location where) {
+        int lost = -change.delta();
+        World world = where.getWorld();
+        if (lost <= 0 || world == null || !plugin.settings().extras().naturalDeathDrops()) return;
+        if (where.getY() < world.getMinHeight()) {
+            // Fell into the void: put them on the ground above, or at the world's spawn if there's none.
+            Block top = world.getHighestBlockAt(where);
+            where = top.getType().isAir() ? world.getSpawnLocation() : top.getLocation().add(0.5, 1, 0.5);
+        }
+        Item item = world.dropItemNaturally(where, heartItems.heart(lost));
+        item.setInvulnerable(true);
+        item.setUnlimitedLifetime(true);
+        item.setGlowing(true);
+        Player owner = plugin.getServer().getPlayer(change.player());
+        if (owner != null) {
+            Msg.send(owner, "items.hearts-dropped", Msg.t("n", lost),
+                    Msg.t("x", where.getBlockX()), Msg.t("y", where.getBlockY()), Msg.t("z", where.getBlockZ()));
+        }
     }
 
     /** Anything about a kill beyond the plain heart transfer gets said out loud; the server hears vengeance and bounties. */
