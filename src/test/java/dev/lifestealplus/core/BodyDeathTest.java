@@ -25,7 +25,7 @@ class BodyDeathTest {
 
     @BeforeEach
     void open() throws SQLException {
-        store = new HeartStore(dir.resolve("test.db"), Clock.systemUTC());
+        store = TestStores.open(dir.resolve("test.db"), Clock.systemUTC());
         store.touch(BOB, "Bob", RULES);
     }
 
@@ -47,7 +47,7 @@ class BodyDeathTest {
     void itSurvivesARestart() throws SQLException {
         store.recordBodyDeath(BOB);
         store.close();
-        store = new HeartStore(dir.resolve("test.db"), Clock.systemUTC());
+        store = TestStores.open(dir.resolve("test.db"), Clock.systemUTC());
         assertTrue(store.takeBodyDeath(BOB));
     }
 }

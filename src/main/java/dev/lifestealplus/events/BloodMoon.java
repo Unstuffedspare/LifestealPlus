@@ -30,8 +30,8 @@ import org.bukkit.event.player.PlayerJoinEvent;
  */
 public final class BloodMoon implements Listener {
 
-    private static final String NEXT = "blood_moon.next";
-    private static final String ENDS = "blood_moon.ends";
+    private final String nextKey;
+    private final String endsKey;
     private static final long MIDNIGHT = 18000;
     private static final long DAWN = 23000;
 
@@ -49,11 +49,13 @@ public final class BloodMoon implements Listener {
         this.plugin = plugin;
         this.hearts = hearts;
         this.items = items;
+        this.nextKey = plugin.settings().database().scope() + "blood_moon.next";
+        this.endsKey = plugin.settings().database().scope() + "blood_moon.ends";
         // Load saved timing, then check twice a minute.
-        hearts.state(ENDS).thenCombine(hearts.state(NEXT), (end, nxt) -> new Saved(
+        hearts.state(endsKey).thenCombine(hearts.state(nextKey), (end, nxt) -> new Saved(
                 end.map(v -> Instant.ofEpochMilli(Long.parseLong(v))).orElse(null),
                 nxt.map(v -> Instant.ofEpochMilli(Long.parseLong(v))).orElse(null)))
-                .whenComplete((saved, error) -> plugin.getServer().getScheduler().runTask(plugin, () -> {
+                .whenComplete((saved, error) -> plugin.tasks().now(() -> {
                     if (error != null) plugin.getLogger().log(Level.SEVERE, "Couldn't load Blood Moon timing", error);
                     Instant savedEnd = saved == null ? null : saved.ends();
                     next = saved == null ? null : saved.next();
@@ -64,7 +66,7 @@ public final class BloodMoon implements Listener {
                         // A schedule is worked out afresh, in case it changed while the server was off.
                         scheduleNext();
                     }
-                    plugin.getServer().getScheduler().runTaskTimer(plugin, this::tick, 20, 20);
+                    plugin.tasks().timer(this::tick, 20, 20);
                 }));
     }
 
@@ -85,7 +87,7 @@ public final class BloodMoon implements Listener {
         timing = timing();
         if (!settings().enabled()) {
             next = null;
-            hearts.clearState(NEXT);
+            hearts.clearState(nextKey);
             return;
         }
         if (!settings().schedule().isEmpty()) {
@@ -94,7 +96,7 @@ public final class BloodMoon implements Listener {
             double factor = 0.5 + ThreadLocalRandom.current().nextDouble();
             next = Instant.now().plusMillis((long) (settings().every().toMillis() * factor));
         }
-        hearts.putState(NEXT, String.valueOf(next.toEpochMilli()));
+        hearts.putState(nextKey, String.valueOf(next.toEpochMilli()));
     }
 
     /** What decides when the next one comes; a change to it in the settings picks a new time. */
@@ -141,7 +143,7 @@ public final class BloodMoon implements Listener {
         } else {
             // Not enough people to enjoy it; look again in ten minutes.
             next = now.plus(Duration.ofMinutes(10));
-            hearts.putState(NEXT, String.valueOf(next.toEpochMilli()));
+            hearts.putState(nextKey, String.valueOf(next.toEpochMilli()));
         }
     }
 
@@ -151,13 +153,16 @@ public final class BloodMoon implements Listener {
         length = lasting;
         ends = Instant.now().plus(lasting);
         next = null;
-        hearts.clearState(NEXT);
-        hearts.putState(ENDS, String.valueOf(ends.toEpochMilli()));
+        hearts.clearState(nextKey);
+        hearts.putState(endsKey, String.valueOf(ends.toEpochMilli()));
         hearts.setKillMultiplier("blood-moon", settings().killMultiplier());
 
         World world = overworld();
-        world.setGameRule(GameRules.ADVANCE_TIME, false);
-        world.setTime(MIDNIGHT);
+        // World time belongs to the global region on Folia (on Paper this is the main thread either way).
+        plugin.tasks().now(() -> {
+            world.setGameRule(GameRules.ADVANCE_TIME, false);
+            world.setTime(MIDNIGHT);
+        });
         bar = BossBar.bossBar(Msg.get("blood-moon.bar"), 1f, BossBar.Color.RED, BossBar.Overlay.PROGRESS);
         int multiplier = settings().killMultiplier();
         for (Player p : plugin.getServer().getOnlinePlayers()) {
@@ -174,11 +179,13 @@ public final class BloodMoon implements Listener {
     public boolean end() {
         if (!isActive()) return false;
         ends = null;
-        hearts.clearState(ENDS);
+        hearts.clearState(endsKey);
         hearts.setKillMultiplier("blood-moon", 1);
         World world = overworld();
-        world.setGameRule(GameRules.ADVANCE_TIME, true);
-        world.setTime(DAWN);
+        plugin.tasks().now(() -> {
+            world.setGameRule(GameRules.ADVANCE_TIME, true);
+            world.setTime(DAWN);
+        });
         if (bar != null) plugin.getServer().getOnlinePlayers().forEach(p -> p.hideBossBar(bar));
         bar = null;
         Msg.broadcast("blood-moon.sets");

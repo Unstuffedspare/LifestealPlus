@@ -37,7 +37,7 @@ public final class Finale implements Listener {
     public Finale(LifestealPlugin plugin, HeartService hearts) {
         this.plugin = plugin;
         this.hearts = hearts;
-        hearts.state(ACTIVE).whenComplete((saved, error) -> plugin.getServer().getScheduler().runTask(plugin, () -> {
+        hearts.state(ACTIVE).whenComplete((saved, error) -> plugin.tasks().now(() -> {
             if (error != null) plugin.getLogger().log(Level.SEVERE, "Couldn't load finale state", error);
             else saved.ifPresent(size -> previousSize = Double.parseDouble(size));
         }));
@@ -57,14 +57,17 @@ public final class Finale implements Listener {
         hearts.putState(ACTIVE, String.valueOf(previousSize));
 
         Location spawn = world.getSpawnLocation();
-        border.setCenter(spawn.getX(), spawn.getZ());
-        border.setDamageBuffer(0);
-        border.setDamageAmount(plugin.settings().events().finaleDamagePerBlock());
-        border.setWarningDistance(16);
         // Start from something the players can see shrinking, not the default 60-million-block border.
         double start = Math.min(border.getSize(), farthestPlayer(spawn) * 2 + 64);
-        border.setSize(Math.max(start, finalSize));
-        border.changeSize(finalSize, Math.max(1, over.toSeconds() * 20));
+        // The border belongs to the global region on Folia (on Paper this is the main thread either way).
+        plugin.tasks().now(() -> {
+            border.setCenter(spawn.getX(), spawn.getZ());
+            border.setDamageBuffer(0);
+            border.setDamageAmount(plugin.settings().events().finaleDamagePerBlock());
+            border.setWarningDistance(16);
+            border.setSize(Math.max(start, finalSize));
+            border.changeSize(finalSize, Math.max(1, over.toSeconds() * 20));
+        });
 
         for (Player p : plugin.getServer().getOnlinePlayers()) {
             p.showTitle(Title.title(Msg.get("finale.title"), Msg.get("finale.subtitle")));
@@ -80,7 +83,8 @@ public final class Finale implements Listener {
     public boolean stop() {
         if (!isActive()) return false;
         WorldBorder border = overworld().getWorldBorder();
-        border.setSize(previousSize);
+        double size = previousSize;
+        plugin.tasks().now(() -> border.setSize(size));
         previousSize = null;
         hearts.clearState(ACTIVE);
         Msg.broadcast("finale.stopped");
@@ -95,13 +99,14 @@ public final class Finale implements Listener {
                 Msg.send(p, "finale.come-back", Msg.t("time", Msg.duration(EVACUATION_WARNING)));
             }
         }
-        plugin.getServer().getScheduler().runTaskLater(plugin, () -> {
+        plugin.tasks().later(() -> {
             if (!isActive()) return;
             for (Player p : plugin.getServer().getOnlinePlayers()) {
-                if (outside(p, purgatory)) {
-                    p.teleport(overworld().getSpawnLocation());
+                plugin.tasks().forEntity(p, () -> {
+                    if (!outside(p, purgatory)) return;
+                    p.teleportAsync(overworld().getSpawnLocation());
                     Msg.send(p, "finale.brought-back");
-                }
+                });
             }
         }, EVACUATION_WARNING.toSeconds() * 20);
     }
@@ -122,7 +127,7 @@ public final class Finale implements Listener {
     @EventHandler
     void onEliminated(PlayerEliminatedEvent event) {
         if (!isActive() || crowned) return;
-        hearts.lastStanding().whenComplete((last, error) -> plugin.getServer().getScheduler().runTask(plugin, () -> {
+        hearts.lastStanding().whenComplete((last, error) -> plugin.tasks().now(() -> {
             if (error != null) {
                 plugin.getLogger().log(Level.SEVERE, "Couldn't check for a finale winner", error);
                 return;

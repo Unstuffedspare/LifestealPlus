@@ -75,8 +75,16 @@ public final class LifestealPlugin extends JavaPlugin {
         return zones;
     }
 
+    private Tasks tasks;
+
+    /** Where code runs (the main thread on Paper; the right region on Folia). */
+    public Tasks tasks() {
+        return tasks;
+    }
+
     @Override
     public void onEnable() {
+        tasks = new Tasks(this);
         saveDefaultConfig();
         addMissingSettings();
         List<String> newMessages = Msg.load(this);
@@ -92,9 +100,17 @@ public final class LifestealPlugin extends JavaPlugin {
         if (regionRules != null) getLogger().info("WorldGuard found: the lifesteal region flags are ready.");
         try {
             getDataFolder().mkdirs();
-            Path database = getDataFolder().toPath().resolve(settings.databaseFile());
-            Backups.restorePending(getDataFolder().toPath(), database, getLogger());
-            HeartStore store = new HeartStore(database, Clock.systemUTC());
+            HeartStore store;
+            PluginSettings.MySql mysql = settings.database().mysql();
+            if (mysql == null) {
+                Path database = getDataFolder().toPath().resolve(settings.database().file());
+                Backups.restorePending(getDataFolder().toPath(), database, getLogger());
+                store = new HeartStore(database, Clock.systemUTC());
+            } else {
+                store = new HeartStore(mysqlSource(mysql), Clock.systemUTC());
+                getLogger().info("Using MySQL/MariaDB at " + mysql.host() + ":" + mysql.port() + "/" + mysql.database()
+                        + " as server \"" + mysql.serverName() + "\".");
+            }
             hearts = new HeartService(store, settings.rules());
             applyStoreSwitches();
         } catch (Exception e) {
@@ -146,7 +162,14 @@ public final class LifestealPlugin extends JavaPlugin {
                 new InputStreamReader(getResource("config.yml"), StandardCharsets.UTF_8));
         Presets presets = new Presets(YamlConfiguration.loadConfiguration(
                 new InputStreamReader(getResource("presets.yml"), StandardCharsets.UTF_8)), shippedConfig);
-        PersonalCaps caps = new PersonalCaps(this, hearts);
+        PersonalCaps caps = new PersonalCaps(this, hearts, tracker);
+        if (settings.database().mysql() != null) {
+            tasks.timer(() -> getServer().getOnlinePlayers().forEach(player ->
+                    hearts.find(player.getUniqueId()).thenAcceptAsync(found -> found.ifPresent(now -> {
+                        Integer known = tracker.cachedHearts(player.getUniqueId());
+                        if (player.isOnline() && (known == null || known != now.hearts())) tracker.joined(player, now);
+                    }), tracker.mainThread())), 1200, 1200);
+        }
         PlaceholderData placeholders = new PlaceholderData(this, hearts, tracker, shield, caps);
         getServer().getPluginManager().registerEvents(placeholders, this);
         if (getServer().getPluginManager().isPluginEnabled("PlaceholderAPI") && PlaceholderHook.hook(this, placeholders)) {
@@ -166,7 +189,10 @@ public final class LifestealPlugin extends JavaPlugin {
                     return player != null && tagger.isTagged(player) || bodies.hasBody(id);
                 }, new Dashboard(this, hearts, tracker, bloodMoon, airdrops, finale),
                 List.of(audit.node(), backups.backupNode(), backups.exportNode()));
-        PurgatoryCommands purgatoryCommands = settings.purgatory().enabled() ? startPurgatory(tracker) : null;
+        if (settings.purgatory().enabled() && Tasks.folia()) {
+            getLogger().warning("Purgatory needs its own world, and Folia can't create worlds while running; eliminated players spectate instead.");
+        }
+        PurgatoryCommands purgatoryCommands = settings.purgatory().enabled() && !Tasks.folia() ? startPurgatory(tracker) : null;
         capSchedule = new CapSchedule(this, hearts);
         SocialCommands social = new SocialCommands(this, hearts, tracker, heartItems, finale, purgatory);
         news = new NewsFeed(this, hearts, tracker);
@@ -224,6 +250,16 @@ public final class LifestealPlugin extends JavaPlugin {
         hearts.setFeatures(s.extras().shieldsEnabled(), s.extras().shieldExpiry(), s.social().pactsEnabled(), s.extras().altDetection());
         hearts.setStreaks(s.streaks());
         hearts.setRevivalRules(s.revival().cooldown(), s.revival().extraPerElimination());
+    }
+
+    /** The MariaDB driver speaks to MySQL too. Made directly: DriverManager can't see Paper's library loader. */
+    private static javax.sql.DataSource mysqlSource(PluginSettings.MySql mysql) throws java.sql.SQLException {
+        org.mariadb.jdbc.MariaDbDataSource source = new org.mariadb.jdbc.MariaDbDataSource();
+        source.setUrl("jdbc:mariadb://" + mysql.host() + ":" + mysql.port() + "/" + mysql.database()
+                + "?permitMysqlScheme&connectTimeout=10000");
+        source.setUser(mysql.user());
+        source.setPassword(mysql.password());
+        return source;
     }
 
     private void logWarnings(List<String> warnings) {

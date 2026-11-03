@@ -96,7 +96,7 @@ From the console (or chat), `/lifesteal config <setting> <value>` does the same,
 **Or edit the file.** All settings are in `plugins/LifestealPlus/config.yml`, and every one is explained in the file itself.
 
 - **Every feature has an `enabled: true/false` switch** in its own section. Turn off anything you don't want.
-- **Apply file changes with `/lifesteal reload`.** Only `purgatory.enabled`, `purgatory.world` and `database.file` need a restart, and they're marked `(restart)` in the file.
+- **Apply file changes with `/lifesteal reload`.** Only Purgatory's switch and world, and the `database` settings, need a restart, and they're marked `(restart)` in the file.
 - **Mistakes are safe.** If a value doesn't make sense (a word where a number goes, a number out of range), the plugin uses the default instead. It tells you exactly which setting it skipped, both in the server log and in the reply to `/lifesteal reload`.
 - **`/lifesteal features`** lists every feature as on or off, using the same names as `config.yml`.
 - **Updating keeps your settings.** New settings from a newer version are added to your existing files automatically, with their explanations, and anything you've changed is left alone.
@@ -210,8 +210,36 @@ All optional: LifestealPlus runs fine without any of them.
 
 - **[PlaceholderAPI](https://modrinth.com/plugin/placeholderapi):** `%lifestealplus_hearts%`, `%lifestealplus_max_hearts%`, `%lifestealplus_kills%`, `%lifestealplus_streak%`, `%lifestealplus_bounty%`, `%lifestealplus_eliminated%`, leaderboard placeholders (`%lifestealplus_top_1_name%`) and more, for scoreboards, TAB and holograms. The full list is in [docs/API.md](docs/API.md#placeholders).
 - **[WorldGuard](https://enginehub.org/worldguard):** region flags `lifesteal`, `lifesteal-natural-loss` and `lifesteal-combat-tag`. For example, `/rg flag spawn lifesteal deny` makes spawn a place where nothing lifesteal happens. See [docs/API.md](docs/API.md#worldguard-flags).
-- **LuckPerms** (or any permissions plugin): every command has its own permission, and `lifestealplus.max-hearts.<n>` gives a rank its own heart cap.
+- **LuckPerms** (or any permissions plugin): every command has its own permission, and ranks can get perks. See [Ranks and permissions](#ranks-and-permissions).
+- **MySQL and MariaDB:** for a network of servers that share hearts. See [Networks](#networks).
+- **[Folia](https://papermc.io/software/folia):** supported, except Purgatory (Folia can't create worlds while running), so eliminated players spectate instead.
 - **Other plugins:** a developer API with heart-change events. See [docs/API.md](docs/API.md).
+
+## Ranks and permissions
+
+Every player command has its own permission (listed with the commands above), all on by default. For ranks, give these with a permissions plugin such as LuckPerms (the highest number counts):
+
+| Permission | What it does |
+| --- | --- |
+| `lifestealplus.max-hearts.<n>` | Their heart cap is n instead of `hearts.max`. Losing it never takes hearts away. |
+| `lifestealplus.starting-hearts.<n>` | A brand-new player with it starts with n hearts. |
+| `lifestealplus.shop-limit.<n>` | Their daily `/heartshop` limit is n. |
+
+`/lifesteal` is split into five parts, so a rank can be given just what it needs. `lifestealplus.admin` gives all five:
+
+| Permission | Covers |
+| --- | --- |
+| `lifestealplus.admin.hearts` | give, take, set, revive, ledger, shield, bounty clear |
+| `lifestealplus.admin.settings` | settings, config, preset, reload, features, and update notices |
+| `lifestealplus.admin.events` | event, finale, item, mostwanted |
+| `lifestealplus.admin.season` | season, and private past seasons |
+| `lifestealplus.admin.records` | dashboard, audit, backup, export, import, alts, flags, and alt-account alerts |
+
+## Networks
+
+Set `database.type: mysql` and fill in `database.mysql` on every server, each with its own `server-name`, and they share one MySQL or MariaDB database: hearts, the ledger, bounties, seasons and everything else about players. Each server keeps its own Blood Moons, airdrops and other events. A player's hearts are kept up to date on the server they're on; a change made on another server reaches them within a minute.
+
+On MySQL, the plugin's own backups are off: back the database up with its own tools (`mysqldump`, `mariadb-backup`).
 
 ## Privacy
 
@@ -232,6 +260,8 @@ The update check (`updates.check`) fetches the public list of releases from GitH
 ```
 
 The plugin jar ends up in `build/libs/`. The build uses Java 25 and downloads it automatically if it's missing.
+
+`./gradlew test` runs the unit tests. With `LIFESTEAL_MYSQL_URL` set to an empty MySQL or MariaDB database (for example `jdbc:mariadb://localhost:3306/lifesteal_test?user=root&password=secret`), every database test also runs against it. [integration-tests](integration-tests/README.md) has bots that play through each feature on a real server, Folia included.
 
 ## Licence
 

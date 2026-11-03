@@ -2,10 +2,12 @@ name: LifestealPlus
 version: '${version}'
 main: dev.lifestealplus.LifestealPlugin
 api-version: '26.3'
+folia-supported: true
 description: Lifesteal SMP core with a full heart ledger.
 softdepend: [PlaceholderAPI, WorldGuard, Vault]
 libraries:
   - org.xerial:sqlite-jdbc:${sqliteVersion}
+  - org.mariadb.jdbc:mariadb-java-client:${mariadbVersion}
 
 permissions:
   lifestealplus.hearts:
@@ -63,5 +65,26 @@ permissions:
     description: See what's been happening with /news.
     default: true
   lifestealplus.admin:
-    description: Everything under /lifesteal (hearts, ledger, events, finale, seasons, alts, features, reload), and alt-account alerts.
+    description: Everything under /lifesteal, and alt-account alerts. Grants all five parts below.
+    default: op
+    children:
+      lifestealplus.admin.hearts: true
+      lifestealplus.admin.settings: true
+      lifestealplus.admin.events: true
+      lifestealplus.admin.season: true
+      lifestealplus.admin.records: true
+  lifestealplus.admin.hearts:
+    description: Change and inspect hearts (give, take, set, revive, ledger, shield, bounty clear).
+    default: op
+  lifestealplus.admin.settings:
+    description: Change settings (settings menu, config, presets, reload, features), and hear about updates.
+    default: op
+  lifestealplus.admin.events:
+    description: Run events (Blood Moons, airdrops, Double Hearts and the rest, King of the Hill, the finale, items, Most Wanted).
+    default: op
+  lifestealplus.admin.season:
+    description: End and start seasons, and see past seasons even when they're private.
+    default: op
+  lifestealplus.admin.records:
+    description: The dashboard, audit log, backups, exports, imports, and alt-account checks and alerts.
     default: op

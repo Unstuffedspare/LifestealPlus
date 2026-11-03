@@ -86,7 +86,7 @@ final class RevivalMenu implements Listener {
             page.inventory = plugin.getServer().createInventory(page, size, Msg.get("revival.menu-title"));
             for (int i = 0; i < out.size(); i++) page.slots.put(i, out.get(i));
             draw(page);
-            player.openInventory(page.inventory);
+            plugin.tasks().forEntity(player, () -> player.openInventory(page.inventory));
             look.play(player, "open");
         }, tracker.mainThread());
     }
@@ -145,7 +145,8 @@ final class RevivalMenu implements Listener {
         tracker.track(hearts.reviveWithItem(player.getUniqueId(), target.uuid()).thenApply(List::of))
                 .whenCompleteAsync((changes, error) -> {
                     if (error != null) {
-                        player.getInventory().addItem(charm).values().forEach(left -> player.getWorld().dropItem(player.getLocation(), left));
+                        plugin.tasks().forEntity(player, () -> player.getInventory().addItem(charm).values()
+                                .forEach(left -> player.getWorld().dropItem(player.getLocation(), left)));
                         Throwable cause = error instanceof CompletionException ? error.getCause() : error;
                         if (cause instanceof RuleException rule) Msg.send(player, "common.not-allowed", Msg.t("reason", rule.getMessage()));
                         else Msg.send(player, "common.error");

@@ -46,7 +46,7 @@ final class Backups {
         this.folder = plugin.getDataFolder().toPath().resolve("backups");
         this.exports = plugin.getDataFolder().toPath().resolve("exports");
         // Checked every 10 minutes; a backup is made once the last one is older than every-hours.
-        plugin.getServer().getScheduler().runTaskTimer(plugin, this::maybeBackUp, 20 * 60, 20 * 60 * 10);
+        plugin.tasks().timer(this::maybeBackUp, 20 * 60, 20 * 60 * 10);
     }
 
     /**
@@ -81,7 +81,7 @@ final class Backups {
     }
 
     private void maybeBackUp() {
-        if (settings().every().isZero()) return;
+        if (settings().every().isZero() || !hearts.isSqlite()) return;
         Path newest = list().stream().filter(p -> !p.getFileName().toString().startsWith("before-")).findFirst().orElse(null);
         try {
             if (newest != null && Files.getLastModifiedTime(newest).toInstant().plus(settings().every()).isAfter(java.time.Instant.now())) return;
@@ -93,6 +93,11 @@ final class Backups {
 
     /** Makes a backup now; {@code reason} goes in its name. Tells {@code who}, if anyone asked. */
     java.util.concurrent.CompletableFuture<Path> backUp(String reason, CommandSender who) {
+        if (!hearts.isSqlite()) {
+            // A MySQL database is backed up with its own tools; nothing to do (and nothing to wait for).
+            if (who != null) Msg.send(who, "backup.mysql");
+            return java.util.concurrent.CompletableFuture.completedFuture(null);
+        }
         Path file = folder.resolve("lifesteal-" + LocalDateTime.now().format(STAMP) + "-" + reason + ".db");
         return hearts.backUpTo(file).whenCompleteAsync((ok, error) -> {
             if (error != null) {

@@ -61,6 +61,12 @@ final class ConfigReader {
         return value;
     }
 
+    /** A value exactly as written (a password may be blank, or look like a number). */
+    Object raw(String key, Object fallback) {
+        Object value = config.get(key);
+        return value == null ? fallback : value;
+    }
+
     String text(String key, String fallback) {
         String value = config.getString(key);
         if (value == null || value.isBlank()) return fallback;

@@ -30,7 +30,7 @@ class HeartStoreTest {
 
     @BeforeEach
     void open() throws SQLException {
-        store = new HeartStore(dir.resolve("test.db"), Clock.fixed(Instant.parse("2026-11-01T12:00:00Z"), ZoneOffset.UTC));
+        store = TestStores.open(dir.resolve("test.db"), Clock.fixed(Instant.parse("2026-11-01T12:00:00Z"), ZoneOffset.UTC));
         store.touch(ALICE, "Alice", RULES);
         store.touch(BOB, "Bob", RULES);
     }
@@ -156,7 +156,7 @@ class HeartStoreTest {
     void dataSurvivesReopening() throws SQLException {
         store.kill(BOB, ALICE, RULES);
         store.close();
-        store = new HeartStore(dir.resolve("test.db"), Clock.systemUTC());
+        store = TestStores.open(dir.resolve("test.db"), Clock.systemUTC());
         assertEquals(11, hearts(ALICE));
         assertEquals(2, store.ledgerSize(ALICE));
     }

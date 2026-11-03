@@ -33,7 +33,7 @@ final class UpdateChecker implements Listener {
 
     UpdateChecker(LifestealPlugin plugin) {
         this.plugin = plugin;
-        plugin.getServer().getScheduler().runTaskTimerAsynchronously(plugin, this::check, 20 * 30, TWELVE_HOURS);
+        plugin.tasks().asyncTimer(this::check, 20 * 30, TWELVE_HOURS);
     }
 
     private void check() {
@@ -69,7 +69,7 @@ final class UpdateChecker implements Listener {
     void onJoin(PlayerJoinEvent event) {
         Release release = newer;
         Player player = event.getPlayer();
-        if (release == null || !plugin.settings().extras().updateCheck() || !player.hasPermission("lifestealplus.admin")) return;
+        if (release == null || !plugin.settings().extras().updateCheck() || !player.hasPermission(AdminPermissions.SETTINGS)) return;
         Msg.send(player, "update.available", Msg.t("version", release.version()),
                 Msg.t("current", plugin.getPluginMeta().getVersion()), Msg.t("url", release.url()));
     }

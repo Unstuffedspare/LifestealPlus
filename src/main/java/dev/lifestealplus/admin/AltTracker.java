@@ -44,7 +44,7 @@ public final class AltTracker implements Listener {
         }
         this.salt = saved;
         // At startup and every six hours; also while switched off, so old records still age out.
-        plugin.getServer().getScheduler().runTaskTimer(plugin, this::forgetOld, 20 * 60, 20 * 60 * 60 * 6);
+        plugin.tasks().timer(this::forgetOld, 20 * 60, 20 * 60 * 60 * 6);
     }
 
     private void forgetOld() {

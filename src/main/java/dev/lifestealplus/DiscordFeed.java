@@ -37,7 +37,7 @@ final class DiscordFeed {
         this.hearts = hearts;
         // Only news from now on: nothing that happened before the server started.
         hearts.lastNewsId().thenAccept(id -> posted = id);
-        plugin.getServer().getScheduler().runTaskTimer(plugin, this::tick, 100, 100);
+        plugin.tasks().timer(this::tick, 100, 100);
     }
 
     private void tick() {

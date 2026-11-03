@@ -28,7 +28,7 @@ class ServerEventsCoreTest {
 
     @BeforeEach
     void open() throws SQLException {
-        store = new HeartStore(dir.resolve("test.db"), Clock.systemUTC());
+        store = TestStores.open(dir.resolve("test.db"), Clock.systemUTC());
         store.touch(ALICE, "Alice", RULES);
         store.touch(BOB, "Bob", RULES);
     }
@@ -44,7 +44,7 @@ class ServerEventsCoreTest {
         store.putState("blood_moon.next", "123");
         store.putState("blood_moon.next", "456");
         store.close();
-        store = new HeartStore(dir.resolve("test.db"), Clock.systemUTC());
+        store = TestStores.open(dir.resolve("test.db"), Clock.systemUTC());
         assertEquals(Optional.of("456"), store.state("blood_moon.next"));
         store.clearState("blood_moon.next");
         assertEquals(Optional.empty(), store.state("blood_moon.next"));

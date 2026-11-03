@@ -188,8 +188,8 @@ public final class HeartItems implements Listener {
                 .whenCompleteAsync((changes, error) -> {
                     if (error != null || changes.getFirst().delta() == 0) {
                         // The very same item, so its fade date doesn't reset.
-                        player.getInventory().addItem(original).values()
-                                .forEach(leftOver -> player.getWorld().dropItem(player.getLocation(), leftOver));
+                        plugin.tasks().forEntity(player, () -> player.getInventory().addItem(original).values()
+                                .forEach(leftOver -> player.getWorld().dropItem(player.getLocation(), leftOver)));
                         Msg.send(player, error != null ? "common.error" : "items.at-cap");
                         return;
                     }

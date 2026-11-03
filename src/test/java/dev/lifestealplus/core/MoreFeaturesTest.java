@@ -33,7 +33,7 @@ class MoreFeaturesTest {
 
     @BeforeEach
     void open() throws SQLException {
-        store = new HeartStore(dir.resolve("test.db"), clock);
+        store = TestStores.open(dir.resolve("test.db"), clock);
         for (var p : List.of(new Object[] {ALICE, "Alice"}, new Object[] {BOB, "Bob"}, new Object[] {CARA, "Cara"},
                 new Object[] {DAN, "Dan"})) {
             store.touch((UUID) p[0], (String) p[1], RULES);

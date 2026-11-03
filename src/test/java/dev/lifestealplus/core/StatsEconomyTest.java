@@ -30,7 +30,7 @@ class StatsEconomyTest {
 
     @BeforeEach
     void open() throws SQLException {
-        store = new HeartStore(dir.resolve("test.db"), clock);
+        store = TestStores.open(dir.resolve("test.db"), clock);
         store.setStreaks(new StreakRules(true, List.of(3), 0, 0));
         store.touch(ALICE, "Alice", RULES);
         store.touch(BOB, "Bob", RULES);

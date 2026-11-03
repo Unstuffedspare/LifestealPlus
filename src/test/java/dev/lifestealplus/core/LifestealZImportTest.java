@@ -89,7 +89,7 @@ class LifestealZImportTest {
 
     @Test
     void importingCreatesAndUpdatesPlayersInOneGo() throws Exception {
-        try (HeartStore store = new HeartStore(dir.resolve("ours.db"), Clock.systemUTC())) {
+        try (HeartStore store = TestStores.open(dir.resolve("ours.db"), Clock.systemUTC())) {
             store.touch(ALICE, "Alice", RULES);
             List<LifestealZImport.Planned> plan = LifestealZImport.plan(LifestealZImport.read(lifestealzDatabase()).rows(), 0, RULES);
 
@@ -109,7 +109,7 @@ class LifestealZImportTest {
 
     @Test
     void importingTwiceChangesNothingTheSecondTime() throws Exception {
-        try (HeartStore store = new HeartStore(dir.resolve("ours.db"), Clock.systemUTC())) {
+        try (HeartStore store = TestStores.open(dir.resolve("ours.db"), Clock.systemUTC())) {
             List<LifestealZImport.Planned> plan = LifestealZImport.plan(LifestealZImport.read(lifestealzDatabase()).rows(), 0, RULES);
             store.importPlayers(plan, "LifeStealZ", RULES);
             ImportResult again = store.importPlayers(plan, "LifeStealZ", RULES);

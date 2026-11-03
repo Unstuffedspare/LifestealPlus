@@ -1,0 +1,12 @@
+{
+  "name": "lifestealplus-integration-tests",
+  "private": true,
+  "type": "commonjs",
+  "description": "Bots that play on a real test server and check what LifestealPlus does.",
+  "scripts": {
+    "test": "node run.js"
+  },
+  "dependencies": {
+    "mineflayer": "^4.39.0"
+  }
+}

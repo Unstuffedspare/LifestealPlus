@@ -49,7 +49,7 @@ public final class KillHandler {
             return;
         }
         tracker.track(hearts.apply(List.of(HeartRequest.add(victim, -loss, HeartCause.DEATH, "server").withNote(note))))
-                .thenAcceptAsync(changes -> dropLostHearts(changes.getFirst(), where.clone()), tracker.mainThread());
+                .thenAccept(changes -> plugin.tasks().at(where, () -> dropLostHearts(changes.getFirst(), where.clone())));
     }
 
     /** Hearts lost to the world land where their owner died, glowing, and safe from lava and despawning. */
@@ -79,7 +79,7 @@ public final class KillHandler {
         if (outcome.repeat()) explainRepeatKill(outcome);
         if (outcome.linked() && plugin.settings().extras().altDetection()) {
             for (Player admin : plugin.getServer().getOnlinePlayers()) {
-                if (!admin.hasPermission("lifestealplus.admin")) continue;
+                if (!admin.hasPermission(AdminPermissions.RECORDS)) continue;
                 Msg.send(admin, "alts.linked-kill", Msg.t("killer", killerName), Msg.t("victim", victimName));
             }
             plugin.getLogger().info("Linked accounts: " + killerName + " killed " + victimName);

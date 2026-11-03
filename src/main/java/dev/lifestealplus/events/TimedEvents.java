@@ -61,18 +61,18 @@ public final class TimedEvents implements Listener {
         this.hearts = hearts;
         this.items = items;
         for (Kind kind : Kind.values()) {
-            hearts.state(stateKey(kind)).whenComplete((saved, error) -> plugin.getServer().getScheduler().runTask(plugin, () -> {
+            hearts.state(stateKey(kind)).whenComplete((saved, error) -> plugin.tasks().now(() -> {
                 if (error != null) plugin.getLogger().log(Level.SEVERE, "Couldn't load when " + kind.key + " ends", error);
                 Instant end = saved == null ? null : saved.map(v -> Instant.ofEpochMilli(Long.parseLong(v))).orElse(null);
                 if (end != null && end.isAfter(Instant.now())) start(kind, Duration.between(Instant.now(), end), false);
             }));
         }
         settingsChanged();
-        plugin.getServer().getScheduler().runTaskTimer(plugin, this::tick, 20, 20);
+        plugin.tasks().timer(this::tick, 20, 20);
     }
 
-    private static String stateKey(Kind kind) {
-        return "event." + kind.key + ".ends";
+    private String stateKey(Kind kind) {
+        return plugin.settings().database().scope() + "event." + kind.key + ".ends";
     }
 
     public EventSettings.TimedEvent settings(Kind kind) {

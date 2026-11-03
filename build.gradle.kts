@@ -20,11 +20,13 @@ repositories {
 }
 
 val sqliteVersion = "3.54.1.0"
+val mariadbVersion = "3.5.11"
 
 dependencies {
     compileOnly("io.papermc.paper:paper-api:26.3.build.235-stable")
     // Not shaded: Paper downloads it at startup from the plugin.yml `libraries` list.
     compileOnly("org.xerial:sqlite-jdbc:$sqliteVersion")
+    compileOnly("org.mariadb.jdbc:mariadb-java-client:$mariadbVersion")
     // Optional hooks: used only when the server has these plugins installed.
     compileOnly("me.clip:placeholderapi:2.12.3")
     compileOnly("com.sk89q.worldguard:worldguard-bukkit:7.0.20")
@@ -34,6 +36,7 @@ dependencies {
     testImplementation("org.junit.jupiter:junit-jupiter")
     testRuntimeOnly("org.junit.platform:junit-platform-launcher")
     testImplementation("org.xerial:sqlite-jdbc:$sqliteVersion")
+    testImplementation("org.mariadb.jdbc:mariadb-java-client:$mariadbVersion")
     // For testing how config.yml is read (YamlConfiguration).
     testImplementation("io.papermc.paper:paper-api:26.3.build.235-stable")
 }
@@ -44,7 +47,7 @@ tasks.withType<JavaCompile>().configureEach {
 }
 
 tasks.processResources {
-    val props = mapOf("version" to version, "sqliteVersion" to sqliteVersion)
+    val props = mapOf("version" to version, "sqliteVersion" to sqliteVersion, "mariadbVersion" to mariadbVersion)
     inputs.properties(props)
     filesMatching("plugin.yml") {
         expand(props)

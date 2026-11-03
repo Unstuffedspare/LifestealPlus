@@ -46,7 +46,7 @@ final class NewsFeed implements Listener {
         this.hearts = hearts;
         this.tracker = tracker;
         long sixHours = 20L * 60 * 60 * 6;
-        plugin.getServer().getScheduler().runTaskTimer(plugin, this::prune, 20, sixHours);
+        plugin.tasks().timer(this::prune, 20, sixHours);
     }
 
     void register(Commands commands) {
@@ -70,7 +70,7 @@ final class NewsFeed implements Listener {
     void onJoin(PlayerJoinEvent event) {
         Player player = event.getPlayer();
         if (!settings().enabled()) return;
-        plugin.getServer().getScheduler().runTaskLater(plugin, () -> {
+        plugin.tasks().later(() -> {
             if (!player.isOnline()) return;
             hearts.recap(player.getUniqueId(), settings().minAway(), settings().lines()).whenCompleteAsync((recap, error) -> {
                 if (error != null) {
@@ -181,7 +181,7 @@ final class NewsFeed implements Listener {
     }
 
     private void showStats(CommandSender sender, String name, String season) {
-        if (season != null && !plugin.settings().extras().publicSeasons() && !sender.hasPermission("lifestealplus.admin")) {
+        if (season != null && !plugin.settings().extras().publicSeasons() && !sender.hasPermission(AdminPermissions.SEASON)) {
             Msg.send(sender, "stats.history-private");
             return;
         }

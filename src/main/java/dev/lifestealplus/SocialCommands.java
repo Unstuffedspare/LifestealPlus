@@ -95,8 +95,8 @@ final class SocialCommands {
             tracker.track(CompletableFuture.completedFuture(List.of(change)));
             int tax = amount * plugin.settings().economy().withdrawTax() / 100;
             if (amount - tax > 0) {
-                player.getInventory().addItem(items.heart(amount - tax)).values()
-                        .forEach(left -> player.getWorld().dropItem(player.getLocation(), left));
+                plugin.tasks().forEntity(player, () -> player.getInventory().addItem(items.heart(amount - tax)).values()
+                        .forEach(left -> player.getWorld().dropItem(player.getLocation(), left)));
             }
             Msg.send(player, tax > 0 ? "withdraw.done-taxed" : "withdraw.done", Msg.t("n", amount - tax),
                     Msg.t("left", change.after()), Msg.t("tax", tax));
@@ -153,7 +153,7 @@ final class SocialCommands {
                     }
                     if (outcome.linked()) {
                         for (Player admin : plugin.getServer().getOnlinePlayers()) {
-                            if (admin.hasPermission("lifestealplus.admin")) {
+                            if (admin.hasPermission(AdminPermissions.RECORDS)) {
                                 Msg.send(admin, "alts.linked-trade", Msg.t("giver", giver.getName()), Msg.t("taker", gift.toName()),
                                         Msg.t("n", gift.hearts()));
                             }

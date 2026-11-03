@@ -31,7 +31,7 @@ import org.bukkit.event.inventory.InventoryCloseEvent;
 import org.bukkit.event.inventory.InventoryOpenEvent;
 import org.bukkit.inventory.Inventory;
 import org.bukkit.inventory.ItemStack;
-import org.bukkit.scheduler.BukkitTask;
+import dev.lifestealplus.Tasks;
 
 /**
  * Heart crates that fall out of the sky at announced coordinates, to pull people
@@ -40,8 +40,8 @@ import org.bukkit.scheduler.BukkitTask;
  */
 public final class Airdrops implements Listener {
 
-    private static final String NEXT = "airdrop.next";
-    private static final String CRATE = "airdrop.crate";
+    private final String nextKey;
+    private final String crateKey;
 
     private final LifestealPlugin plugin;
     private final HeartService hearts;
@@ -54,14 +54,16 @@ public final class Airdrops implements Listener {
     private boolean golden;
     private Block crate;
     private boolean opened;
-    private final List<BukkitTask> pending = new ArrayList<>();
+    private final List<Tasks.Handle> pending = new ArrayList<>();
 
     public Airdrops(LifestealPlugin plugin, HeartService hearts, HeartItems items) {
         this.plugin = plugin;
         this.hearts = hearts;
         this.items = items;
-        hearts.state(CRATE).thenCombine(hearts.state(NEXT), Saved::new)
-                .whenComplete((saved, error) -> plugin.getServer().getScheduler().runTask(plugin, () -> {
+        this.nextKey = plugin.settings().database().scope() + "airdrop.next";
+        this.crateKey = plugin.settings().database().scope() + "airdrop.crate";
+        hearts.state(crateKey).thenCombine(hearts.state(nextKey), Saved::new)
+                .whenComplete((saved, error) -> plugin.tasks().now(() -> {
                     if (error != null) plugin.getLogger().log(Level.SEVERE, "Couldn't load airdrop timing", error);
                     if (saved != null) {
                         saved.crate().ifPresent(this::clearLeftoverCrate);
@@ -69,7 +71,7 @@ public final class Airdrops implements Listener {
                     }
                     timing = timing();
                     if (next == null || !settings().schedule().isEmpty()) scheduleNext();
-                    plugin.getServer().getScheduler().runTaskTimer(plugin, this::tick, 20 * 30, 20 * 30);
+                    plugin.tasks().timer(this::tick, 20 * 30, 20 * 30);
                 }));
     }
 
@@ -86,7 +88,7 @@ public final class Airdrops implements Listener {
         Duration every = settings().every();
         if (every.isZero()) {
             next = null;
-            hearts.clearState(NEXT);
+            hearts.clearState(nextKey);
             return;
         }
         if (!settings().schedule().isEmpty()) {
@@ -96,7 +98,7 @@ public final class Airdrops implements Listener {
             double factor = 0.75 + ThreadLocalRandom.current().nextDouble() * 0.5;
             next = Instant.now().plusMillis((long) (every.toMillis() * factor));
         }
-        hearts.putState(NEXT, String.valueOf(next.toEpochMilli()));
+        hearts.putState(nextKey, String.valueOf(next.toEpochMilli()));
     }
 
     private Object timing() {
@@ -114,7 +116,7 @@ public final class Airdrops implements Listener {
             announce(randomSpot(), settings().warning());
         } else {
             next = Instant.now().plus(Duration.ofMinutes(10));
-            hearts.putState(NEXT, String.valueOf(next.toEpochMilli()));
+            hearts.putState(nextKey, String.valueOf(next.toEpochMilli()));
         }
     }
 
@@ -124,11 +126,12 @@ public final class Airdrops implements Listener {
         target = where;
         golden = ThreadLocalRandom.current().nextDouble() < settings().goldenChance();
         next = null;
-        hearts.clearState(NEXT);
+        hearts.clearState(nextKey);
         broadcast(golden ? "airdrops.incoming-golden" : "airdrops.incoming", Msg.t("x", where.getBlockX()),
                 Msg.t("z", where.getBlockZ()), Msg.t("time", Msg.duration(warning)));
         plugin.getServer().getOnlinePlayers().forEach(p -> p.playSound(p, Sound.BLOCK_NOTE_BLOCK_BELL, 1f, 0.7f));
-        pending.add(plugin.getServer().getScheduler().runTaskLater(plugin, this::land, Math.max(1, warning.toSeconds() * 20)));
+        Location spot = where;
+        pending.add(plugin.tasks().later(() -> plugin.tasks().at(spot, this::land), Math.max(1, warning.toSeconds() * 20)));
         return true;
     }
 
@@ -156,11 +159,11 @@ public final class Airdrops implements Listener {
         Location at = crate.getLocation().add(0.5, 0.5, 0.5);
         world.strikeLightningEffect(at);
         world.spawnParticle(Particle.FIREWORK, at, 60, 0.6, 1.5, 0.6, 0.05);
-        hearts.putState(CRATE, world.getName() + "," + crate.getX() + "," + crate.getY() + "," + crate.getZ());
+        hearts.putState(crateKey, world.getName() + "," + crate.getX() + "," + crate.getY() + "," + crate.getZ());
         broadcast("airdrops.landed", Msg.t("x", crate.getX()), Msg.t("y", crate.getY()), Msg.t("z", crate.getZ()));
         // Only ever this crate: if it was emptied and a newer one has landed since, leave that one alone.
         Block thisCrate = crate;
-        pending.add(plugin.getServer().getScheduler().runTaskLater(plugin, () -> {
+        pending.add(plugin.tasks().atLater(thisCrate.getLocation(), () -> {
             if (crate != null && crate.equals(thisCrate)) {
                 removeCrate();
                 broadcast("airdrops.crumbled");
@@ -202,9 +205,10 @@ public final class Airdrops implements Listener {
     void onClose(InventoryCloseEvent event) {
         if (!(event.getInventory().getHolder() instanceof Chest chest) || !isCrate(chest.getBlock())) return;
         if (event.getInventory().isEmpty()) {
-            plugin.getServer().getScheduler().runTask(plugin, () -> {
+            Location at = chest.getLocation();
+            plugin.tasks().atLater(at, () -> {
                 if (crate != null && crate.getState() instanceof Chest c && c.getBlockInventory().isEmpty()) removeCrate();
-            });
+            }, 1);
         }
     }
 
@@ -232,27 +236,31 @@ public final class Airdrops implements Listener {
         }
         crate = null;
         target = null;
-        hearts.clearState(CRATE);
+        hearts.clearState(crateKey);
         scheduleNext();
     }
 
     private void clearLeftoverCrate(String saved) {
         String[] parts = saved.split(",");
         World world = plugin.getServer().getWorld(parts[0]);
-        hearts.clearState(CRATE);
+        hearts.clearState(crateKey);
         if (world == null) return;
-        Block block = world.getBlockAt(Integer.parseInt(parts[1]), Integer.parseInt(parts[2]), Integer.parseInt(parts[3]));
-        if (block.getType() == Material.CHEST) {
-            if (block.getState() instanceof Chest chest) chest.getBlockInventory().clear();
-            block.setType(Material.AIR);
-        }
+        Location at = new Location(world, Integer.parseInt(parts[1]), Integer.parseInt(parts[2]), Integer.parseInt(parts[3]));
+        plugin.tasks().at(at, () -> {
+            Block block = at.getBlock();
+            if (block.getType() == Material.CHEST) {
+                if (block.getState() instanceof Chest chest) chest.getBlockInventory().clear();
+                block.setType(Material.AIR);
+            }
+        });
     }
 
     /** On disable: a crate mid-flight just doesn't arrive; one on the ground goes. */
     public void shutdown() {
-        pending.forEach(BukkitTask::cancel);
+        pending.forEach(Tasks.Handle::cancel);
         pending.clear();
-        if (crate != null) {
+        // On Folia the regions have stopped by now; the next start clears the crate instead.
+        if (crate != null && !Tasks.folia()) {
             if (crate.getState() instanceof Chest chest) chest.getBlockInventory().clear();
             crate.setType(Material.AIR);
             crate = null;

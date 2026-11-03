@@ -49,7 +49,7 @@ public final class PlaceholderData implements Listener {
         this.tracker = tracker;
         this.shield = shield;
         this.caps = caps;
-        plugin.getServer().getScheduler().runTaskTimer(plugin, this::refreshAll, 40, 600);
+        plugin.tasks().timer(this::refreshAll, 40, 600);
     }
 
     private void refreshAll() {

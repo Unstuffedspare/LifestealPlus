@@ -65,8 +65,13 @@ final class PlayerListener implements Listener {
                         return;
                     }
                     if (!player.isOnline()) return;
-                    if (state.bodyDied()) bodies.finishBodyDeath(player);
-                    state.hearts().ifPresent(h -> tracker.joined(player, h));
+                    // On the player's own thread, and in order: an eliminated player is placed by the
+                    // elimination (Purgatory), not sent home by the body's death.
+                    plugin.tasks().forEntity(player, () -> {
+                        boolean eliminated = state.hearts().map(PlayerHearts::eliminated).orElse(false);
+                        if (state.bodyDied()) bodies.finishBodyDeath(player, eliminated);
+                        state.hearts().ifPresent(h -> tracker.joined(player, h));
+                    });
                 }, tracker.mainThread());
     }
 

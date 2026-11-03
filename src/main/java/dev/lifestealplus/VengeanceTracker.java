@@ -30,8 +30,8 @@ final class VengeanceTracker {
         this.plugin = plugin;
         this.hearts = hearts;
         this.tagger = tagger;
-        plugin.getServer().getScheduler().runTaskTimer(plugin, this::refresh, 20, 100);
-        plugin.getServer().getScheduler().runTaskTimer(plugin, this::show, 20, 20);
+        plugin.tasks().timer(this::refresh, 20, 100);
+        plugin.tasks().timer(this::show, 20, 20);
     }
 
     private boolean on() {
@@ -47,7 +47,7 @@ final class VengeanceTracker {
             if (error != null) return;
             Map<UUID, List<VengeanceMark>> fresh = new ConcurrentHashMap<>();
             for (VengeanceMark mark : marks) fresh.computeIfAbsent(mark.avenger(), k -> new ArrayList<>()).add(mark);
-            plugin.getServer().getScheduler().runTask(plugin, () -> {
+            plugin.tasks().now(() -> {
                 byAvenger.clear();
                 byAvenger.putAll(fresh);
             });

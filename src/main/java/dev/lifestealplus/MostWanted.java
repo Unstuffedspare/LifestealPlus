@@ -7,7 +7,6 @@ import java.util.concurrent.ThreadLocalRandom;
 import org.bukkit.Location;
 import org.bukkit.Sound;
 import org.bukkit.entity.Player;
-import org.bukkit.scheduler.BukkitTask;
 
 /**
  * Every so often, tells the whole server roughly where the online player with the most
@@ -17,7 +16,7 @@ final class MostWanted {
 
     private final LifestealPlugin plugin;
     private final HeartTracker tracker;
-    private BukkitTask task;
+    private Tasks.Handle task;
 
     MostWanted(LifestealPlugin plugin, HeartTracker tracker) {
         this.plugin = plugin;
@@ -29,7 +28,7 @@ final class MostWanted {
         if (task != null) task.cancel();
         task = null;
         long ticks = plugin.settings().mostWanted().interval().toSeconds() * 20;
-        if (ticks > 0) task = plugin.getServer().getScheduler().runTaskTimer(plugin, this::announce, ticks, ticks);
+        if (ticks > 0) task = plugin.tasks().timer(this::announce, ticks, ticks);
     }
 
     /** Announces the current leader. Returns their name, or null if nobody qualified (too few online, or all eliminated). */

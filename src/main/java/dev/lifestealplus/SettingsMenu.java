@@ -115,7 +115,7 @@ final class SettingsMenu implements Listener {
                                     Setting setting = catalog.find(StringArgumentType.getString(ctx, "setting"));
                                     if (setting == null) return builder.buildFuture();
                                     if (setting.kind() == SettingsCatalog.Kind.FLAG) List.of("on", "off").forEach(builder::suggest);
-                                    else builder.suggest(SettingsCatalog.show(current(setting)));
+                                    else if (!secret(setting)) builder.suggest(SettingsCatalog.show(current(setting)));
                                     return builder.buildFuture();
                                 })
                                 .executes(ctx -> {
@@ -204,9 +204,19 @@ final class SettingsMenu implements Listener {
     }
 
     private void describe(CommandSender sender, Setting setting) {
-        Msg.send(sender, "settings.current", Msg.t("setting", setting.key()), Msg.t("value", SettingsCatalog.show(current(setting))));
+        Msg.send(sender, "settings.current", Msg.t("setting", setting.key()), Msg.t("value", shown(setting, current(setting))));
         for (String line : setting.description()) sender.sendMessage(Component.text(line, NamedTextColor.GRAY));
         if (setting.needsRestart()) Msg.send(sender, "settings.restart-note");
+    }
+
+    /** A password is never shown: not in the menu, in chat, or in the audit log. */
+    private static boolean secret(Setting setting) {
+        return setting.key().endsWith("password");
+    }
+
+    private static String shown(Setting setting, Object value) {
+        if (secret(setting)) return value == null || String.valueOf(value).isEmpty() ? "(none)" : "*****";
+        return SettingsCatalog.show(value);
     }
 
     private Object current(Setting setting) {
@@ -219,7 +229,7 @@ final class SettingsMenu implements Listener {
 
     /** Writes the change and says how it went. */
     private void change(CommandSender who, Setting setting, Object value) {
-        String before = SettingsCatalog.show(current(setting));
+        String before = shown(setting, current(setting));
         String problem = plugin.changeSetting(setting.key(), value);
         if (problem != null) {
             Msg.send(who, "settings.refused", Msg.t("reason", problem));
@@ -227,7 +237,7 @@ final class SettingsMenu implements Listener {
             return;
         }
         if (who instanceof Player player) look.play(player, "changed");
-        String shown = SettingsCatalog.show(value);
+        String shown = shown(setting, value);
         Msg.send(who, setting.needsRestart() ? "settings.changed-restart" : "settings.changed",
                 Msg.t("setting", setting.key()), Msg.t("value", shown));
         plugin.getLogger().info(who.getName() + " set " + setting.key() + " to " + shown + ".");
@@ -341,7 +351,7 @@ final class SettingsMenu implements Listener {
 
     private ItemStack settingIcon(Setting setting) {
         Object value = current(setting);
-        Component name = Msg.get("settings.setting", Msg.t("name", setting.label()), Msg.t("value", SettingsCatalog.show(value)));
+        Component name = Msg.get("settings.setting", Msg.t("name", setting.label()), Msg.t("value", shown(setting, value)));
         List<Component> lore = new ArrayList<>(text(setting.description()));
         if (setting.needsRestart()) lore.add(Msg.get("settings.restart-note"));
         lore.add(Component.empty());
@@ -400,7 +410,7 @@ final class SettingsMenu implements Listener {
         if (!(event.getWhoClicked() instanceof Player player)) return;
         int slot = event.getRawSlot();
         if (slot < 0 || slot >= page.inventory.getSize()) return;
-        if (!player.hasPermission("lifestealplus.admin")) {
+        if (!player.hasPermission(AdminPermissions.SETTINGS)) {
             player.closeInventory();
             return;
         }
@@ -467,7 +477,7 @@ final class SettingsMenu implements Listener {
     private void askToType(Player player, Setting setting) {
         typing.put(player.getUniqueId(), new Typing(setting, Instant.now().plus(TYPING_WINDOW)));
         player.closeInventory();
-        Msg.send(player, "settings.type-prompt", Msg.t("setting", setting.key()), Msg.t("value", SettingsCatalog.show(current(setting))));
+        Msg.send(player, "settings.type-prompt", Msg.t("setting", setting.key()), Msg.t("value", shown(setting, current(setting))));
     }
 
     /** The next chat line after "type a value" is the value, and nobody else sees it. */
@@ -478,11 +488,11 @@ final class SettingsMenu implements Listener {
         if (waiting == null || Instant.now().isAfter(waiting.expires())) return;
         event.setCancelled(true);
         String text = PlainTextComponentSerializer.plainText().serialize(event.message());
-        plugin.getServer().getScheduler().runTask(plugin, () -> {
+        plugin.tasks().forEntityLater(player, () -> {
             if (text.strip().equalsIgnoreCase("cancel")) Msg.send(player, "settings.type-cancelled");
             else typed(player, waiting.setting(), text);
             if (player.isOnline()) open(player, waiting.setting().section());
-        });
+        }, 1);
     }
 
     @EventHandler

@@ -34,7 +34,7 @@ class NewbieShieldTest {
 
     @BeforeEach
     void open() throws SQLException {
-        store = new HeartStore(dir.resolve("test.db"), clock);
+        store = TestStores.open(dir.resolve("test.db"), clock);
         store.touch(ALICE, "Alice", NO_SHIELD);
         store.touch(NEWBIE, "Newbie", RULES);
     }

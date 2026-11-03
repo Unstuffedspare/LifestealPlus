@@ -279,15 +279,22 @@ final class LifestealCommands {
                 .build();
     }
 
+    /** /lifesteal, with each part needing its own permission (see AdminPermissions). */
     private LiteralCommandNode<CommandSourceStack> adminCommand() {
         var root = adminRoot();
         moreAdmin.forEach(root::then);
-        return root.build();
+        var gated = Commands.literal("lifesteal").requires(src -> AdminPermissions.any(src.getSender()));
+        for (com.mojang.brigadier.tree.CommandNode<CommandSourceStack> part : root.getArguments()) {
+            String permission = AdminPermissions.forSubcommand(part.getName());
+            var builder = part.createBuilder().requires(src -> src.getSender().hasPermission(permission));
+            part.getChildren().forEach(builder::then);
+            gated.then(builder);
+        }
+        return gated.build();
     }
 
     private com.mojang.brigadier.builder.LiteralArgumentBuilder<CommandSourceStack> adminRoot() {
         return Commands.literal("lifesteal")
-                .requires(src -> src.getSender().hasPermission("lifestealplus.admin"))
                 .then(amountCommand("give", HeartCause.ADMIN_GIVE))
                 .then(amountCommand("take", HeartCause.ADMIN_TAKE))
                 .then(amountCommand("set", HeartCause.ADMIN_SET))

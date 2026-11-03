@@ -40,7 +40,7 @@ public final class NewbieShield implements Listener {
         this.plugin = plugin;
         this.hearts = hearts;
         long ticks = TICK.toSeconds() * 20;
-        plugin.getServer().getScheduler().runTaskTimer(plugin, this::wearDown, ticks, ticks);
+        plugin.tasks().timer(this::wearDown, ticks, ticks);
     }
 
     /** False for everyone while newbie-shield is switched off; their remaining time is kept for later. */
@@ -70,7 +70,7 @@ public final class NewbieShield implements Listener {
                     plugin.getLogger().log(Level.SEVERE, "Couldn't read the newbie shield for " + player.getName(), error);
                     return;
                 }
-                plugin.getServer().getScheduler().runTask(plugin, () -> {
+                plugin.tasks().now(() -> {
                     if (!player.isOnline()) return;
                     if (!shield.isZero()) {
                         left.put(id, shield);
@@ -91,7 +91,7 @@ public final class NewbieShield implements Listener {
                 return;
             }
             if (shield.isZero() || !plugin.settings().extras().shieldsEnabled()) return;
-            plugin.getServer().getScheduler().runTask(plugin, () -> {
+            plugin.tasks().now(() -> {
                 if (!player.isOnline()) return;
                 left.put(player.getUniqueId(), shield);
                 Msg.send(player, "shield.on-join", Msg.t("time", describe(shield)));
@@ -148,7 +148,7 @@ public final class NewbieShield implements Listener {
                     plugin.getLogger().log(Level.SEVERE, "Couldn't update the newbie shield for " + player.getName(), error);
                     return;
                 }
-                plugin.getServer().getScheduler().runTask(plugin, () -> {
+                plugin.tasks().now(() -> {
                     // A break or an admin change may have landed in the meantime; only an existing entry gets updated.
                     if (remaining.isZero()) {
                         if (left.remove(id) != null && player.isOnline()) {

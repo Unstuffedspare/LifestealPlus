@@ -29,7 +29,7 @@ class RecordsTest {
 
     @BeforeEach
     void open() throws SQLException {
-        store = new HeartStore(dir.resolve("test.db"), clock);
+        store = TestStores.open(dir.resolve("test.db"), clock);
         store.touch(ALICE, "Alice", RULES);
         store.touch(BOB, "Bob", RULES);
     }
@@ -54,6 +54,7 @@ class RecordsTest {
 
     @Test
     void aBackupHoldsTheHeartsAsTheyWere() throws SQLException {
+        TestStores.sqliteOnly();
         store.apply(List.of(HeartRequest.set(BOB, 7, HeartCause.ADMIN_SET, "op")), RULES);
         Path backup = dir.resolve("backups").resolve("one.db");
         store.backUpTo(backup);

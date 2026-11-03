@@ -20,13 +20,13 @@ import org.bukkit.configuration.file.FileConfiguration;
  * @param lastStandHearts players at this many hearts or fewer (but not eliminated) get Last Stand; 0 means off
  * @param excludedWorlds lower-cased names of worlds where hearts don't move
  */
-public record PluginSettings(HeartRules rules, int naturalDeathLoss, String databaseFile, PurgatorySettings purgatory,
+public record PluginSettings(HeartRules rules, int naturalDeathLoss, PurgatorySettings purgatory,
                              boolean bountiesEnabled, boolean bountyAnonymous, int lastStandHearts,
                              MostWantedSettings mostWanted, CombatSettings combat, EventSettings events,
                              SocialSettings social, Extras extras, StreakRules streaks, RecapSettings recap,
                              Set<String> excludedWorlds, HeartRecipe heartRecipe, CombatItemRules combatItems,
                              String discordWebhook, RewardSettings rewards, RevivalSettings revival,
-                             EconomySettings economy, BackupSettings backups) {
+                             EconomySettings economy, BackupSettings backups, DatabaseSettings database) {
 
     /** Whether dying and killing in this world move hearts (false for the worlds listed in worlds.excluded). */
     public boolean lifestealIn(World world) {
@@ -138,6 +138,21 @@ public record PluginSettings(HeartRules rules, int naturalDeathLoss, String data
     public record BackupSettings(Duration every, int keep) {
     }
 
+    /** Where hearts are kept; {@code mysql} is null for SQLite. */
+    public record DatabaseSettings(String file, MySql mysql) {
+
+        /**
+         * Keys for world events in the shared state, kept apart per server on MySQL (a network);
+         * empty for SQLite, where there's only ever one server.
+         */
+        public String scope() {
+            return mysql == null ? "" : "server." + mysql.serverName() + ".";
+        }
+    }
+
+    public record MySql(String host, int port, String database, String user, String password, String serverName) {
+    }
+
     /** The settings, plus anything in the file that had to be replaced by a default. */
     public record Loaded(PluginSettings settings, List<String> warnings) {
     }
@@ -225,7 +240,7 @@ public record PluginSettings(HeartRules rules, int naturalDeathLoss, String data
                 in.whole("recap.lines", 5, 1, 20),
                 hours(24 * in.number("recap.keep-days", 14, 1, 365)));
 
-        PluginSettings settings = new PluginSettings(rules, naturalDeathLoss, in.text("database.file", "lifesteal.db"), purgatory,
+        PluginSettings settings = new PluginSettings(rules, naturalDeathLoss, purgatory,
                 in.flag("bounties.enabled", true), in.flag("bounties.anonymous", true), lastStand, mostWanted, combat,
                 EventSettings.from(in), SocialSettings.from(in, starting, revive), extras, streaks, recap,
                 in.texts("worlds.excluded").stream().map(name -> name.toLowerCase(Locale.ROOT)).collect(Collectors.toUnmodifiableSet()),
@@ -246,7 +261,8 @@ public record PluginSettings(HeartRules rules, int naturalDeathLoss, String data
                                 in.number("heart-shop.fragment-price", 1000, 0, 1e12), in.number("heart-shop.charm-price", 20000, 0, 1e12),
                                 in.whole("heart-shop.daily-limit", 2, 0, 1000))),
                 new BackupSettings(in.flag("backups.enabled", true) ? hours(in.number("backups.every-hours", 24, 1, 24 * 30)) : Duration.ZERO,
-                        in.whole("backups.keep", 7, 1, 1000)));
+                        in.whole("backups.keep", 7, 1, 1000)),
+                database(in));
         return new Loaded(settings, List.copyOf(in.warnings()));
     }
 
@@ -269,6 +285,24 @@ public record PluginSettings(HeartRules rules, int naturalDeathLoss, String data
         return new RewardSettings(java.util.Map.copyOf(advancements),
                 hours(in.number("rewards.playtime-hours", 2, 0, 24 * 30)),
                 in.whole("rewards.playtime-fragments", 1, 0, 64));
+    }
+
+    private static DatabaseSettings database(ConfigReader in) {
+        String file = in.text("database.file", "lifesteal.db");
+        String type = in.text("database.type", "sqlite").strip().toLowerCase(Locale.ROOT);
+        if (type.equals("sqlite")) return new DatabaseSettings(file, null);
+        if (!type.equals("mysql") && !type.equals("mariadb")) {
+            in.warn("database.type should be sqlite or mysql (it's \"" + type + "\"); using sqlite.");
+            return new DatabaseSettings(file, null);
+        }
+        String server = in.text("database.mysql.server-name", "main").strip().toLowerCase(Locale.ROOT);
+        if (!server.matches("[a-z0-9_-]{1,32}")) {
+            in.warn("database.mysql.server-name should be a short name like lobby or survival-1; using main.");
+            server = "main";
+        }
+        return new DatabaseSettings(file, new MySql(in.text("database.mysql.host", "localhost"),
+                in.whole("database.mysql.port", 3306, 1, 65535), in.text("database.mysql.database", "lifesteal"),
+                in.text("database.mysql.user", "lifesteal"), String.valueOf(in.raw("database.mysql.password", "")), server));
     }
 
     /** The Discord webhook link, or null for none. */

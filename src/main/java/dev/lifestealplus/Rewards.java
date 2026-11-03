@@ -29,7 +29,7 @@ final class Rewards implements Listener {
         this.tracker = tracker;
         this.items = items;
         long ticks = TICK.toSeconds() * 20;
-        plugin.getServer().getScheduler().runTaskTimer(plugin, this::countPlaytime, ticks, ticks);
+        plugin.tasks().timer(this::countPlaytime, ticks, ticks);
     }
 
     private PluginSettings.RewardSettings settings() {
@@ -58,7 +58,7 @@ final class Rewards implements Listener {
                     return;
                 }
                 if (reached <= 0 || every.isZero()) return;
-                plugin.getServer().getScheduler().runTask(plugin, () -> {
+                plugin.tasks().forEntity(player, () -> {
                     if (!player.isOnline()) return;
                     int fragments = reached * settings().playtimeFragments();
                     give(player, fragments);

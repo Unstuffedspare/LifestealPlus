@@ -23,7 +23,7 @@ public final class CapSchedule {
     CapSchedule(LifestealPlugin plugin, HeartService hearts) {
         this.plugin = plugin;
         this.hearts = hearts;
-        plugin.getServer().getScheduler().runTaskTimer(plugin, this::refresh, 20, 20 * 60);
+        plugin.tasks().timer(this::refresh, 20, 20 * 60);
     }
 
     /** Also called after a reload or a season reset, so a changed schedule applies straight away. */
@@ -38,7 +38,7 @@ public final class CapSchedule {
             if (saved.isPresent()) return java.util.concurrent.CompletableFuture.completedFuture(Instant.ofEpochMilli(Long.parseLong(saved.get())));
             Instant now = Instant.now();
             return hearts.putState(SEASON_STARTED, String.valueOf(now.toEpochMilli())).thenApply(ignored -> now);
-        }).whenComplete((started, error) -> plugin.getServer().getScheduler().runTask(plugin, () -> {
+        }).whenComplete((started, error) -> plugin.tasks().now(() -> {
             if (error != null) {
                 plugin.getLogger().log(Level.SEVERE, "Couldn't work out the season's start for the heart cap", error);
                 return;

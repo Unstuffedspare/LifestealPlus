@@ -39,15 +39,15 @@ public final class HeartTracker {
 
     HeartTracker(LifestealPlugin plugin) {
         this.plugin = plugin;
-        this.mainThread = task -> {
-            if (plugin.isEnabled()) plugin.getServer().getScheduler().runTask(plugin, task);
-        };
+        this.mainThread = plugin.tasks().global();
         this.eliminatedTag = new NamespacedKey(plugin, "eliminated");
         this.lastStand = new LastStand(plugin);
         // Milk and /effect clear can strip Last Stand between heart changes; put it back.
-        plugin.getServer().getScheduler().runTaskTimer(plugin, () -> online.forEach((id, hearts) -> {
+        plugin.tasks().timer(() -> online.forEach((id, hearts) -> {
             Player player = plugin.getServer().getPlayer(id);
-            if (player != null && !player.isDead()) lastStand.update(player, hearts);
+            if (player != null) plugin.tasks().forEntity(player, () -> {
+                if (!player.isDead()) lastStand.update(player, hearts);
+            });
         }), 200, 200);
     }
 
@@ -126,10 +126,10 @@ public final class HeartTracker {
             Location where = elimination.respawnLocation(player);
             if (where != null) event.setRespawnLocation(where);
         }
-        plugin.getServer().getScheduler().runTask(plugin, () -> {
+        plugin.tasks().forEntityLater(player, () -> {
             Integer now = online.get(player.getUniqueId());
             if (now != null) sync(player, now);
-        });
+        }, 1);
     }
 
     public Integer cachedHearts(UUID uuid) {
@@ -146,6 +146,11 @@ public final class HeartTracker {
      * it only changes what differs. Dead players are left alone until they respawn.
      */
     private void sync(Player player, int hearts) {
+        plugin.tasks().forEntity(player, () -> syncHere(player, hearts));
+    }
+
+    /** On the player's own thread. */
+    private void syncHere(Player player, int hearts) {
         if (!player.isOnline()) return;
         AttributeInstance maxHealth = player.getAttribute(Attribute.MAX_HEALTH);
         double max = hearts > 0 ? hearts * 2.0 : elimination.eliminatedMaxHealth();

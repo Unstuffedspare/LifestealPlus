@@ -155,7 +155,8 @@ final class EventCommands {
             case "charm" -> items.revivalCharm(amount);
             default -> items.fragment(amount);
         };
-        target.getInventory().addItem(item).values().forEach(left -> target.getWorld().dropItem(target.getLocation(), left));
+        plugin.tasks().forEntity(target, () -> target.getInventory().addItem(item).values()
+                .forEach(left -> target.getWorld().dropItem(target.getLocation(), left)));
         Msg.send(sender, "admin.items-given", Msg.t("player", target.getName()), Msg.t("amount", amount), Msg.t("kind", kind));
         return Command.SINGLE_SUCCESS;
     }

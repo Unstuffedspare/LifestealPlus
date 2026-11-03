@@ -29,7 +29,7 @@ class PurgatoryProgressTest {
 
     @BeforeEach
     void open() throws SQLException {
-        store = new HeartStore(dir.resolve("test.db"), clock);
+        store = TestStores.open(dir.resolve("test.db"), clock);
         store.touch(BOB, "Bob", RULES);
     }
 

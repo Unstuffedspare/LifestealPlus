@@ -20,7 +20,7 @@ final class SpectatorElimination implements EliminationHandler {
     @Override
     public void restore(Player player, int hearts) {
         player.setGameMode(GameMode.SURVIVAL);
-        player.teleport(EliminationHandler.home(player));
+        player.teleportAsync(EliminationHandler.home(player));
         player.setHealth(hearts * 2.0);
         Msg.send(player, "elimination.back-from-spectating", Msg.t("hearts", hearts));
     }

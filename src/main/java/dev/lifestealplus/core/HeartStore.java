@@ -18,7 +18,8 @@ import java.util.UUID;
 import org.sqlite.SQLiteDataSource;
 
 /**
- * SQLite-backed heart state and ledger. Every heart change goes through
+ * Heart state and ledger, in SQLite (a file) or MySQL/MariaDB (for a network sharing hearts).
+ * The SQL is SQLite's; {@link MySqlConnection} rewrites it for MySQL. Every heart change goes through
  * {@link #apply}, {@link #kill} or {@link #touch}, which update the player and
  * write the ledger row in one transaction, so the two can't disagree.
  *
@@ -30,9 +31,11 @@ public final class HeartStore implements AutoCloseable {
 
     private final Connection conn;
     private final Clock clock;
+    private final boolean sqlite;
 
     public HeartStore(Path file, Clock clock) throws SQLException {
         this.clock = clock;
+        this.sqlite = true;
         // DataSource rather than DriverManager: the driver lives in Paper's plugin
         // library loader, which DriverManager's service lookup doesn't search.
         SQLiteDataSource ds = new SQLiteDataSource();
@@ -40,11 +43,26 @@ public final class HeartStore implements AutoCloseable {
         this.conn = ds.getConnection();
         try (Statement st = conn.createStatement()) {
             st.execute("PRAGMA journal_mode=WAL");
+            // If something else has the file open for a moment (a backup tool, a database viewer), wait rather than fail.
+            st.execute("PRAGMA busy_timeout=5000");
             // FULL: a commit is on disk before it counts, even through a power cut. Heart changes are
             // few enough that the extra sync costs nothing noticeable.
             st.execute("PRAGMA synchronous=FULL");
         }
         migrate();
+    }
+
+    /** MySQL or MariaDB, through {@code source}; tables are made (or brought up to date) on first use. */
+    public HeartStore(javax.sql.DataSource source, Clock clock) throws SQLException {
+        this.clock = clock;
+        this.sqlite = false;
+        this.conn = MySqlConnection.open(source);
+        migrate();
+    }
+
+    /** False on MySQL/MariaDB, where backups are the database server's job. */
+    public boolean isSqlite() {
+        return sqlite;
     }
 
     private void migrate() throws SQLException {
@@ -470,6 +488,26 @@ public final class HeartStore implements AutoCloseable {
         });
     }
 
+    /**
+     * A brand-new player (whose only ledger entry is their first join) gets {@code starting}
+     * hearts instead, within their cap. Null if they aren't brand new, so nothing changed.
+     */
+    public HeartChange applyStartingHearts(UUID player, int starting, HeartRules rules) throws SQLException {
+        return inTransaction(() -> {
+            try (PreparedStatement ps = conn.prepareStatement(
+                    "SELECT COUNT(*), MIN(cause) FROM heart_ledger WHERE player_uuid = ?")) {
+                ps.setString(1, player.toString());
+                try (ResultSet rs = ps.executeQuery()) {
+                    if (!rs.next() || rs.getInt(1) != 1 || !"FIRST_JOIN".equals(rs.getString(2))) return null;
+                }
+            }
+            PlayerHearts current = require(player);
+            if (current.hearts() == starting) return null;
+            return applyOne(HeartRequest.set(player, starting, HeartCause.FIRST_JOIN, "server").withNote("rank starting hearts"),
+                    personalRules(player, rules), nextEventId(), clock.millis());
+        });
+    }
+
     /** A Revival Charm brings {@code target} back with reviveHearts. */
     public HeartChange reviveWithItem(UUID user, UUID target, HeartRules rules) throws SQLException {
         return inTransaction(() -> {
@@ -878,7 +916,7 @@ public final class HeartStore implements AutoCloseable {
                 ps.setLong(2, clock.millis());
                 ps.executeUpdate();
             }
-            try (PreparedStatement ps = conn.prepareStatement("INSERT INTO heart_ledger_archive SELECT ?, * FROM heart_ledger")) {
+            try (PreparedStatement ps = conn.prepareStatement("INSERT INTO heart_ledger_archive SELECT ?, heart_ledger.* FROM heart_ledger")) {
                 ps.setString(1, name);
                 ps.executeUpdate();
             }
@@ -966,6 +1004,7 @@ public final class HeartStore implements AutoCloseable {
         } catch (java.io.IOException e) {
             throw new SQLException("Couldn't make the backups folder", e);
         }
+        if (!sqlite) throw new SQLException("Backups are for SQLite; back up a MySQL database with its own tools.");
         try (PreparedStatement ps = conn.prepareStatement("VACUUM INTO ?")) {
             ps.setString(1, file.toAbsolutePath().toString());
             ps.execute();
@@ -1717,7 +1756,7 @@ public final class HeartStore implements AutoCloseable {
     /** One more kill in a row; returns the new length. */
     private int extendStreak(UUID player) throws SQLException {
         try (PreparedStatement ps = conn.prepareStatement(
-                "UPDATE players SET streak = streak + 1, best_streak = MAX(best_streak, streak + 1) WHERE uuid = ?")) {
+                "UPDATE players SET best_streak = MAX(best_streak, streak + 1), streak = streak + 1 WHERE uuid = ?")) {
             ps.setString(1, player.toString());
             ps.executeUpdate();
         }
@@ -1921,7 +1960,7 @@ public final class HeartStore implements AutoCloseable {
      */
     public Optional<PlayerStats> stats(String name, String season) throws SQLException {
         String table = season == null ? "heart_ledger" : "heart_ledger_archive";
-        String inSeason = season == null ? "" : " AND season = ?2 COLLATE NOCASE";
+        String inSeason = season == null ? "" : " AND season = ? COLLATE NOCASE";
         String uuid = null;
         String shownName = name;
         int bestStreak = -1;
@@ -1944,20 +1983,21 @@ public final class HeartStore implements AutoCloseable {
                 }
             }
         }
+        // The player goes in once, as me.id, and every column refers to it.
         try (PreparedStatement ps = conn.prepareStatement("""
                 SELECT
-                  COALESCE(SUM(CASE WHEN cause = 'PVP_DEATH' AND other_uuid = ?1 AND hearts_after < hearts_before THEN 1 END), 0),
-                  COALESCE(SUM(CASE WHEN player_uuid = ?1 AND cause IN ('PVP_DEATH', 'DEATH') AND hearts_after < hearts_before
+                  COALESCE(SUM(CASE WHEN cause = 'PVP_DEATH' AND other_uuid = me.id AND hearts_after < hearts_before THEN 1 END), 0),
+                  COALESCE(SUM(CASE WHEN player_uuid = me.id AND cause IN ('PVP_DEATH', 'DEATH') AND hearts_after < hearts_before
                                     THEN 1 END), 0),
-                  COALESCE(SUM(CASE WHEN player_uuid = ?1 AND cause = 'PVP_KILL' AND hearts_after > hearts_before
+                  COALESCE(SUM(CASE WHEN player_uuid = me.id AND cause = 'PVP_KILL' AND hearts_after > hearts_before
                                     THEN hearts_after - hearts_before END), 0),
-                  COALESCE(SUM(CASE WHEN player_uuid = ?1 AND cause IN ('PVP_DEATH', 'DEATH') AND hearts_after < hearts_before
+                  COALESCE(SUM(CASE WHEN player_uuid = me.id AND cause IN ('PVP_DEATH', 'DEATH') AND hearts_after < hearts_before
                                     THEN hearts_before - hearts_after END), 0),
-                  COALESCE(SUM(CASE WHEN player_uuid = ?1 AND cause = 'BOUNTY_CLAIM' THEN hearts_after - hearts_before END), 0),
-                  COALESCE(SUM(CASE WHEN player_uuid = ?1 AND hearts_before > 0 AND hearts_after <= 0 THEN 1 END), 0),
-                  COALESCE(SUM(CASE WHEN player_uuid = ?1 AND hearts_before <= 0 AND hearts_after > 0
+                  COALESCE(SUM(CASE WHEN player_uuid = me.id AND cause = 'BOUNTY_CLAIM' THEN hearts_after - hearts_before END), 0),
+                  COALESCE(SUM(CASE WHEN player_uuid = me.id AND hearts_before > 0 AND hearts_after <= 0 THEN 1 END), 0),
+                  COALESCE(SUM(CASE WHEN player_uuid = me.id AND hearts_before <= 0 AND hearts_after > 0
                                     AND cause NOT IN ('FIRST_JOIN', 'IMPORT') THEN 1 END), 0)
-                FROM %s WHERE (player_uuid = ?1 OR other_uuid = ?1)%s""".formatted(table, inSeason))) {
+                FROM %s, (SELECT ? AS id) me WHERE (player_uuid = me.id OR other_uuid = me.id)%s""".formatted(table, inSeason))) {
             ps.setString(1, uuid);
             if (season != null) ps.setString(2, season);
             try (ResultSet rs = ps.executeQuery()) {

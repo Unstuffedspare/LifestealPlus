@@ -25,8 +25,8 @@ final class TabList {
         this.plugin = plugin;
         this.hearts = hearts;
         this.tracker = tracker;
-        plugin.getServer().getScheduler().runTaskTimer(plugin, this::update, 40, 40);
-        plugin.getServer().getScheduler().runTaskTimer(plugin, this::refreshPacts, 20, 20 * 30);
+        plugin.tasks().timer(this::update, 40, 40);
+        plugin.tasks().timer(this::refreshPacts, 20, 20 * 30);
     }
 
     private boolean pactsShown() {
@@ -46,7 +46,7 @@ final class TabList {
                 fresh.put(pact.first(), pact.secondName());
                 fresh.put(pact.second(), pact.firstName());
             }
-            plugin.getServer().getScheduler().runTask(plugin, () -> {
+            plugin.tasks().now(() -> {
                 partners.clear();
                 partners.putAll(fresh);
             });
@@ -55,7 +55,7 @@ final class TabList {
 
     private void update() {
         if (!plugin.settings().extras().tabList()) {
-            if (showing) plugin.getServer().getOnlinePlayers().forEach(p -> p.playerListName(null));
+            if (showing) plugin.getServer().getOnlinePlayers().forEach(p -> plugin.tasks().forEntity(p, () -> p.playerListName(null)));
             showing = false;
             return;
         }
@@ -67,7 +67,9 @@ final class TabList {
             Component pact = partner == null ? Component.empty() : Msg.get("tab.pact", Msg.t("partner", partner));
             Component name = Msg.get(count <= 0 ? "tab.eliminated" : "tab.player",
                     Msg.t("name", player.getName()), Msg.t("hearts", count), Msg.c("pact", pact));
-            if (!name.equals(player.playerListName())) player.playerListName(name);
+            plugin.tasks().forEntity(player, () -> {
+                if (!name.equals(player.playerListName())) player.playerListName(name);
+            });
         }
     }
 }

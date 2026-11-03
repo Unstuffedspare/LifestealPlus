@@ -32,7 +32,7 @@ class StreakNewsTest {
 
     @BeforeEach
     void open() throws SQLException {
-        store = new HeartStore(dir.resolve("test.db"), clock);
+        store = TestStores.open(dir.resolve("test.db"), clock);
         store.setStreaks(STREAKS);
         store.touch(ALICE, "Alice", RULES);
         store.touch(BOB, "Bob", RULES);

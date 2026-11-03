@@ -31,7 +31,7 @@ public final class CombatTagger implements Listener {
     public CombatTagger(LifestealPlugin plugin, HeartTracker tracker) {
         this.plugin = plugin;
         this.tracker = tracker;
-        plugin.getServer().getScheduler().runTaskTimer(plugin, this::showCountdowns, 20, 20);
+        plugin.tasks().timer(this::showCountdowns, 20, 20);
     }
 
     public boolean isTagged(Player player) {

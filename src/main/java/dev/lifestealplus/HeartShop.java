@@ -104,7 +104,9 @@ final class HeartShop {
             Msg.send(player, "shop.not-sold", Msg.t("item", name));
             return 0;
         }
-        int limit = shop().dailyLimit();
+        // A rank's lifestealplus.shop-limit.<n> replaces the daily limit for its players.
+        int ranked = PersonalCaps.highest(player, "lifestealplus.shop-limit.");
+        int limit = ranked > 0 ? ranked : shop().dailyLimit();
         LocalDate day = LocalDate.now();
         Bought bought = today.get(player.getUniqueId());
         int already = bought != null && bought.day().equals(day) ? bought.count() : 0;

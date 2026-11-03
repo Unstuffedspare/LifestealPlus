@@ -713,6 +713,7 @@ backup:
   # <file>
   made: "<green>Backed up the heart database to backups/<file>."
   none: "<gray>No backups yet. /lifesteal backup now makes one."
+  mysql: "<gray>On MySQL or MariaDB, back up the database with its own tools (mysqldump, mariadb-backup)."
   # <n>
   header: "<gold>Backups</gold> <gray>(<n>, newest first). /lifesteal backup restore <file> [player]"
   # <file>

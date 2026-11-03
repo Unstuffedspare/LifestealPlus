@@ -178,6 +178,10 @@ public final class HeartService implements AutoCloseable {
         return submit(() -> store.addPlaytime(player, played, every));
     }
 
+    public boolean isSqlite() {
+        return store.isSqlite();
+    }
+
     public CompletableFuture<Void> backUpTo(java.nio.file.Path file) {
         return submit(() -> {
             store.backUpTo(file);
@@ -195,6 +199,10 @@ public final class HeartService implements AutoCloseable {
 
     public CompletableFuture<Integer> exportAudit(java.nio.file.Path file) {
         return submit(() -> store.exportAudit(file));
+    }
+
+    public CompletableFuture<HeartChange> applyStartingHearts(UUID player, int starting) {
+        return submit(() -> store.applyStartingHearts(player, starting, rules()));
     }
 
     public CompletableFuture<Void> addAudit(String actor, String action, String detail) {

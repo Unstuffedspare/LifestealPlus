@@ -27,7 +27,7 @@ import org.bukkit.event.player.PlayerQuitEvent;
 import org.bukkit.inventory.EquipmentSlot;
 import org.bukkit.inventory.ItemStack;
 import org.bukkit.persistence.PersistentDataType;
-import org.bukkit.scheduler.BukkitTask;
+import dev.lifestealplus.Tasks;
 
 /**
  * Logging out mid-fight doesn't save you. The player's body stays behind for a while,
@@ -37,7 +37,7 @@ import org.bukkit.scheduler.BukkitTask;
 public final class CombatBodies implements Listener {
 
     /** A body waiting in the world. {@code items} is what drops if it dies: the owner's whole inventory at logout. */
-    private record Body(UUID entity, ItemStack[] items, int exp, BukkitTask expiry) {
+    private record Body(UUID entity, ItemStack[] items, int exp, Tasks.Handle expiry) {
     }
 
     private final LifestealPlugin plugin;
@@ -96,11 +96,10 @@ public final class CombatBodies implements Listener {
         int exp = Math.min(player.getLevel() * 7, 100);
         UUID owner = player.getUniqueId();
         String name = player.getName();
-        BukkitTask expiry = plugin.getServer().getScheduler().runTaskLater(plugin, () -> {
+        Tasks.Handle expiry = plugin.tasks().forEntityLater(body, () -> {
             Body left = byOwner.remove(owner);
             if (left == null) return;
-            Entity e = plugin.getServer().getEntity(left.entity());
-            if (e != null) e.remove();
+            body.remove();
             Msg.broadcast("combat-log.body-faded", Msg.t("player", name));
         }, life.toSeconds() * 20);
         byOwner.put(owner, new Body(body.getUniqueId(), items, exp, expiry));
@@ -145,22 +144,27 @@ public final class CombatBodies implements Listener {
         if (body == null) return;
         body.expiry().cancel();
         if (plugin.getServer().getEntity(body.entity()) instanceof Mannequin mannequin && !mannequin.isDead()) {
-            player.teleport(mannequin.getLocation());
-            player.setHealth(Math.min(mannequin.getHealth(), player.getAttribute(Attribute.MAX_HEALTH).getValue()));
-            mannequin.remove();
-            Msg.send(player, "combat-log.back-in-body");
+            double health = mannequin.getHealth();
+            player.teleportAsync(mannequin.getLocation()).thenRun(() -> plugin.tasks().forEntity(player, () -> {
+                player.setHealth(Math.min(health, player.getAttribute(Attribute.MAX_HEALTH).getValue()));
+                Msg.send(player, "combat-log.back-in-body");
+            }));
+            plugin.tasks().forEntity(mannequin, mannequin::remove);
         }
     }
 
-    /** The body died while they were away: their items already dropped there, so this is the rest of a death. */
-    public void finishBodyDeath(Player player) {
+    /**
+     * The body died while they were away: their items already dropped there, so this is the rest
+     * of a death. An eliminated player stays where the elimination puts them.
+     */
+    public void finishBodyDeath(Player player, boolean eliminated) {
         player.getInventory().clear();
         player.setLevel(0);
         player.setExp(0);
         player.setFireTicks(0);
         player.setFoodLevel(20);
         player.setHealth(player.getAttribute(Attribute.MAX_HEALTH).getValue());
-        player.teleport(EliminationHandler.home(player));
+        if (!eliminated) player.teleportAsync(EliminationHandler.home(player));
         Msg.send(player, "combat-log.body-died-while-away");
     }
 

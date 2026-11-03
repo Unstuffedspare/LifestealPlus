@@ -388,5 +388,22 @@ updates:
   check: true
 
 database:
+  # sqlite: a file in the plugin folder, nothing to set up. mysql: a MySQL or MariaDB
+  # server, so the servers of a network share hearts, seasons and the ledger. (restart)
+  type: sqlite
   # SQLite file inside the plugin folder. (restart)
   file: lifesteal.db
+  mysql:
+    # Where the MySQL or MariaDB server is. (restart)
+    host: localhost
+    # (restart)
+    port: 3306
+    # The database to use; it must exist, and the tables are made in it. (restart)
+    database: lifesteal
+    # (restart)
+    user: lifesteal
+    # (restart)
+    password: ""
+    # This server's name in the network. Each server keeps its own Blood Moons, airdrops
+    # and other events; hearts, seasons and everything else are shared. (restart)
+    server-name: main

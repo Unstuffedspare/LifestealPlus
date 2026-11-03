@@ -44,7 +44,7 @@ public final class KingOfTheHill implements Listener {
         this.plugin = plugin;
         this.hearts = hearts;
         this.tracker = tracker;
-        plugin.getServer().getScheduler().runTaskTimer(plugin, this::tick, 20, 20);
+        plugin.tasks().timer(this::tick, 20, 20);
     }
 
     private EventSettings.Koth settings() {
@@ -101,7 +101,7 @@ public final class KingOfTheHill implements Listener {
         int radius = settings().radius();
         List<Player> holding = center.getWorld().getPlayers().stream().filter(p -> onHill(p, radius)).toList();
         if (holding.size() == 1) seconds.merge(holding.getFirst().getUniqueId(), 1, Integer::sum);
-        showRing(radius);
+        plugin.tasks().at(center, () -> showRing(radius));
 
         Map.Entry<UUID, Integer> leader = leader();
         String leaderName = leader == null ? null : plugin.getServer().getOfflinePlayer(leader.getKey()).getName();
