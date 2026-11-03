@@ -172,6 +172,7 @@ public final class BloodMoon implements Listener {
         }
         Msg.broadcast("blood-moon.rises", Msg.t("time", Msg.duration(lasting)), Msg.t("multiplier", multiplier));
         hearts.addNews(NewsItem.BLOOD_MOON, null, null, multiplier);
+        plugin.hooks().eventStarted("blood-moon", lasting);
         return true;
     }
 
@@ -189,6 +190,7 @@ public final class BloodMoon implements Listener {
         if (bar != null) plugin.getServer().getOnlinePlayers().forEach(p -> p.hideBossBar(bar));
         bar = null;
         Msg.broadcast("blood-moon.sets");
+        plugin.hooks().eventEnded("blood-moon");
         scheduleNext();
         return true;
     }

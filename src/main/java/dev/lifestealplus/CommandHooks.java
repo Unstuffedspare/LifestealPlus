@@ -21,10 +21,14 @@ import org.bukkit.event.Listener;
  * streak, a bounty, a new season), with fill-ins like {player}. Kept out of config.yml so the
  * settings menu can't be used to run console commands.
  */
-final class CommandHooks implements Listener {
+public final class CommandHooks implements Listener {
 
     static final Set<String> HOOKS = Set.of("elimination", "revival", "kill", "streak", "streak-ended",
-            "bounty-claimed", "season-reset");
+            "bounty-claimed", "season-reset", "event-start", "event-end", "airdrop-landed", "airdrop-opened",
+            "koth-won", "finale-won");
+    /** The server events event-start and event-end list commands for, by name. */
+    public static final Set<String> EVENTS = Set.of("blood-moon", "double-hearts", "heart-frenzy", "cap-boost",
+            "king-of-the-hill", "finale");
 
     private final LifestealPlugin plugin;
     private final HeartService hearts;
@@ -61,17 +65,25 @@ final class CommandHooks implements Listener {
         for (String key : loaded.getKeys(false)) {
             if (!HOOKS.contains(key)) {
                 warnings.add("hooks.yml has \"" + key + "\", which isn't a hook; the hooks are " + String.join(", ", HOOKS.stream().sorted().toList()) + ".");
-            } else if (key.equals("streak")) {
+            } else if (key.equals("streak") || key.startsWith("event-")) {
+                boolean streak = key.equals("streak");
                 var section = loaded.getConfigurationSection(key);
                 if (section == null) {
                     if (!(loaded.get(key) instanceof Map<?, ?> map && map.isEmpty())) {
-                        warnings.add("hooks.yml: streak should list streak numbers, each with its commands; ignoring it.");
+                        warnings.add("hooks.yml: " + key + (streak ? " should list streak numbers" : " should list events")
+                                + ", each with its commands; ignoring it.");
                     }
                     continue;
                 }
                 for (String n : section.getKeys(false)) {
-                    if (!n.matches("\\d{1,4}")) warnings.add("hooks.yml: streak." + n + " should be a streak number like 5; ignoring it.");
-                    else if (!section.isList(n)) warnings.add("hooks.yml: streak." + n + " should be a list of commands; ignoring it.");
+                    if (streak && !n.matches("\\d{1,4}")) {
+                        warnings.add("hooks.yml: streak." + n + " should be a streak number like 5; ignoring it.");
+                    } else if (!streak && !EVENTS.contains(n)) {
+                        warnings.add("hooks.yml: " + key + "." + n + " isn't an event; the events are "
+                                + String.join(", ", EVENTS.stream().sorted().toList()) + ".");
+                    } else if (!section.isList(n)) {
+                        warnings.add("hooks.yml: " + key + "." + n + " should be a list of commands; ignoring it.");
+                    }
                 }
             } else if (!loaded.isList(key)) {
                 warnings.add("hooks.yml: " + key + " should be a list of commands, like [\"say hi {player}\"]; ignoring it.");
@@ -134,6 +146,45 @@ final class CommandHooks implements Listener {
             bounty.put("hearts", outcome.bounty().change().delta());
             run("bounty-claimed", bounty);
         }
+    }
+
+    /** A server event began: one of {@link #EVENTS}. */
+    public void eventStarted(String event, java.time.Duration length) {
+        run("event-start." + event, Map.of("event", event, "minutes", Math.max(1, (length.toSeconds() + 59) / 60)));
+    }
+
+    /** It ended, on time or stopped early. */
+    public void eventEnded(String event) {
+        run("event-end." + event, Map.of("event", event));
+    }
+
+    public void airdropLanded(org.bukkit.Location at, boolean golden) {
+        run("airdrop-landed", place(at, golden));
+    }
+
+    public void airdropOpened(org.bukkit.entity.Player player, org.bukkit.Location at, boolean golden) {
+        Map<String, Object> fills = place(at, golden);
+        fills.put("player", name(player.getName()));
+        fills.put("uuid", player.getUniqueId());
+        run("airdrop-opened", fills);
+    }
+
+    private static Map<String, Object> place(org.bukkit.Location at, boolean golden) {
+        Map<String, Object> fills = new LinkedHashMap<>();
+        fills.put("world", at.getWorld() == null ? "" : at.getWorld().getName());
+        fills.put("x", at.getBlockX());
+        fills.put("y", at.getBlockY());
+        fills.put("z", at.getBlockZ());
+        fills.put("golden", golden);
+        return fills;
+    }
+
+    public void kothWon(String player, java.util.UUID uuid, int seconds, int hearts) {
+        run("koth-won", Map.of("player", name(player), "uuid", uuid, "seconds", seconds, "hearts", hearts));
+    }
+
+    public void finaleWon(String player, java.util.UUID uuid) {
+        run("finale-won", Map.of("player", name(player), "uuid", uuid));
     }
 
     void seasonEnded(String old, String next, String winner) {

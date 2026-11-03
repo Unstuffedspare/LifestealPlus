@@ -76,6 +76,7 @@ public final class Finale implements Listener {
         Msg.broadcast("finale.started", Msg.t("time", Msg.duration(over)), Msg.t("size", (int) finalSize));
         hearts.addNews(NewsItem.FINALE, null, null, 0);
         evacuateOtherDimensions();
+        plugin.hooks().eventStarted("finale", over);
         return true;
     }
 
@@ -88,6 +89,7 @@ public final class Finale implements Listener {
         previousSize = null;
         hearts.clearState(ACTIVE);
         Msg.broadcast("finale.stopped");
+        plugin.hooks().eventEnded("finale");
         return true;
     }
 
@@ -143,6 +145,7 @@ public final class Finale implements Listener {
             }
             Msg.broadcast("finale.winner", Msg.t("player", name));
             hearts.addNews(NewsItem.FINALE_WINNER, name, null, 0);
+            plugin.hooks().finaleWon(name, last.get().uuid());
         }));
     }
 

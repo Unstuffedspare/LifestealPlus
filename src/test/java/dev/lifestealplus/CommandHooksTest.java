@@ -54,4 +54,20 @@ class CommandHooksTest {
         assertTrue(problems.get(3).contains("streak.5 should be a list"));
         assertEquals(List.of("eco give {player} 10"), file.getStringList("streak.10"));
     }
+
+    @Test
+    void eventHooksAreListedByEvent() throws Exception {
+        YamlConfiguration file = new YamlConfiguration();
+        file.loadFromString("""
+                event-start:
+                  blood-moon: ["say up"]
+                  bloodmoon: ["say typo"]
+                event-end: ["say any"]
+                """);
+        List<String> problems = CommandHooks.problems(file);
+        assertEquals(2, problems.size(), problems.toString());
+        assertTrue(problems.get(0).contains("event-start.bloodmoon isn't an event"));
+        assertTrue(problems.get(1).contains("event-end should list events"));
+        assertEquals(List.of("say up"), file.getStringList("event-start.blood-moon"));
+    }
 }

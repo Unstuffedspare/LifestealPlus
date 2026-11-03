@@ -312,6 +312,11 @@ public final class LifestealPlugin extends JavaPlugin {
         }
     }
 
+    /** hooks.yml, for the server events to report to. */
+    public CommandHooks hooks() {
+        return hooks;
+    }
+
     public PluginSettings settings() {
         return settings;
     }

@@ -161,6 +161,7 @@ public final class Airdrops implements Listener {
         world.spawnParticle(Particle.FIREWORK, at, 60, 0.6, 1.5, 0.6, 0.05);
         hearts.putState(crateKey, world.getName() + "," + crate.getX() + "," + crate.getY() + "," + crate.getZ());
         broadcast("airdrops.landed", Msg.t("x", crate.getX()), Msg.t("y", crate.getY()), Msg.t("z", crate.getZ()));
+        plugin.hooks().airdropLanded(crate.getLocation(), golden);
         // Only ever this crate: if it was emptied and a newer one has landed since, leave that one alone.
         Block thisCrate = crate;
         pending.add(plugin.tasks().atLater(thisCrate.getLocation(), () -> {
@@ -198,6 +199,7 @@ public final class Airdrops implements Listener {
         opened = true;
         broadcast("airdrops.opened", Msg.t("player", event.getPlayer().getName()));
         hearts.addNews(NewsItem.AIRDROP, event.getPlayer().getName(), null, 0);
+        if (event.getPlayer() instanceof org.bukkit.entity.Player player) plugin.hooks().airdropOpened(player, chest.getLocation(), golden);
     }
 
     /** Once it's been emptied it has done its job. */

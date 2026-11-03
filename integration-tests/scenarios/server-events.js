@@ -16,7 +16,14 @@ async function main() {
     await rcon(`gamemode survival ${n}`); await rcon(`effect clear ${n}`); await rcon(`clear ${n}`); await rcon(`lifesteal set ${n} 10`)
   }
   await rcon('op Alice'); await rcon('difficulty normal'); await rcon('gamerule spawn_monsters false')
-  check('schema upgraded to v6', sql('PRAGMA user_version'), '[[6]]')
+  // Earlier kills between them would count as repeat kills.
+  dbWrite("DELETE FROM heart_ledger WHERE cause LIKE 'PVP%'")
+  for (const n of ['Alice', 'Bob', 'Cara']) await rcon(`lifesteal shield ${n} 0`)
+  check('the database is on the current schema', sql('PRAGMA user_version'), '[[13]]')
+  // Certain where the shipped settings leave it to chance, and a crate that doesn't sit for 20 minutes.
+  await rcon('lifesteal config blood-moon.fragment-chance 1')
+  await rcon('lifesteal config airdrops.golden-chance 0')
+  await rcon('lifesteal config airdrops.despawn-minutes 0.2')
 
   // Heart items
   await rcon('lifesteal item Alice heart 2'); await sleep(500)
@@ -87,6 +94,9 @@ async function main() {
   await rcon('lifesteal finale stop'); await sleep(1000)
   check('stopping restores the border', Math.round(await border()), Math.round(before))
 
+  await rcon('lifesteal config blood-moon.fragment-chance 0.02')
+  await rcon('lifesteal config airdrops.golden-chance 0.1')
+  await rcon('lifesteal config airdrops.despawn-minutes 20')
   await rcon('lifesteal revive Bob 10'); await rcon('lifesteal revive Cara 10'); await rcon('deop Alice')
   const errors = require('child_process').execFileSync('python', ['-c',
     "import sys; print(sum(1 for l in open(sys.argv[1], encoding='utf8', errors='replace') if 'Could not pass event' in l or 'Heart change failed' in l or 'command failed' in l or 'generated an exception' in l))",

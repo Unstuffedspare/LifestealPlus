@@ -20,7 +20,7 @@ Everything is switchable and every message is editable. A typo in the config nev
 | Rising heart cap | The max hearts can rise week by week through a season. | `hearts.max-by-week` |
 | Purgatory | Eliminated players go to their own world and can win their way back. (What happens there is left for players to find out.) | `purgatory` |
 | Ban mode | Or ban eliminated players instead, for longer each time this season; they come back when it ends. | `eliminations.ban` |
-| Command hooks | Run your own console commands on eliminations, revivals, kills, streaks, bounties and new seasons: money, crate keys, a network ban. | `hooks.yml` |
+| Command hooks | Run your own console commands on eliminations, revivals, kills, streaks, bounties, server events and new seasons: money, crate keys, a rank for the finale winner, a network ban. | `hooks.yml` |
 | Rifts | Pay hearts to pull an eliminated friend straight back. | `rifts` |
 | Revival votes | Players chip in hearts together to bring someone back. | `revival-votes` |
 | Blood Pacts | Two players share kill rewards, and each other's deaths. | `blood-pacts` |
@@ -140,7 +140,7 @@ bounty-claimed:
   - "eco give {killer} 1000"
 ```
 
-The hooks are `elimination`, `revival`, `kill`, `streak` (by streak number), `streak-ended`, `bounty-claimed` and `season-reset`. The file lists each one's fill-ins. Put quotes around commands. Hooks are only set in this file, not in `/lifesteal settings`, so an admin who can change settings can't use them to run console commands. Apply changes with `/lifesteal reload`.
+The hooks are `elimination`, `revival`, `kill`, `streak` (by streak number), `streak-ended`, `bounty-claimed`, `season-reset`, `event-start` and `event-end` (by event: `blood-moon`, `double-hearts`, `heart-frenzy`, `cap-boost`, `king-of-the-hill`, `finale`), `airdrop-landed`, `airdrop-opened`, `koth-won` and `finale-won`. The file lists each one's fill-ins. Put quotes around commands. Hooks are only set in this file, not in `/lifesteal settings`, so an admin who can change settings can't use them to run console commands. Apply changes with `/lifesteal reload`.
 
 ### Menus
 

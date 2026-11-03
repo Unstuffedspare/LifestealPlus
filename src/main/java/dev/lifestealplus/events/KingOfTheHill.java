@@ -73,6 +73,7 @@ public final class KingOfTheHill implements Listener {
         });
         Msg.broadcast("koth.started", Msg.t("x", center.getBlockX()), Msg.t("y", center.getBlockY()),
                 Msg.t("z", center.getBlockZ()), Msg.t("time", Msg.duration(lasting)), Msg.t("hearts", settings().prizeHearts()));
+        plugin.hooks().eventStarted("king-of-the-hill", lasting);
         return true;
     }
 
@@ -81,6 +82,7 @@ public final class KingOfTheHill implements Listener {
         if (!isActive()) return false;
         clear();
         Msg.broadcast("koth.called-off");
+        plugin.hooks().eventEnded("king-of-the-hill");
         return true;
     }
 
@@ -136,6 +138,7 @@ public final class KingOfTheHill implements Listener {
         Map.Entry<UUID, Integer> winner = leader();
         int prize = settings().prizeHearts();
         clear();
+        plugin.hooks().eventEnded("king-of-the-hill");
         if (winner == null) {
             Msg.broadcast("koth.no-winner");
             return;
@@ -146,6 +149,7 @@ public final class KingOfTheHill implements Listener {
             tracker.track(hearts.apply(List.of(HeartRequest.add(winner.getKey(), prize, HeartCause.EVENT_PRIZE, "King of the Hill"))));
         }
         hearts.addNews(NewsItem.KOTH_WON, name, null, prize);
+        plugin.hooks().kothWon(name, winner.getKey(), winner.getValue(), prize);
     }
 
     @EventHandler

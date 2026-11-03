@@ -64,3 +64,37 @@ bounty-claimed: []
 # A season ended with /lifesteal season reset.
 #   {old} {season} (the new one) {winner} (most hearts at the end, or nobody)
 season-reset: []
+
+# A server event began, whether an admin started it or its schedule did. List the events you
+# want, each with its commands: blood-moon, double-hearts, heart-frenzy, cap-boost,
+# king-of-the-hill, finale.
+#   {event} {minutes} (how long it's set to last)
+# For example:
+#   event-start:
+#     blood-moon:
+#       - "discord broadcast The Blood Moon is up for {minutes} minutes"
+event-start: {}
+
+# A server event ended, on time or stopped early. The same events as event-start.
+#   {event}
+event-end: {}
+
+# An airdrop crate landed.
+#   {world} {x} {y} {z} {golden} (true for a golden crate)
+airdrop-landed: []
+
+# Someone was first to open an airdrop crate.
+#   {player} {uuid} {world} {x} {y} {z} {golden}
+airdrop-opened: []
+
+# Someone won King of the Hill.
+#   {player} {uuid} {seconds} (held alone) {hearts} (the prize)
+koth-won: []
+
+# Someone was the last one standing in the finale.
+#   {player} {uuid}
+# For example:
+#   finale-won:
+#     - "crate key give {player} legendary 1"
+#     - "lp user {player} parent add champion"
+finale-won: []

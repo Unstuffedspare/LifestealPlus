@@ -112,6 +112,7 @@ public final class TimedEvents implements Listener {
         if (announce) {
             Msg.broadcast(kind.key + ".started", Msg.t("time", Msg.duration(length)), Msg.t("n", settings(kind).amount()));
             plugin.getServer().getOnlinePlayers().forEach(p -> p.playSound(p, Sound.BLOCK_BEACON_ACTIVATE, 0.8f, 1.2f));
+            plugin.hooks().eventStarted(kind.key, length);
         }
         return true;
     }
@@ -126,6 +127,7 @@ public final class TimedEvents implements Listener {
         BossBar bar = bars.remove(kind);
         if (bar != null) plugin.getServer().getOnlinePlayers().forEach(p -> p.hideBossBar(bar));
         Msg.broadcast(kind.key + ".ended");
+        plugin.hooks().eventEnded(kind.key);
         return true;
     }
 
