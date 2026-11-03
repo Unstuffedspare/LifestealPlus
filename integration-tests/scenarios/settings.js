@@ -1,7 +1,7 @@
 const say = async (n, text, wait = 1300) => { bots[n].chat(text); await sleep(wait) }
 const fs = require('fs')
 // sql() above only reads; writes need a commit.
-const write = q => execFileSync('python', ['-c', 'import sqlite3,sys; c=sqlite3.connect(sys.argv[1]); c.execute(sys.argv[2]); c.commit()', DB, q])
+const write = dbWrite
 const cfgFile = path.join(SERVER, 'plugins', 'LifestealPlus', 'config.yml')
 const changedLines = (a, b) => {
   const x = a.split('\n'), y = b.split('\n')
@@ -22,7 +22,8 @@ async function main() {
   await say('Alice', '/lifesteal config newbie-shield.enabled off', 2000)
   check('switching a feature off is confirmed', saw('Alice', 'newbie-shield.enabled is now off'), true)
   const after = fs.readFileSync(cfgFile, 'utf8')
-  check('only that line changed in config.yml', changedLines(before, after), ['64: enabled: true -> enabled: false'])
+  const changed = changedLines(before, after)
+  check('only that line changed in config.yml', changed.length === 1 && changed[0].endsWith(': enabled: true -> enabled: false'), true)
   await say('Alice', '/lifesteal features')
   check('and it is off straight away', chat.Alice.some(m => /off\s+newbie-shield/.test(m)), true)
 

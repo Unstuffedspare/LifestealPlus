@@ -1,4 +1,4 @@
-const write = q => execFileSync('python', ['-c', 'import sqlite3,sys; c=sqlite3.connect(sys.argv[1]); c.execute(sys.argv[2]); c.commit()', DB, q])
+const write = dbWrite
 // A hit can bounce off during hurt-immunity frames, so keep trying until it lands.
 async function land(victim, attacker, amount = 1) {
   for (let i = 0; i < 20; i++) {

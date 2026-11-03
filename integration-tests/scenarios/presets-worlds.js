@@ -1,6 +1,6 @@
 const say = async (n, text, wait = 1300) => { bots[n].chat(text); await sleep(wait) }
 const fs = require('fs')
-const write = q => execFileSync('python', ['-c', 'import sqlite3,sys; c=sqlite3.connect(sys.argv[1]); c.execute(sys.argv[2]); c.commit()', DB, q])
+const write = dbWrite
 const cfgFile = path.join(SERVER, 'plugins', 'LifestealPlus', 'config.yml')
 const cfg = () => fs.readFileSync(cfgFile, 'utf8')
 const block = (name, next) => cfg().split(`\n${name}:`)[1].split(`\n${next}:`)[0]

@@ -1,6 +1,6 @@
 const say = async (n, text, wait = 1500) => { bots[n].chat(text); await sleep(wait) }
 const fs = require('fs')
-const write = q => execFileSync('python', ['-c', 'import sqlite3,sys; c=sqlite3.connect(sys.argv[1]); c.execute(sys.argv[2]); c.commit()', DB, q])
+const write = dbWrite
 const DATA = path.join(SERVER, 'plugins', 'LifestealPlus')
 const files = dir => fs.existsSync(path.join(DATA, dir)) ? fs.readdirSync(path.join(DATA, dir)) : []
 let win = null

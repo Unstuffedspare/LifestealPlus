@@ -33,9 +33,9 @@ async function rcon(cmd) {
   return lines.join('\n')
 }
 
-function rawRcon(cmd) {
+function rawRcon(cmd, port = RCON_PORT) {
   return new Promise((resolve, reject) => {
-    const s = net.connect(RCON_PORT, '127.0.0.1')
+    const s = net.connect(port, '127.0.0.1')
     const pkt = (id, type, body) => {
       const b = Buffer.from(body, 'utf8')
       const buf = Buffer.alloc(14 + b.length)
@@ -58,10 +58,31 @@ function rawRcon(cmd) {
   })
 }
 
+// With LIFESTEAL_MYSQL=<mariadb or mysql client>|<user>|<password>|<host>|<port>|<database>, the
+// checks read and write that database (the plugin running with database.type: mysql) instead.
+const MYSQL = process.env.LIFESTEAL_MYSQL ? process.env.LIFESTEAL_MYSQL.split('|') : null
+function mysql(query) {
+  const [client, user, password, host, port, database] = MYSQL
+  // The same column names the plugin quotes for MySQL.
+  const q = query.replace(/(?<![`\w.])(key|rank|until|value)(?![`\w(])/g, '`$1`')
+  return execFileSync(client, [`-u${user}`, `-p${password}`, `-h${host}`, `-P${port}`, '-N', '-B', database, '-e', q]).toString()
+}
+
 function sql(query) {
-  return execFileSync('python', ['-c',
-    'import sqlite3,sys,json; c=sqlite3.connect(sys.argv[1]); print(json.dumps(c.execute(sys.argv[2]).fetchall()))',
-    DB, query]).toString().trim()
+  if (!MYSQL) {
+    return execFileSync('python', ['-c',
+      'import sqlite3,sys,json; c=sqlite3.connect(sys.argv[1]); print(json.dumps(c.execute(sys.argv[2]).fetchall()))',
+      DB, query]).toString().trim()
+  }
+  const rows = mysql(query).split(/\r?\n/).filter(line => line.length > 0)
+  return JSON.stringify(rows.map(line => line.split('\t').map(cell =>
+    cell === 'NULL' ? null : /^-?\d+(\.\d+)?$/.test(cell) ? Number(cell) : cell)))
+}
+
+/** Changes the plugin's database directly (setting up a scenario). */
+function dbWrite(query) {
+  if (MYSQL) return mysql(query)
+  return execFileSync('python', ['-c', 'import sqlite3,sys; c=sqlite3.connect(sys.argv[1]); c.execute(sys.argv[2]); c.commit()', DB, query])
 }
 const hearts = name => JSON.parse(sql(`SELECT hearts FROM players WHERE name='${name}'`))[0]?.[0]
 const lastLedger = name => JSON.parse(sql(
@@ -99,10 +120,10 @@ const leave = async bot => { bot.quit(); await sleep(1500) }
 const chat = { Alice: [], Bob: [], Cara: [] }
 const bots = {}
 // Listen from the very start: some messages arrive the moment a player joins.
-async function enter(n) {
+async function enter(n, port = GAME_PORT) {
   if (!chat[n]) chat[n] = []
   bots[n] = await new Promise((resolve, reject) => {
-    const bot = mineflayer.createBot({ host: '127.0.0.1', port: GAME_PORT, username: n, version: '26.1', auth: 'offline', physicsEnabled: false })
+    const bot = mineflayer.createBot({ host: '127.0.0.1', port, username: n, version: '26.1', auth: 'offline', physicsEnabled: false })
     const write = bot._client.write.bind(bot._client)
     bot._client.write = (name, params) => /^(position|position_look|look|flying)$/.test(name) ? undefined : write(name, params)
     bot.on('messagestr', m => chat[n].push(m))
@@ -115,6 +136,6 @@ async function enter(n) {
 async function logOut(n) { bots[n].quit(); await sleep(1200) }
 const saw = (n, text) => chat[n].some(m => m.includes(text))
 const bodies = async () => Number(((await rcon('execute if entity @e[type=minecraft:mannequin]')).match(/count: (\d+)/i) || [0, 0])[1])
-const count = async (name, item) => Number(((await rcon(`clear ${name} ${item} 0`)).match(/Found (\d+)/) || [0, 0])[1])
+const count = async (name, item) => Number(((await rcon(`minecraft:clear ${name} ${item} 0`)).match(/Found (\d+)/) || [0, 0])[1])
 const hit = (victim, attacker) => rcon(`damage ${victim} 1 minecraft:player_attack by ${attacker}`)
 

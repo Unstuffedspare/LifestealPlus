@@ -1,6 +1,6 @@
 const fs = require('fs')
 // sql() above only reads; writes need a commit.
-const write = q => execFileSync('python', ['-c', 'import sqlite3,sys; c=sqlite3.connect(sys.argv[1]); c.execute(sys.argv[2]); c.commit()', DB, q])
+const write = dbWrite
 const say = async (n, text, wait = 1300) => { bots[n].chat(text); await sleep(wait) }
 async function pvpKill(victim, killer) {
   for (let i = 0; i < 8; i++) {
@@ -14,9 +14,14 @@ const streakRow = n => JSON.parse(sql(`SELECT streak, best_streak FROM players W
 const anyone = text => Object.values(chat).some(lines => lines.some(m => m.includes(text)))
 
 async function main() {
+  // Dora only needs to exist (she stays offline): join once if she never has.
+  if (hearts('Dora') === undefined) { await enter('Dora'); await logOut('Dora') }
   await rcon('lifesteal set Dora 5'); await sleep(1000)
   write("UPDATE players SET streak = 0, best_streak = 0, last_left = NULL")
+  // Other scenarios' news would crowd the recap.
   write("DELETE FROM news")
+  // A recap of 5 lines, whatever an earlier run left it at.
+  await rcon('lifesteal config recap.lines 5')
   for (const n of ['Alice', 'Bob', 'Cara']) {
     await enter(n)
     await rcon(`gamemode survival ${n}`); await rcon(`lifesteal set ${n} 10`)

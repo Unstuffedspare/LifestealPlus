@@ -1,6 +1,6 @@
 // The paths that matter most on Folia, checked only with what works there: the database and
 // "execute if entity" (Folia doesn't let players use /data). Run with LIFESTEAL_FOLIA=1.
-const write = q => execFileSync('python', ['-c', 'import sqlite3,sys; c=sqlite3.connect(sys.argv[1]); c.execute(sys.argv[2]); c.commit()', DB, q])
+const write = dbWrite
 const is = async selector => /passed/i.test(await rcon(`execute if entity ${selector}`))
 async function land(victim, attacker, amount) {
   let reply = ''

@@ -734,6 +734,40 @@ update:
   # To admins when they join. <version>, <current>, <url>
   available: "<gold>LifestealPlus <version> is out</gold> <gray>(you have <current>).</gray> <click:open_url:'<url>'><aqua><u>[What's new]</u></aqua></click>"
 
+# ---- /lifesteal help ---------------------------------------------------------
+help:
+  header: "<gold>━━ LifestealPlus ━━</gold> <gray>(click a command to type it)"
+  admin-header: "<gold>Admin</gold>"
+  # <command>, <typed>, <description>
+  line: "<click:suggest_command:'<typed>'><yellow><command></yellow></click> <gray>- <description>"
+  hearts: "your hearts, or someone else's"
+  stats: "kills, deaths and hearts won this season, or a past one"
+  leaderboard: "most hearts this season, or a past season's winners"
+  news: "what's happened lately"
+  streak: "kills in a row"
+  bounty: "put your hearts on someone's head, or see the bounties"
+  vengeance: "who you can take your heart back from"
+  shield: "how long your new-player shield lasts"
+  withdraw: "turn hearts into Heart items"
+  giveheart: "give some of your hearts to a friend"
+  heartshop: "buy Hearts with money"
+  pact: "share kills, and deaths, with a partner"
+  rift: "pay hearts to bring an eliminated player back"
+  pledge: "chip in hearts to bring someone back"
+  purgatory: "your way back from elimination"
+  ghost: "roam as a spectator while eliminated"
+  whisper: "one message to the living while eliminated"
+  settings: "change any setting in a menu"
+  dashboard: "the server at a glance"
+  change-hearts: "change someone's hearts"
+  revive: "bring an eliminated player back"
+  ledger: "every heart change for a player"
+  events: "Blood Moons, airdrops and other events"
+  season: "see or end the season"
+  audit: "every admin action"
+  backup: "backups of the heart database"
+  reload: "apply changes made in config.yml or messages.yml"
+
 # ---- /stats -----------------------------------------------------------------
 stats:
   # <player>, <season>

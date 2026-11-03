@@ -116,7 +116,7 @@ Some things worth deciding before a season starts:
 - `revival.cooldown-minutes` (10) and `revival.extra-cost-per-elimination` (1): a fresh elimination can't be undone by a rift, pledge or Revival Charm straight away, and each earlier elimination this season makes the next comeback dearer.
 - `rewards.advancements`: the advancements that pay Heart Fragments, and how many. Add any advancement by its id; set one to 0 to give nothing.
 - `trading.tax-percent` and `heart-items.withdraw.tax-percent` (both 0): a share of every gift or withdrawal that's lost, to slow hearts moving around.
-- `heart-shop`: off until you switch it on. Needs Vault and an economy plugin. `daily-limit` (2) stops money buying a season.
+- `heart-shop`: off until you switch it on. Needs Vault (or VaultUnlocked) and an economy plugin such as EssentialsX. `daily-limit` (2) stops money buying a season, and what each player bought today is saved, so a restart doesn't reset it.
 - `eliminations`: everyone sees a title and hears a sound when someone loses their last heart. The chat message differs for a kill, a death to the world and an admin, and each is in `messages.yml`.
 - `combat-items`: switch off totems (`totems`), crystal PvP (`end-crystals`; crystals still break blocks and respawn the dragon) or bed and respawn-anchor bombing (`bed-and-anchor-explosions`).
 - Personal caps: give a player the permission `lifestealplus.max-hearts.<n>` (for example `lifestealplus.max-hearts.30`, with a permissions plugin such as LuckPerms) and their cap is n instead of `hearts.max`. The highest one counts, it's picked up within a minute, and losing it never takes hearts away.
@@ -144,6 +144,10 @@ Every message players see is in `plugins/LifestealPlus/messages.yml`.
 
 ## Commands
 
+**`/lifesteal` on its own (or `/lifesteal help`) lists the commands**, for everyone. Each player sees only what they can use and what's switched on, and admins also see their tools.
+
+Every command also shows up a second time with `lifestealplus:` in front (`/lifestealplus:lifesteal`). The server does that for every plugin, so two plugins with the same command name can't clash. To hide those from players' tab-completion, set `send-namespaced: false` under `commands:` in `spigot.yml`.
+
 ### Players
 
 | Command | What it does | Permission |
@@ -169,7 +173,7 @@ Every message players see is in `plugins/LifestealPlus/messages.yml`.
 
 Every player permission is allowed by default. Take one away with your permissions plugin to block that command for a group.
 
-### Admins (`/lifesteal`, or `/lsp`; permission `lifestealplus.admin`, ops by default)
+### Admins (`/lifesteal`, or `/lsp` for short; permission `lifestealplus.admin`, ops by default)
 
 | Command | What it does |
 |---|---|

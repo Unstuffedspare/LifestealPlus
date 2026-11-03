@@ -1,5 +1,5 @@
 const say = async (n, text, wait = 1500) => { bots[n].chat(text); await sleep(wait) }
-const write = q => execFileSync('python', ['-c', 'import sqlite3,sys; c=sqlite3.connect(sys.argv[1]); c.execute(sys.argv[2]); c.commit()', DB, q])
+const write = dbWrite
 async function pvpKill(victim, killer) {
   for (let i = 0; i < 20; i++) { if ((await rcon(`damage ${victim} 1000 minecraft:player_attack by ${killer}`)).includes('Applied')) return; await sleep(500) }
   throw new Error(`couldn't kill ${victim}`)

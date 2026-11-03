@@ -1,6 +1,6 @@
 const say = async (n, text, wait = 1300) => { bots[n].chat(text); await sleep(wait) }
 const http = require('http')
-const write = q => execFileSync('python', ['-c', 'import sqlite3,sys; c=sqlite3.connect(sys.argv[1]); c.execute(sys.argv[2]); c.commit()', DB, q])
+const write = dbWrite
 const health = async n => Number(((await rcon(`data get entity ${n} Health`)).match(/([\d.]+)f\s*$/) || [0, -1])[1])
 async function hurt(cmd) {
   for (let i = 0; i < 20; i++) { const out = await rcon(cmd); if (!out.includes('invulnerable')) return out; await sleep(500) }

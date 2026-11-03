@@ -1,6 +1,6 @@
 // Rank perks and admin permission groups, given out with LuckPerms (install it on the test server).
 const say = async (n, text, wait = 1500) => { bots[n].chat(text); await sleep(wait) }
-const write = q => execFileSync('python', ['-c', 'import sqlite3,sys; c=sqlite3.connect(sys.argv[1]); c.execute(sys.argv[2]); c.commit()', DB, q])
+const write = dbWrite
 const lp = cmd => rcon('lp ' + cmd)
 // LuckPerms only knows players by name once they've joined with it installed, so use their (offline-mode) UUIDs.
 function uuid(name) {

@@ -1,6 +1,6 @@
 const say = async (n, text, wait = 1300) => { bots[n].chat(text); await sleep(wait) }
 const fs = require('fs')
-const write = q => execFileSync('python', ['-c', 'import sqlite3,sys; c=sqlite3.connect(sys.argv[1]); c.execute(sys.argv[2]); c.commit()', DB, q])
+const write = dbWrite
 const near = async (x, y, z, r = 3) => Number(((await rcon(`execute if entity @e[type=minecraft:item,x=${x},y=${y},z=${z},distance=..${r}]`)).match(/count: (\d+)/i) || [0, 0])[1])
 const itemData = (x, y, z, r, path) => rcon(`data get entity @e[type=minecraft:item,x=${x},y=${y},z=${z},distance=..${r},limit=1] ${path}`)
 

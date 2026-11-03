@@ -1,5 +1,5 @@
 const say = async (n, text, wait = 1500) => { bots[n].chat(text); await sleep(wait) }
-const write = q => execFileSync('python', ['-c', 'import sqlite3,sys; c=sqlite3.connect(sys.argv[1]); c.execute(sys.argv[2]); c.commit()', DB, q])
+const write = dbWrite
 const openOn = name => JSON.parse(sql(`SELECT COALESCE(SUM(b.hearts),0) FROM bounties b JOIN players p ON p.uuid=b.target WHERE p.name='${name}' AND b.closed_at IS NULL`))[0][0]
 
 async function main() {

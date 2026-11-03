@@ -57,6 +57,7 @@ final class LifestealCommands {
     private final SettingsMenu settingsMenu;
     private final PersonalCaps caps;
     private final Dashboard dashboard;
+    private final HelpCommand help;
     /** More /lifesteal subcommands (audit, backup, export). */
     private final List<com.mojang.brigadier.builder.LiteralArgumentBuilder<CommandSourceStack>> moreAdmin;
     /** Whether a player is in a fight right now: combat-tagged, or logged out with their body still standing. */
@@ -65,7 +66,9 @@ final class LifestealCommands {
     LifestealCommands(LifestealPlugin plugin, HeartService hearts, HeartTracker tracker, MostWanted mostWanted,
                       NewbieShield shield, EventCommands events, AdminCommands admin, FeaturesCommand features,
                       ImportCommand importer, SettingsMenu settingsMenu, PersonalCaps caps, Predicate<UUID> inFight,
-                      Dashboard dashboard, List<com.mojang.brigadier.builder.LiteralArgumentBuilder<CommandSourceStack>> moreAdmin) {
+                      Dashboard dashboard, List<com.mojang.brigadier.builder.LiteralArgumentBuilder<CommandSourceStack>> moreAdmin,
+                      HelpCommand help) {
+        this.help = help;
         this.dashboard = dashboard;
         this.moreAdmin = moreAdmin;
         this.caps = caps;
@@ -84,7 +87,7 @@ final class LifestealCommands {
 
     void register(Commands commands) {
         commands.register(heartsCommand(), "Show how many hearts you or another player have");
-        commands.register(adminCommand(), "Lifesteal admin tools", List.of("lsp"));
+        commands.register(adminCommand(), "LifestealPlus: /lifesteal on its own lists the commands", List.of("lsp"));
         commands.register(bountyCommand(), "Stake your hearts on another player's head");
         commands.register(vengeanceCommand(), "See who you can take vengeance on, and who can on you");
         commands.register(shieldCommand(), "See how long your new-player shield lasts");
@@ -279,11 +282,15 @@ final class LifestealCommands {
                 .build();
     }
 
-    /** /lifesteal, with each part needing its own permission (see AdminPermissions). */
+    /**
+     * /lifesteal: on its own (or /lifesteal help) the help, for everyone; every other part
+     * needs its own permission (see AdminPermissions).
+     */
     private LiteralCommandNode<CommandSourceStack> adminCommand() {
         var root = adminRoot();
         moreAdmin.forEach(root::then);
-        var gated = Commands.literal("lifesteal").requires(src -> AdminPermissions.any(src.getSender()));
+        var gated = Commands.literal("lifesteal").executes(ctx -> help.show(ctx.getSource().getSender()));
+        gated.then(help.node());
         for (com.mojang.brigadier.tree.CommandNode<CommandSourceStack> part : root.getArguments()) {
             String permission = AdminPermissions.forSubcommand(part.getName());
             var builder = part.createBuilder().requires(src -> src.getSender().hasPermission(permission));

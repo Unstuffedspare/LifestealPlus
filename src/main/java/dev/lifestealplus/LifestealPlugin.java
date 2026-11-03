@@ -188,7 +188,8 @@ public final class LifestealPlugin extends JavaPlugin {
                     Player player = getServer().getPlayer(id);
                     return player != null && tagger.isTagged(player) || bodies.hasBody(id);
                 }, new Dashboard(this, hearts, tracker, bloodMoon, airdrops, finale),
-                List.of(audit.node(), backups.backupNode(), backups.exportNode()));
+                List.of(audit.node(), backups.backupNode(), backups.exportNode()),
+                new HelpCommand(this, settings.purgatory().enabled() && !Tasks.folia()));
         if (settings.purgatory().enabled() && Tasks.folia()) {
             getLogger().warning("Purgatory needs its own world, and Folia can't create worlds while running; eliminated players spectate instead.");
         }
@@ -196,7 +197,7 @@ public final class LifestealPlugin extends JavaPlugin {
         capSchedule = new CapSchedule(this, hearts);
         SocialCommands social = new SocialCommands(this, hearts, tracker, heartItems, finale, purgatory);
         news = new NewsFeed(this, hearts, tracker);
-        HeartShop shop = new HeartShop(this, heartItems,
+        HeartShop shop = new HeartShop(this, hearts, heartItems,
                 () -> getServer().getPluginManager().isPluginEnabled("Vault") ? VaultWallet.find(this) : null);
         getServer().getPluginManager().registerEvents(news, this);
         getServer().getPluginManager().registerEvents(new GhostChat(this, tracker), this);

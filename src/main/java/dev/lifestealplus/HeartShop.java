@@ -34,13 +34,16 @@ final class HeartShop {
     }
 
     private final LifestealPlugin plugin;
+    private final dev.lifestealplus.core.HeartService hearts;
     private final HeartItems items;
     /** Looked up each time: the economy plugin may enable after this one. Gives null without one. */
     private final java.util.function.Supplier<Wallet> wallets;
     private final Map<UUID, Bought> today = new ConcurrentHashMap<>();
 
-    HeartShop(LifestealPlugin plugin, HeartItems items, java.util.function.Supplier<Wallet> wallets) {
+    HeartShop(LifestealPlugin plugin, dev.lifestealplus.core.HeartService hearts, HeartItems items,
+              java.util.function.Supplier<Wallet> wallets) {
         this.plugin = plugin;
+        this.hearts = hearts;
         this.items = items;
         this.wallets = wallets;
     }
@@ -104,6 +107,36 @@ final class HeartShop {
             Msg.send(player, "shop.not-sold", Msg.t("item", name));
             return 0;
         }
+        Bought cached = today.get(player.getUniqueId());
+        if (cached != null && cached.day().equals(LocalDate.now())) {
+            buyNow(player, wallet, name, make, price, amount);
+        } else {
+            // What they bought earlier today is saved, so a restart doesn't reset the daily limit.
+            hearts.state(boughtKey(player.getUniqueId())).thenAccept(saved -> plugin.tasks().forEntity(player, () -> {
+                today.put(player.getUniqueId(), parseBought(saved.orElse(null)));
+                buyNow(player, wallet, name, make, price, amount);
+            }));
+        }
+        return Command.SINGLE_SUCCESS;
+    }
+
+    private static String boughtKey(UUID player) {
+        return "heartshop.bought." + player;
+    }
+
+    /** "2026-11-03,2": today's count, or nothing bought if it was another day. */
+    private static Bought parseBought(String saved) {
+        LocalDate day = LocalDate.now();
+        if (saved == null) return new Bought(day, 0);
+        String[] parts = saved.split(",");
+        try {
+            return LocalDate.parse(parts[0]).equals(day) ? new Bought(day, Integer.parseInt(parts[1])) : new Bought(day, 0);
+        } catch (RuntimeException e) {
+            return new Bought(day, 0);
+        }
+    }
+
+    private void buyNow(Player player, Wallet wallet, String name, IntFunction<ItemStack> make, double price, int amount) {
         // A rank's lifestealplus.shop-limit.<n> replaces the daily limit for its players.
         int ranked = PersonalCaps.highest(player, "lifestealplus.shop-limit.");
         int limit = ranked > 0 ? ranked : shop().dailyLimit();
@@ -112,18 +145,18 @@ final class HeartShop {
         int already = bought != null && bought.day().equals(day) ? bought.count() : 0;
         if (limit > 0 && already + amount > limit) {
             Msg.send(player, "shop.over-limit", Msg.t("n", limit), Msg.t("left", Math.max(0, limit - already)));
-            return 0;
+            return;
         }
         double total = price * amount;
         if (!wallet.charge(player, total)) {
             Msg.send(player, "shop.too-poor", Msg.t("price", wallet.format(total)));
-            return 0;
+            return;
         }
         today.put(player.getUniqueId(), new Bought(day, already + amount));
+        hearts.putState(boughtKey(player.getUniqueId()), day + "," + (already + amount));
         player.getInventory().addItem(make.apply(amount)).values()
                 .forEach(left -> player.getWorld().dropItem(player.getLocation(), left));
         Msg.send(player, "shop.bought", Msg.t("n", amount), Msg.t("item", name), Msg.t("price", wallet.format(total)));
         plugin.getLogger().info(player.getName() + " bought " + amount + " " + name + " for " + wallet.format(total) + ".");
-        return Command.SINGLE_SUCCESS;
     }
 }
