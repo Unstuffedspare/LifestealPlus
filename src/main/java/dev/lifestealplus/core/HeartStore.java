@@ -1157,6 +1157,46 @@ public final class HeartStore implements AutoCloseable {
         });
     }
 
+    /**
+     * Takes back the placer's own unclaimed bounties on {@code target} placed within the last
+     * {@code window}, refunded in full. Older ones stay where they are.
+     */
+    public BountyUndo undoBounty(UUID placer, UUID target, Duration window, HeartRules rules) throws SQLException {
+        return inTransaction(() -> {
+            PlayerHearts from = require(placer);
+            PlayerHearts on = require(target);
+            if (from.eliminated()) throw new BountyException("You can't take back a bounty while you're eliminated.");
+            long now = clock.millis();
+            List<long[]> mine = new ArrayList<>();
+            try (PreparedStatement ps = conn.prepareStatement("""
+                    SELECT id, hearts, placed_at FROM bounties
+                    WHERE target = ? AND placer = ? AND closed_at IS NULL ORDER BY id""")) {
+                ps.setString(1, target.toString());
+                ps.setString(2, placer.toString());
+                try (ResultSet rs = ps.executeQuery()) {
+                    while (rs.next()) mine.add(new long[] {rs.getLong(1), rs.getInt(2), rs.getLong(3)});
+                }
+            }
+            if (mine.isEmpty()) throw new BountyException("You don't have a bounty on " + on.name() + ".");
+            List<long[]> recent = mine.stream().filter(row -> row[2] >= now - window.toMillis()).toList();
+            if (recent.isEmpty()) {
+                throw new BountyException("A bounty can only be taken back in the first " + window.toMinutes()
+                        + " minute(s) after placing it.");
+            }
+            int refund = recent.stream().mapToInt(row -> (int) row[1]).sum();
+            int cap = personalRules(placer, rules).maxHearts();
+            if (from.hearts() + refund > cap) {
+                throw new BountyException("Taking it back would put you over the cap of " + cap + " hearts.");
+            }
+            HeartChange back = applyOne(HeartRequest.add(placer, refund, HeartCause.BOUNTY_REFUND, from.name())
+                    .withOther(target, on.name()).withNote("taken back"), rules, nextEventId(), now);
+            for (long[] row : recent) closeBounty(row[0], placer.toString(), "taken back", now);
+            int total = bountyOn(target);
+            news(now, total == 0 ? NewsItem.BOUNTY_WITHDRAWN : NewsItem.BOUNTY_CUT, on.name(), null, total);
+            return new BountyUndo(back, refund, total);
+        });
+    }
+
     /** Pays the killer every open bounty on the victim, as far as the cap allows; the rest stays open. */
     private BountyClaim claimBounties(UUID victim, String victimName, UUID killer, HeartRules rules, long eventId, long now)
             throws SQLException {

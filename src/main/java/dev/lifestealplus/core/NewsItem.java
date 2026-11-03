@@ -15,6 +15,8 @@ public record NewsItem(Instant at, String kind, String player, String other, int
     public static final String STREAK = "streak";
     public static final String STREAK_ENDED = "streak-ended";
     public static final String BOUNTY = "bounty";
+    public static final String BOUNTY_CUT = "bounty-cut";
+    public static final String BOUNTY_WITHDRAWN = "bounty-withdrawn";
     public static final String BLOOD_MOON = "blood-moon";
     public static final String AIRDROP = "airdrop";
     public static final String FINALE = "finale";

@@ -68,6 +68,10 @@ bounties:
   enabled: true
   # Announce new bounties without naming who placed them (admins can still check the ledger).
   anonymous: true
+  # /bounty undo <player>: take back your own bounty, refunded in full, within this many
+  # minutes of placing it. Not while the target is in a fight, and everyone sees the bounty
+  # shrink. 0 = bounties can't be taken back.
+  undo-minutes: 5
 
 streaks:
   # Kills that take a heart, in a row, without dying. Long streaks are announced, and

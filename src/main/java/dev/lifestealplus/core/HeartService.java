@@ -213,6 +213,10 @@ public final class HeartService implements AutoCloseable {
         return submit(() -> store.placeBounty(placer, target, hearts, rules()));
     }
 
+    public CompletableFuture<BountyUndo> undoBounty(UUID placer, UUID target, java.time.Duration window) {
+        return submit(() -> store.undoBounty(placer, target, window, rules()));
+    }
+
     public CompletableFuture<List<HeartChange>> clearBounties(UUID target, String actor) {
         return submit(() -> store.clearBounties(target, actor, rules()));
     }

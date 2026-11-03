@@ -140,4 +140,57 @@ class BountyTest {
         assertEquals(0, store.bountyOn(BOB));
         assertEquals(HeartCause.BOUNTY_REFUND, store.ledger(CARA, 1, 0).getFirst().cause());
     }
+
+    private static final Duration UNDO = Duration.ofMinutes(5);
+
+    @Test
+    void aFreshBountyCanBeTakenBackInFull() throws SQLException {
+        store.placeBounty(ALICE, BOB, 3, RULES);
+        clock.advance(Duration.ofMinutes(4));
+        BountyUndo undone = store.undoBounty(ALICE, BOB, UNDO, RULES);
+        assertEquals(3, undone.hearts());
+        assertEquals(0, undone.totalOnTarget());
+        assertEquals(10, hearts(ALICE));
+        assertEquals(0, store.bountyOn(BOB));
+        assertEquals(HeartCause.BOUNTY_REFUND, store.ledger(ALICE, 1, 0).getFirst().cause());
+        assertEquals(NewsItem.BOUNTY_WITHDRAWN, store.latestNews(1).getFirst().kind());
+    }
+
+    @Test
+    void onlyTheRecentOnesComeBack() throws SQLException {
+        store.placeBounty(ALICE, BOB, 2, RULES);
+        clock.advance(Duration.ofMinutes(10));
+        store.placeBounty(ALICE, BOB, 1, RULES);
+        store.placeBounty(CARA, BOB, 4, RULES);
+        BountyUndo undone = store.undoBounty(ALICE, BOB, UNDO, RULES);
+        assertEquals(1, undone.hearts());
+        assertEquals(6, undone.totalOnTarget(), "Alice's older 2 and Cara's 4 stay");
+        assertEquals(8, hearts(ALICE));
+        assertEquals(NewsItem.BOUNTY_CUT, store.latestNews(1).getFirst().kind());
+    }
+
+    @Test
+    void oldOrMissingBountiesCantBeTakenBack() throws SQLException {
+        assertThrows(BountyException.class, () -> store.undoBounty(ALICE, BOB, UNDO, RULES));
+        store.placeBounty(ALICE, BOB, 2, RULES);
+        assertThrows(BountyException.class, () -> store.undoBounty(CARA, BOB, UNDO, RULES), "only the placer's own");
+        clock.advance(Duration.ofMinutes(6));
+        assertThrows(BountyException.class, () -> store.undoBounty(ALICE, BOB, UNDO, RULES));
+        assertEquals(2, store.bountyOn(BOB));
+    }
+
+    @Test
+    void aClaimedBountyIsGone() throws SQLException {
+        store.placeBounty(ALICE, BOB, 2, RULES);
+        store.kill(BOB, CARA, RULES);
+        assertThrows(BountyException.class, () -> store.undoBounty(ALICE, BOB, UNDO, RULES));
+    }
+
+    @Test
+    void aRefundThatWouldPassTheCapIsRefused() throws SQLException {
+        store.placeBounty(ALICE, BOB, 3, RULES);
+        store.apply(List.of(HeartRequest.set(ALICE, 19, HeartCause.ADMIN_SET, "op")), RULES);
+        assertThrows(BountyException.class, () -> store.undoBounty(ALICE, BOB, UNDO, RULES));
+        assertEquals(3, store.bountyOn(BOB), "the bounty stays rather than losing hearts to the cap");
+    }
 }

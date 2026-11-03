@@ -101,6 +101,7 @@ Some things worth deciding before a season starts:
 - `newbie-shield.hours`: on a fresh season every player is new, so everyone starts shielded for these hours. That works as an opening grace period. Turn it off if you want PvP straight away.
 - `newbie-shield.expires-after-days` (3): the shield also ends this many days after a player first joins, however little they've played, so nobody keeps it forever.
 - `hearts.max-by-week`, e.g. `[15, 20, 25]`, makes the cap rise through the season. Leave it empty for a fixed cap.
+- `bounties.undo-minutes` (5): how long after placing a bounty you can take it back with `/bounty undo`, refunded in full. Not while the target is in a fight, and everyone sees the bounty shrink. 0 turns undo off.
 - `combat-items`: switch off totems (`totems`), crystal PvP (`end-crystals`; crystals still break blocks and respawn the dragon) or bed and respawn-anchor bombing (`bed-and-anchor-explosions`).
 - Personal caps: give a player the permission `lifestealplus.max-hearts.<n>` (for example `lifestealplus.max-hearts.30`, with a permissions plugin such as LuckPerms) and their cap is n instead of `hearts.max`. The highest one counts, it's picked up within a minute, and losing it never takes hearts away.
 - `discord.webhook-url`: paste a Discord channel's webhook link (channel settings > Integrations > Webhooks) and the server's news (eliminations, comebacks, long streaks, bounties, events) is posted there within seconds. `none` turns it off.
@@ -128,7 +129,7 @@ Every message players see is in `plugins/LifestealPlus/messages.yml`.
 | `/streak [player]` | Kills in a row right now, and the best this season | `lifestealplus.streak` |
 | `/news` | The latest eliminations, comebacks, streaks, bounties and events | `lifestealplus.news` |
 | `/vengeance` | Who you can take vengeance on, and who can on you | `lifestealplus.vengeance` |
-| `/bounty [list]`, `/bounty check <player>`, `/bounty place <player> <hearts>` | See and place bounties | `lifestealplus.bounty` |
+| `/bounty [list]`, `/bounty check <player>`, `/bounty place <player> <hearts>`, `/bounty undo <player>` | See, place and take back bounties | `lifestealplus.bounty` |
 | `/withdraw [hearts]` | Turn your hearts into Heart items | `lifestealplus.withdraw` |
 | `/rift <player>`, then `/rift confirm` | Pay hearts to bring an eliminated player back | `lifestealplus.rift` |
 | `/pledge <player> <hearts>`, `/pledge cancel <player>`, `/pledge list` | Chip in toward reviving someone | `lifestealplus.pledge` |

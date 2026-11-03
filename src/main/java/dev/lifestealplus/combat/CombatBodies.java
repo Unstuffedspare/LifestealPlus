@@ -165,6 +165,11 @@ public final class CombatBodies implements Listener {
     }
 
     /** On disable: bodies vanish without anyone dying. */
+    /** Whether the player is logged out with their body still standing in for them. */
+    public boolean hasBody(UUID owner) {
+        return byOwner.containsKey(owner);
+    }
+
     public void shutdown() {
         byOwner.values().forEach(body -> {
             body.expiry().cancel();

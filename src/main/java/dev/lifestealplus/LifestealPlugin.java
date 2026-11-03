@@ -32,6 +32,7 @@ import java.util.logging.Level;
 import org.bukkit.configuration.Configuration;
 import org.bukkit.configuration.file.FileConfiguration;
 import org.bukkit.Material;
+import org.bukkit.entity.Player;
 import org.bukkit.configuration.file.YamlConfiguration;
 import org.bukkit.plugin.java.JavaPlugin;
 
@@ -116,7 +117,10 @@ public final class LifestealPlugin extends JavaPlugin {
         getServer().getPluginManager().registerEvents(settingsMenu, this);
         LifestealCommands commands = new LifestealCommands(this, hearts, tracker, mostWanted, shield,
                 new EventCommands(this, heartItems, bloodMoon, airdrops, finale), admin, new FeaturesCommand(this),
-                new ImportCommand(this, hearts, tracker), settingsMenu, caps);
+                new ImportCommand(this, hearts, tracker), settingsMenu, caps, id -> {
+                    Player player = getServer().getPlayer(id);
+                    return player != null && tagger.isTagged(player) || bodies.hasBody(id);
+                });
         PurgatoryCommands purgatoryCommands = settings.purgatory().enabled() ? startPurgatory(tracker) : null;
         capSchedule = new CapSchedule(this, hearts);
         SocialCommands social = new SocialCommands(this, hearts, tracker, heartItems, finale, purgatory);

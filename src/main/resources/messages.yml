@@ -111,6 +111,15 @@ bounty:
   # <hearts>, <player>
   list-line: " <gold><hearts>❤</gold> <white><player>"
   list-empty: "<gray>No bounties right now. Place one with /bounty place <player> <hearts>."
+  # Told to everyone when a bounty is taken back (the placer stays unnamed). <target>, <total>
+  cut: "<gold>💰 The bounty on <target> dropped to <total> hearts."
+  # <target>
+  withdrawn: "<gold>💰 The bounty on <target> was taken back."
+  # To the placer. <hearts>, <now>
+  undone-you: "<gray>You took back <hearts> heart(s) of bounty. You have <now> hearts."
+  # <player>
+  undo-in-fight: "<red><player> is in a fight right now, so the bounty stays. Try again once it's over."
+  undo-off: "<gray>Bounties can't be taken back on this server."
 
 # ---- Newbie shield ---------------------------------------------------------
 shield:
@@ -602,6 +611,8 @@ news:
   streak-ended: "<white><other></white> <gray>ended</gray> <gold><player></gold><gray>'s <n>-kill streak."
   # <player>, <n>
   bounty: "<gray>A bounty went up on</gray> <white><player></white> <gray>(<n> hearts in total)."
+  bounty-cut: "<gray>The bounty on</gray> <white><player></white> <gray>dropped to <n> hearts."
+  bounty-withdrawn: "<gray>The bounty on</gray> <white><player></white> <gray>was taken back."
   # <n> (the kill multiplier)
   blood-moon: "<dark_red>A Blood Moon rose."
   # <player>

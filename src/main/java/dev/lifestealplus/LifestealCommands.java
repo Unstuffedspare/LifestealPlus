@@ -25,9 +25,11 @@ import java.time.Instant;
 import java.time.ZoneId;
 import java.time.format.DateTimeFormatter;
 import java.util.List;
+import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionException;
 import java.util.function.Consumer;
+import java.util.function.Predicate;
 import java.util.logging.Level;
 import net.kyori.adventure.text.Component;
 import net.kyori.adventure.text.minimessage.tag.resolver.TagResolver;
@@ -54,11 +56,14 @@ final class LifestealCommands {
     private final ImportCommand importer;
     private final SettingsMenu settingsMenu;
     private final PersonalCaps caps;
+    /** Whether a player is in a fight right now: combat-tagged, or logged out with their body still standing. */
+    private final Predicate<UUID> inFight;
 
     LifestealCommands(LifestealPlugin plugin, HeartService hearts, HeartTracker tracker, MostWanted mostWanted,
                       NewbieShield shield, EventCommands events, AdminCommands admin, FeaturesCommand features,
-                      ImportCommand importer, SettingsMenu settingsMenu, PersonalCaps caps) {
+                      ImportCommand importer, SettingsMenu settingsMenu, PersonalCaps caps, Predicate<UUID> inFight) {
         this.caps = caps;
+        this.inFight = inFight;
         this.importer = importer;
         this.settingsMenu = settingsMenu;
         this.events = events;
@@ -116,6 +121,17 @@ final class LifestealCommands {
                                             }, tracker.mainThread()));
                                     return Command.SINGLE_SUCCESS;
                                 })))
+                .then(Commands.literal("undo")
+                        .then(Commands.argument("player", StringArgumentType.word())
+                                .suggests(ONLINE_NAMES)
+                                .executes(ctx -> {
+                                    if (!(ctx.getSource().getSender() instanceof Player placer)) {
+                                        Msg.send(ctx.getSource().getSender(), "common.players-only");
+                                        return 0;
+                                    }
+                                    withPlayer(placer, StringArgumentType.getString(ctx, "player"), target -> undoBounty(placer, target));
+                                    return Command.SINGLE_SUCCESS;
+                                })))
                 .then(Commands.literal("place")
                         .then(Commands.argument("player", StringArgumentType.word())
                                 .suggests(ONLINE_NAMES)
@@ -154,6 +170,34 @@ final class LifestealCommands {
                     Msg.t("who", placer.getName()), Msg.t("hearts", amount), Msg.t("target", target.name()),
                     Msg.t("total", placed.totalOnTarget()));
             Msg.send(placer, "bounty.placed-you", Msg.t("left", placed.placerChange().after()));
+        }, tracker.mainThread());
+    }
+
+    private void undoBounty(Player placer, PlayerHearts target) {
+        Duration window = plugin.settings().extras().bountyUndo();
+        if (window.isZero()) {
+            Msg.send(placer, "bounty.undo-off");
+            return;
+        }
+        // Pulling a bounty just as someone is about to collect it is the one thing undo mustn't allow.
+        if (inFight.test(target.uuid())) {
+            Msg.send(placer, "bounty.undo-in-fight", Msg.t("player", target.name()));
+            return;
+        }
+        hearts.undoBounty(placer.getUniqueId(), target.uuid(), window).whenCompleteAsync((undone, error) -> {
+            if (error != null) {
+                Throwable cause = error instanceof CompletionException ? error.getCause() : error;
+                if (cause instanceof RuleException rule) {
+                    Msg.send(placer, "common.not-allowed", Msg.t("reason", rule.getMessage()));
+                } else {
+                    fail(placer, error);
+                }
+                return;
+            }
+            tracker.track(CompletableFuture.completedFuture(List.of(undone.refund())));
+            Msg.broadcast(undone.totalOnTarget() == 0 ? "bounty.withdrawn" : "bounty.cut",
+                    Msg.t("target", target.name()), Msg.t("total", undone.totalOnTarget()));
+            Msg.send(placer, "bounty.undone-you", Msg.t("hearts", undone.hearts()), Msg.t("now", undone.refund().after()));
         }, tracker.mainThread());
     }
 

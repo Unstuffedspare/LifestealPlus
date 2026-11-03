@@ -63,10 +63,12 @@ public record PluginSettings(HeartRules rules, int naturalDeathLoss, String data
      * @param shieldExpiry a newbie shield ends this long after first join however little was played; zero for never
      * @param naturalDeathDrops hearts lost to a non-player death drop as Heart items where the player died
      * @param keepLogins how long alt detection remembers an address after its last use
+     * @param bountyUndo how long after placing a bounty the placer can take it back; zero for never
      */
     public record Extras(boolean vengeanceTracker, int trackerRoundTo, boolean tabList, boolean pactsInTab,
                          boolean publicSeasons, boolean altDetection, boolean shieldsEnabled, Duration shieldExpiry,
-                         boolean convertLifestealZItems, boolean naturalDeathDrops, Duration keepLogins) {
+                         boolean convertLifestealZItems, boolean naturalDeathDrops, Duration keepLogins,
+                         Duration bountyUndo) {
     }
 
     /**
@@ -159,7 +161,8 @@ public record PluginSettings(HeartRules rules, int naturalDeathLoss, String data
                 hours(24 * in.number("newbie-shield.expires-after-days", 3, 0, 365)),
                 in.flag("lifestealz-import.convert-items", true),
                 in.flag("hearts.natural-death-drops", true),
-                hours(24 * in.number("alt-detection.keep-days", 90, 1, 3650)));
+                hours(24 * in.number("alt-detection.keep-days", 90, 1, 3650)),
+                minutes(in.number("bounties.undo-minutes", 5, 0, 60 * 24)));
         HeartRecipe heartRecipe = in.flag("heart-items.recipe.enabled", true)
                 ? new HeartRecipe(true, in.item("heart-items.recipe.corners", "diamond_block"),
                         in.item("heart-items.recipe.sides", "gold_block"),
