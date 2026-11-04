@@ -59,6 +59,22 @@ async function main() {
   check('and the audit log says which', JSON.parse(sql(
     "SELECT COUNT(*) FROM audit WHERE detail = '/lifesteal take Alice 1'"))[0][0] >= 1, true)
 
+  // Both servers change Alice at the same moment, over and over. Nothing may be lost, and the
+  // ledger has to tell one unbroken story.
+  await rcon('lifesteal set Alice 10'); await sleep(1000)
+  const firstRow = JSON.parse(sql("SELECT COALESCE(MAX(id), 0) FROM heart_ledger WHERE player_name = 'Alice'"))[0][0]
+  const hammer = (send, first, second) => (async () => {
+    for (let i = 0; i < 25; i++) { await send(`lifesteal ${first} Alice 1`); await send(`lifesteal ${second} Alice 1`) }
+  })()
+  await Promise.all([hammer(cmd => rawRcon(cmd), 'give', 'take'), hammer(cmd => rawRcon(cmd, SECOND_RCON), 'take', 'give')])
+  await sleep(2000)
+  check('both servers at once: no heart lost or doubled', hearts('Alice'), 10)
+  const rows = JSON.parse(sql(`SELECT hearts_before, hearts_after FROM heart_ledger WHERE player_name = 'Alice' AND id > ${firstRow} ORDER BY id`))
+  check('every change is in the ledger', rows.length, 100)
+  check('each row follows on from the one before', rows.every((r, i) => i === 0 || r[0] === rows[i - 1][1]), true)
+  check('and every event has its own id', JSON.parse(sql(
+    `SELECT COUNT(*) - COUNT(DISTINCT event_id) FROM heart_ledger WHERE player_name = 'Alice' AND id > ${firstRow}`))[0][0], 0)
+
   await rcon('difficulty normal'); await rawRcon('difficulty normal', SECOND_RCON)
   for (const n of ['Alice', 'Bob', 'Cara']) await rcon(`lifesteal set ${n} 10`)
   write('DELETE FROM bounties')

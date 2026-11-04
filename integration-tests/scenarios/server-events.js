@@ -19,7 +19,7 @@ async function main() {
   // Earlier kills between them would count as repeat kills.
   dbWrite("DELETE FROM heart_ledger WHERE cause LIKE 'PVP%'")
   for (const n of ['Alice', 'Bob', 'Cara']) await rcon(`lifesteal shield ${n} 0`)
-  check('the database is on the current schema', sql('PRAGMA user_version'), '[[13]]')
+  check('the database is on the current schema', sql('PRAGMA user_version'), '[[14]]')
   // Certain where the shipped settings leave it to chance, and a crate that doesn't sit for 20 minutes.
   await rcon('lifesteal config blood-moon.fragment-chance 1')
   await rcon('lifesteal config airdrops.golden-chance 0')

@@ -16,6 +16,10 @@ import javax.sql.DataSource;
  * Lets the store, which is written for SQLite, run on MySQL or MariaDB: SQL is rewritten as
  * it's prepared (see {@link #translate}), and a dropped connection is replaced between
  * transactions, since MySQL closes connections that sit idle.
+ *
+ * <p>Transactions are SERIALIZABLE: every row a transaction reads stays locked until it ends, so
+ * two servers changing the same player can't both read the old value and overwrite each other.
+ * One of them waits, or is rolled back as a deadlock and tried again by the store.
  */
 final class MySqlConnection implements InvocationHandler {
 
@@ -39,8 +43,14 @@ final class MySqlConnection implements InvocationHandler {
 
     private MySqlConnection(DataSource source) throws SQLException {
         this.source = source;
-        this.real = source.getConnection();
+        this.real = connect();
         this.lastChecked = System.currentTimeMillis();
+    }
+
+    private Connection connect() throws SQLException {
+        Connection fresh = source.getConnection();
+        fresh.setTransactionIsolation(Connection.TRANSACTION_SERIALIZABLE);
+        return fresh;
     }
 
     static Connection open(DataSource source) throws SQLException {
@@ -59,21 +69,49 @@ final class MySqlConnection implements InvocationHandler {
         long now = System.currentTimeMillis();
         if (autoCommit && now - lastChecked > CHECK_EVERY_MS) {
             lastChecked = now;
-            if (real.isClosed() || !real.isValid(2)) {
-                try {
-                    real.close();
-                } catch (SQLException ignored) {
-                    // Already gone.
-                }
-                real = source.getConnection();
-            }
+            if (real.isClosed() || !real.isValid(2)) reconnect();
         }
         return real;
     }
 
+    private void reconnect() throws SQLException {
+        try {
+            real.close();
+        } catch (SQLException ignored) {
+            // Already gone.
+        }
+        real = connect();
+        lastChecked = System.currentTimeMillis();
+    }
+
+    /**
+     * Starting or ending a transaction. The connection is checked before a transaction starts
+     * (while it's still safe to swap), and the state only changes once the switch worked.
+     */
+    private Object switchAutoCommit(Method method, Object[] args) throws Throwable {
+        boolean on = (Boolean) args[0];
+        try {
+            Object result = method.invoke(real(), args);
+            autoCommit = on;
+            return result;
+        } catch (InvocationTargetException e) {
+            if (!on && (real.isClosed() || !real.isValid(2))) {
+                // Dropped since the last check: nothing has happened in this transaction yet, so start it on a new one.
+                reconnect();
+                Object result = method.invoke(real, args);
+                autoCommit = false;
+                return result;
+            }
+            // Either way we're no longer in a transaction; check the connection before the next one.
+            autoCommit = true;
+            lastChecked = 0;
+            throw e.getCause();
+        }
+    }
+
     @Override
     public Object invoke(Object proxy, Method method, Object[] args) throws Throwable {
-        if (method.getName().equals("setAutoCommit")) autoCommit = (Boolean) args[0];
+        if (method.getName().equals("setAutoCommit")) return switchAutoCommit(method, args);
         if (args != null && args.length > 0 && args[0] instanceof String sql
                 && (method.getName().equals("prepareStatement") || method.getName().equals("prepareCall"))) {
             args[0] = translate(sql);
@@ -93,6 +131,8 @@ final class MySqlConnection implements InvocationHandler {
             }
             return result;
         } catch (InvocationTargetException e) {
+            // Outside a transaction a failure may be a dropped connection: look before the next statement.
+            if (autoCommit) lastChecked = 0;
             throw e.getCause();
         }
     }

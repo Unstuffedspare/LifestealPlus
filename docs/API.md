@@ -45,7 +45,7 @@ lifesteal.hearts(uuid).thenAccept(hearts -> {
 int cap = lifesteal.maxHearts(uuid);           // their own cap (from a permission) or the server's
 ```
 
-Futures complete off the main thread. Before touching the world or a player, hop back:
+`hearts()` and `stats()` complete on the plugin's database thread, not the main thread. Before touching the world or a player, hop back:
 
 ```java
 lifesteal.hearts(uuid).thenAccept(hearts ->
@@ -70,6 +70,8 @@ Each returns a `CompletableFuture<HeartChange>` with the hearts `before()` and `
 - Gains stop at the player's cap.
 - `addHearts` never brings back an eliminated player; `setHearts` does.
 - Online players' health, the tab list and placeholders update straight away.
+
+These futures complete on the server's main thread (on Folia, the global region thread), once the change has reached online players. Don't wait on them with `join()` or `get()` from the main thread: that blocks the thread they need.
 
 ## Events
 

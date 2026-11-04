@@ -27,7 +27,9 @@ import org.sqlite.SQLiteDataSource;
  */
 public final class HeartStore implements AutoCloseable {
 
-    private static final int SCHEMA_VERSION = 13;
+    private static final int SCHEMA_VERSION = 14;
+    /** How many times a transaction that lost a deadlock to another server is tried again. */
+    private static final int MAX_ATTEMPTS = 5;
 
     private final Connection conn;
     private final Clock clock;
@@ -342,6 +344,18 @@ public final class HeartStore implements AutoCloseable {
                                 detail TEXT    NOT NULL
                             )""");
                     st.execute("PRAGMA user_version = 13");
+                }
+                return null;
+            });
+        }
+        if (version < 14) {
+            inTransaction(() -> {
+                try (Statement st = conn.createStatement()) {
+                    // Event ids from a counter row, which servers sharing a database take turns at,
+                    // rather than MAX(event_id) + 1, which two of them could work out at once.
+                    st.execute("CREATE TABLE counters (name TEXT PRIMARY KEY, value INTEGER NOT NULL)");
+                    st.execute("INSERT INTO counters (name, value) SELECT 'event', COALESCE(MAX(event_id), 0) FROM heart_ledger");
+                    st.execute("PRAGMA user_version = 14");
                 }
                 return null;
             });
@@ -2115,11 +2129,14 @@ public final class HeartStore implements AutoCloseable {
         return find(uuid).orElseThrow(() -> new UnknownPlayerException(uuid));
     }
 
+    /** Only ever inside a transaction: the counter row stays locked until it commits. */
     private long nextEventId() throws SQLException {
-        try (Statement st = conn.createStatement();
-             ResultSet rs = st.executeQuery("SELECT COALESCE(MAX(event_id), 0) + 1 FROM heart_ledger")) {
-            rs.next();
-            return rs.getLong(1);
+        try (Statement st = conn.createStatement()) {
+            st.executeUpdate("UPDATE counters SET value = value + 1 WHERE name = 'event'");
+            try (ResultSet rs = st.executeQuery("SELECT value FROM counters WHERE name = 'event'")) {
+                rs.next();
+                return rs.getLong(1);
+            }
         }
     }
 
@@ -2133,18 +2150,55 @@ public final class HeartStore implements AutoCloseable {
         T run() throws SQLException;
     }
 
+    /**
+     * Runs {@code work} as one transaction. On MySQL, a transaction rolled back because another
+     * server was changing the same rows (a deadlock, or waiting too long for its locks) is tried
+     * again from the start, so {@code work} mustn't change anything outside the database except
+     * {@link #sideEffects}, which is put back whenever an attempt fails.
+     */
     private <T> T inTransaction(SqlWork<T> work) throws SQLException {
-        conn.setAutoCommit(false);
-        try {
-            T result = work.run();
-            conn.commit();
-            return result;
-        } catch (SQLException | RuntimeException e) {
-            conn.rollback();
-            throw e;
-        } finally {
-            conn.setAutoCommit(true);
+        // Already inside one: part of it, committed (or tried again) with the rest.
+        if (!conn.getAutoCommit()) return work.run();
+        for (int attempt = 1; ; attempt++) {
+            int effects = sideEffects.size();
+            conn.setAutoCommit(false);
+            try {
+                T result = work.run();
+                conn.commit();
+                return result;
+            } catch (SQLException | RuntimeException e) {
+                try {
+                    conn.rollback();
+                } catch (SQLException rollback) {
+                    e.addSuppressed(rollback);
+                }
+                sideEffects.subList(effects, sideEffects.size()).clear();
+                if (attempt >= MAX_ATTEMPTS || !(e instanceof SQLException sql) || !lostToAnotherServer(sql)) throw e;
+            } finally {
+                conn.setAutoCommit(true);
+            }
+            try {
+                Thread.sleep(java.util.concurrent.ThreadLocalRandom.current().nextLong(10, 50L * attempt));
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+                throw new SQLException("Interrupted while retrying a transaction", e);
+            }
         }
+    }
+
+    /**
+     * Another server got to the same rows first, which a fresh attempt gets past: a deadlock (1213),
+     * a lock wait timeout (1205), or on MariaDB with snapshot isolation, a row changed since it
+     * was read (1020).
+     */
+    static boolean lostToAnotherServer(SQLException e) {
+        for (Throwable t = e; t != null; t = t.getCause()) {
+            if (t instanceof SQLException s && ("40001".equals(s.getSQLState())
+                    || s.getErrorCode() == 1213 || s.getErrorCode() == 1205 || s.getErrorCode() == 1020)) {
+                return true;
+            }
+        }
+        return false;
     }
 
     @Override

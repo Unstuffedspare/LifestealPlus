@@ -262,6 +262,8 @@ Every player command has its own permission (listed with the commands above), al
 
 Set `database.type: mysql` and fill in `database.mysql` on every server, each with its own `server-name`, and they share one MySQL or MariaDB database: hearts, the ledger, bounties, seasons and everything else about players. Each server keeps its own Blood Moons, airdrops and other events. A player's hearts are kept up to date on the server they're on; a change made on another server reaches them within a minute.
 
+Two servers can change the same player at the same moment (a kill on one, an admin command on another) and both changes are kept, in order, in the ledger. When you update the plugin, start one server first and let it finish starting before the rest: the first one to start brings the database up to date.
+
 Command hooks run on the server where the thing happened. The plugin's own ban (`eliminations.ban`) only covers the server it's on, so on a network, turn on `eliminations.ban.use-hooks` too and ban through your proxy's ban plugin. The plugin then bans nobody itself, but still brings players back the first time they join after being eliminated, on whichever server that is. `{ban-time}` is the length `eliminations.ban.lengths` gives that elimination (empty for `forever`):
 
 ```yaml

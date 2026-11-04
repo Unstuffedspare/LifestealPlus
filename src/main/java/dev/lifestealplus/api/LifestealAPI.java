@@ -40,13 +40,18 @@ public interface LifestealAPI {
 
     /**
      * Gives (or with a negative amount, takes) hearts. Gains stop at the cap. Adding hearts doesn't
-     * bring back an eliminated player; use {@link #setHearts} for that.
+     * bring back an eliminated player; use {@link #setHearts} for that. The future completes on the
+     * main thread (Folia: the global region) once online players have the change, so don't wait on
+     * it there with join() or get().
      *
      * @param reason shown in the ledger, e.g. your plugin's name and what for
      */
     CompletableFuture<HeartChange> addHearts(UUID player, int amount, String reason);
 
-    /** Sets a player's hearts. 0 eliminates them, and more than 0 brings an eliminated player back. */
+    /**
+     * Sets a player's hearts. 0 eliminates them, and more than 0 brings an eliminated player back.
+     * Like {@link #addHearts}, the future completes on the main thread (Folia: the global region).
+     */
     CompletableFuture<HeartChange> setHearts(UUID player, int hearts, String reason);
 
     /** A player's record for the current season, by name; empty if there's no such player. */
